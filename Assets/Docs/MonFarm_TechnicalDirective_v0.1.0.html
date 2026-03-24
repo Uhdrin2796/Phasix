@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Mon-Farm — Technical Directive v0.1.0</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0F0F13;
+  --card: #16161C;
+  --card2: #1E1E28;
+  --border: #2E2E42;
+  --border2: #3A3A52;
+  --text: #E8E8F0;
+  --text2: #A8A8C0;
+  --text3: #6A6A88;
+  --accent: #7B6FE8;
+  --accent-light: rgba(123,111,232,0.1);
+  --green: #1A8050;
+  --amber: #906010;
+  --red: #8A2010;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.page { max-width: 1080px; margin: 0 auto; padding: 0 32px 100px; }
+
+/* ── COVER ── */
+.cover {
+  padding: 80px 0 72px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 72px;
+}
+.cover-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 20px;
+}
+.cover-title {
+  font-family: 'Syne', 'Segoe UI', Arial, sans-serif;
+  font-size: clamp(40px,5vw,64px); font-weight: 700; line-height: 1.1;
+  color: var(--text); margin-bottom: 6px;
+}
+.cover-title em { color: var(--accent); font-style: normal; }
+.cover-subtitle { font-size: 17px; color: var(--text3); margin-bottom: 48px; font-weight: 300; }
+.cover-meta { display: flex; gap: 40px; flex-wrap: wrap; margin-bottom: 48px; }
+.cover-meta-item { display: flex; flex-direction: column; gap: 3px; }
+.cover-meta-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); }
+.cover-meta-value { font-size: 14px; color: var(--text2); font-weight: 500; }
+.cover-refs { padding-top: 32px; border-top: 1px solid var(--border); }
+.cover-refs-label { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+.ref-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.ref-tag { font-size: 12px; padding: 3px 10px; border: 1px solid var(--border2); border-radius: 20px; color: var(--text2); background: var(--card); }
+
+/* ── SECTIONS ── */
+section { margin-bottom: 64px; scroll-margin-top: 24px; }
+section + section { border-top: 1px solid var(--border); padding-top: 64px; }
+
+/* ── HEADINGS ── */
+.sec-eyebrow { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+h1 {
+  font-family: 'Syne', 'Segoe UI', Arial, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.3;
+  color: var(--text); margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.status { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; }
+.s-locked { background: rgba(40,160,100,0.12); color: #1A8050; border: 1px solid rgba(40,160,100,0.25); }
+.s-active { background: rgba(123,111,232,0.12); color: var(--accent); border: 1px solid rgba(123,111,232,0.25); }
+.s-pending { background: rgba(192,50,30,0.1); color: #8A2010; border: 1px solid rgba(192,50,30,0.2); }
+h2 { font-family: 'Syne', 'Segoe UI', Arial, sans-serif; font-size: 16px; font-weight: 600; color: var(--text); margin: 32px 0 10px; padding-bottom: 7px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); margin: 20px 0 8px; }
+
+/* ── PROSE ── */
+p { color: var(--text2); margin-bottom: 10px; }
+ul { margin: 8px 0 12px 18px; }
+li { color: var(--text2); margin-bottom: 4px; }
+li::marker { color: var(--accent); }
+
+.note { font-family: 'DM Mono', monospace; font-size: 11px; color: #1A7050; background: rgba(26,112,80,0.12); border-left: 3px solid #1A7050; padding: 10px 14px; border-radius: 0 6px 6px 0; margin-bottom: 14px; line-height: 1.6; }
+.design-note { font-size: 13px; color: var(--text2); background: rgba(123,111,232,0.1); border-left: 3px solid var(--accent); padding: 12px 14px; border-radius: 0 8px 8px 0; margin-bottom: 14px; line-height: 1.6; }
+.warn-note { font-size: 13px; color: var(--text2); background: rgba(232,160,40,0.08); border-left: 3px solid rgba(232,160,40,0.6); padding: 12px 14px; border-radius: 0 8px 8px 0; margin-bottom: 14px; line-height: 1.6; }
+.warn-note strong { color: #C89020; }
+
+/* ── TABLES ── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin: 14px 0 20px; }
+.tbl th { background: var(--card2); color: var(--text); font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; padding: 9px 12px; text-align: left; border-bottom: 2px solid var(--border2); }
+.tbl td { padding: 8px 12px; color: var(--text2); border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: rgba(80,72,184,0.03); }
+.tbl td b, .tbl td strong { color: var(--text); font-weight: 500; }
+
+/* ── CODE BLOCKS ── */
+.code-block { background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin: 14px 0 20px; overflow: hidden; }
+.code-header { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--card2); display: flex; align-items: center; gap: 8px; }
+.code-lang { font-size: 9px; padding: 2px 8px; border-radius: 20px; background: rgba(123,111,232,0.1); color: var(--accent); border: 1px solid rgba(123,111,232,0.2); }
+pre { font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.7; color: var(--text2); padding: 16px; overflow-x: auto; margin: 0; }
+pre .kw { color: #C792EA; }
+pre .type { color: #82AAFF; }
+pre .str { color: #C3E88D; }
+pre .num { color: #F78C6C; }
+pre .cmt { color: #546E7A; font-style: italic; }
+pre .attr { color: #FFCB6B; }
+pre .fn { color: #82AAFF; }
+
+/* ── PART DIVIDERS ── */
+.part-divider {
+  scroll-margin-top: 24px;
+  margin: 72px 0 48px;
+  padding: 32px 0 28px;
+  border-top: 2px solid var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+.part-num {
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+}
+.part-title {
+  font-family: 'Syne', 'Segoe UI', Arial, sans-serif; font-size: clamp(28px,3.5vw,40px); font-weight: 700;
+  line-height: 1.15; margin-bottom: 8px;
+}
+.part-desc { font-size: 14px; color: var(--text3); max-width: 680px; }
+
+/* ── PHASE CARDS ── */
+.phase-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin: 18px 0; }
+@media (max-width: 700px) { .phase-grid { grid-template-columns: 1fr; } }
+.phase-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 16px; }
+.phase-card-num { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+.phase-card-name { font-family: 'Syne', 'Segoe UI', Arial, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; }
+.phase-card-desc { font-size: 12px; color: var(--text3); line-height: 1.6; }
+
+/* ── INSPECTOR BOXES ── */
+.inspector-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 14px 0 20px; }
+.inspector-title { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.inspector-title::before { content: '⚙'; font-size: 14px; }
+.inspector-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+.inspector-key { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); min-width: 180px; font-weight: 500; }
+.inspector-val { color: var(--text2); flex: 1; }
+
+/* ── TUNING CARDS ── */
+.tuning-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 14px 0 20px; }
+@media (max-width: 750px) { .tuning-grid { grid-template-columns: repeat(2,1fr); } }
+.tuning-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.tuning-card-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 4px; }
+.tuning-card-val { font-family: 'Syne', 'Segoe UI', Arial, sans-serif; font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.tuning-card-unit { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); }
+.tuning-card-note { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 6px; }
+
+/* ── TOC ── */
+.toc-table td:first-child { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); width: 36px; }
+.toc-table td:last-child { width: 130px; }
+.st-locked { color: #1A8050; font-size: 11px; font-weight: 500; }
+.st-active { color: #5048B8; font-size: 11px; font-weight: 500; }
+.st-pending { color: #8A2010; font-size: 11px; font-weight: 500; }
+.toc-link { color: var(--text2); text-decoration: none; transition: color 0.15s; }
+.toc-link:hover { color: var(--accent); text-decoration: underline; }
+.toc-part-link { color: var(--accent); text-decoration: none; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+.toc-part-link:hover { text-decoration: underline; }
+.toc-part-row td { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); background: rgba(123,111,232,0.05); padding: 8px 12px; font-weight: 600; border-top: 1px solid rgba(123,111,232,0.2); }
+
+/* ── REVISION ── */
+.rev-table td:first-child { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); white-space: nowrap; }
+.rev-table td:nth-child(2) { color: var(--text3); white-space: nowrap; }
+
+/* ── DEPENDENCY CHAIN ── */
+.dep-chain { display: flex; align-items: center; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+.dep-node { font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 14px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); color: var(--text2); }
+.dep-node.active { border-color: var(--accent); color: var(--accent); background: rgba(123,111,232,0.08); }
+.dep-arrow { color: var(--text3); font-size: 16px; }
+
+/* ── PRINT ── */
+@media print {
+  body { background: white; }
+  section + section { page-break-before: auto; }
+  h1 { page-break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══════════════════════════════ COVER ═══════════════════════════════ -->
+<div class="cover">
+  <div class="cover-eyebrow">Technical Directive — GDD-to-Execution Bridge</div>
+  <div class="cover-title">Project <em>Mon-Farm</em></div>
+  <div class="cover-subtitle">2D top-down Monster Tamer RPG — Unity implementation roadmap from design to code</div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><span class="cover-meta-label">Version</span><span class="cover-meta-value">0.1.0</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Date</span><span class="cover-meta-value">March 2026</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Engine</span><span class="cover-meta-value">Unity Latest LTS · 2D URP</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Sections</span><span class="cover-meta-value">12</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Status</span><span class="cover-meta-value">Active Development</span></div>
+  </div>
+  <div class="cover-refs">
+    <div class="cover-refs-label">Reference Stack</div>
+    <div class="ref-tags">
+      <span class="ref-tag">Unity 2D URP</span>
+      <span class="ref-tag">C# / ScriptableObjects</span>
+      <span class="ref-tag">A* Pathfinding</span>
+      <span class="ref-tag">Scene Streaming</span>
+      <span class="ref-tag">Event-Driven</span>
+      <span class="ref-tag">Stardew Valley (Visual)</span>
+      <span class="ref-tag">Digimon (Mechanics)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ REVISION HISTORY ═══════════════════════════════ -->
+<section>
+<div class="sec-eyebrow">Document History</div>
+<h1>Revision Log</h1>
+<table class="tbl rev-table">
+<thead><tr><th>Version</th><th>Date</th><th>Changes</th></tr></thead>
+<tbody>
+<tr><td>v0.1.0</td><td>Mar 2026</td><td>Initial technical directive. Four-phase roadmap established. Architecture constraints locked. Companion document to GDD v0.7.9. Covers: Player Controller, Monster Database, Companion AI, World Optimization. Required instruction format defined (C# script + Inspector setup + variable tuning).</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ═══════════════════════════════ TOC ═══════════════════════════════ -->
+<section>
+<div id="sec-toc" class="sec-eyebrow">Navigation</div>
+<h1>Table of Contents</h1>
+<table class="tbl toc-table">
+<thead><tr><th>§</th><th>Section</th><th>Status</th></tr></thead>
+<tbody>
+<tr class="toc-part-row"><td colspan="3"><a href="#part-1" class="toc-part-link">Part 1 — Architecture &amp; Constraints</a></td></tr>
+<tr><td><a href="#sec-1" class="toc-link">1</a></td><td><a href="#sec-1" class="toc-link">Role &amp; Project Goal — What This Document Is</a></td><td><span class="st-locked">Locked</span></td></tr>
+<tr><td><a href="#sec-2" class="toc-link">2</a></td><td><a href="#sec-2" class="toc-link">Technical Architecture — Engine, Data Model, Constraints</a></td><td><span class="st-locked">Locked</span></td></tr>
+<tr><td><a href="#sec-3" class="toc-link">3</a></td><td><a href="#sec-3" class="toc-link">Required Instruction Format — Script, Inspector, Tuning</a></td><td><span class="st-locked">Locked</span></td></tr>
+<tr><td><a href="#sec-4" class="toc-link">4</a></td><td><a href="#sec-4" class="toc-link">Development Roadmap — Phase Overview &amp; Dependencies</a></td><td><span class="st-locked">Locked</span></td></tr>
+
+<tr class="toc-part-row"><td colspan="3"><a href="#part-2" class="toc-part-link">Part 2 — Phase 1: Foundation &amp; Player Controller</a></td></tr>
+<tr><td><a href="#sec-5" class="toc-link">5</a></td><td><a href="#sec-5" class="toc-link">Player Controller — 8-Directional Movement, Input System</a></td><td><span class="st-active">Active</span></td></tr>
+<tr><td><a href="#sec-6" class="toc-link">6</a></td><td><a href="#sec-6" class="toc-link">Sprite Sorting — Depth Logic, Sorting Groups</a></td><td><span class="st-active">Active</span></td></tr>
+
+<tr class="toc-part-row"><td colspan="3"><a href="#part-3" class="toc-part-link">Part 3 — Phase 2: Monster Database</a></td></tr>
+<tr><td><a href="#sec-7" class="toc-link">7</a></td><td><a href="#sec-7" class="toc-link">MonsterData ScriptableObject — Template &amp; Schema</a></td><td><span class="st-pending">Pending Phase 2</span></td></tr>
+<tr><td><a href="#sec-8" class="toc-link">8</a></td><td><a href="#sec-8" class="toc-link">Monster Spawning System — Instantiation &amp; Partner Setup</a></td><td><span class="st-pending">Pending Phase 2</span></td></tr>
+
+<tr class="toc-part-row"><td colspan="3"><a href="#part-4" class="toc-part-link">Part 4 — Phase 3: Companion AI &amp; Pathfinding</a></td></tr>
+<tr><td><a href="#sec-9" class="toc-link">9</a></td><td><a href="#sec-9" class="toc-link">Companion State Machine — Follow, Idle, Wander</a></td><td><span class="st-pending">Pending Phase 3</span></td></tr>
+<tr><td><a href="#sec-10" class="toc-link">10</a></td><td><a href="#sec-10" class="toc-link">Pathfinding &amp; Obstacle Avoidance — A* Integration</a></td><td><span class="st-pending">Pending Phase 3</span></td></tr>
+
+<tr class="toc-part-row"><td colspan="3"><a href="#part-5" class="toc-part-link">Part 5 — Phase 4: Open World Optimization</a></td></tr>
+<tr><td><a href="#sec-11" class="toc-link">11</a></td><td><a href="#sec-11" class="toc-link">World Chunk Manager — Enable/Disable by Distance</a></td><td><span class="st-pending">Pending Phase 4</span></td></tr>
+<tr><td><a href="#sec-12" class="toc-link">12</a></td><td><a href="#sec-12" class="toc-link">Performance Rules — Update() Avoidance, Event-Driven Patterns</a></td><td><span class="st-pending">Pending Phase 4</span></td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ═══════════════════════════════ PART 1 ═══════════════════════════════ -->
+<div id="part-1" class="part-divider">
+  <div class="part-num">Part 1</div>
+  <div class="part-title">Architecture &amp; Constraints</div>
+  <div class="part-desc">The engine, the rules, the format every feature must follow, and the order things get built.</div>
+</div>
+
+<!-- §1 — ROLE & PROJECT GOAL -->
+<section>
+<div id="sec-1" class="sec-eyebrow">Section 1 · Part 1 · Architecture</div>
+<h1>Role &amp; Project Goal <span class="status s-locked">Locked</span></h1>
+
+<h2>1.1 AI Role Definition</h2>
+<p>When executing against this directive, the AI assumes the role of <strong>Senior Unity Developer and C# Architect</strong>. Every response must be implementation-ready — not conceptual, not pseudocode. Real scripts, real Inspector values, real tuning guidance.</p>
+
+<h2>1.2 Project Goal</h2>
+<p>Develop a 2D top-down "Monster Tamer" RPG with a seamless, continuous open world. No loading screens between areas. The player captures, raises, and evolves creatures that follow them in the overworld. The world is large enough to require streaming or chunking to stay performant.</p>
+
+<h2>1.3 Style References</h2>
+<table class="tbl">
+<thead><tr><th>Axis</th><th>Reference</th><th>What We Take</th></tr></thead>
+<tbody>
+<tr><td><strong>Visual Style</strong></td><td>Stardew Valley</td><td>Pixel-art top-down perspective. Warm palette, readable silhouettes, 16×16 or 32×32 tile base. Layered depth (player walks behind trees). Cozy but not childish.</td></tr>
+<tr><td><strong>Creature Mechanics</strong></td><td>Digimon</td><td>Branching evolution web (not linear chains). Devolution is always available. Stats matter. Companion creatures follow the player in the overworld. Bond/friendship as a real progression axis.</td></tr>
+<tr><td><strong>World Feel</strong></td><td>Stardew × Pokémon</td><td>Seamless open world with distinct biomes. No hard scene transitions. NPC-populated towns. Day/night cycle (stretch goal). The world exists whether the player is there or not.</td></tr>
+</tbody>
+</table>
+
+<div class="design-note"><strong>Bridge to GDD:</strong> This document does not replace the Game Design Document (currently v0.7.9). The GDD defines <em>what</em> the game is — its systems, types, creatures, and progression. This Technical Directive defines <em>how</em> to build it in Unity. Every implementation choice here must serve the design decisions locked in the GDD.</div>
+</section>
+
+<!-- §2 — TECHNICAL ARCHITECTURE -->
+<section>
+<div id="sec-2" class="sec-eyebrow">Section 2 · Part 1 · Architecture</div>
+<h1>Technical Architecture <span class="status s-locked">Locked</span></h1>
+
+<h2>2.1 Engine &amp; Rendering</h2>
+<table class="tbl">
+<thead><tr><th>Constraint</th><th>Decision</th><th>Rationale</th></tr></thead>
+<tbody>
+<tr><td><strong>Engine</strong></td><td>Unity Latest LTS</td><td>Stability over bleeding-edge. LTS versions receive two years of support. Check <code>Unity Hub → Installs → LTS</code> for the current version at time of development.</td></tr>
+<tr><td><strong>Render Pipeline</strong></td><td>2D URP (Universal Render Pipeline)</td><td>Built-in 2D lighting, shadow casters, sprite sorting support. Required for visual effects (torchlight, day/night). Do <em>not</em> use HDRP or Built-in RP.</td></tr>
+<tr><td><strong>Pixel Resolution</strong></td><td>320×180 reference (16:9, scaled up)</td><td>Provides a crisp pixel-art look when rendered to a low-res camera and scaled. Configure via Pixel Perfect Camera component.</td></tr>
+</tbody>
+</table>
+
+<h2>2.2 Data Model</h2>
+<table class="tbl">
+<thead><tr><th>System</th><th>Storage</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><strong>Monster Data</strong></td><td>ScriptableObjects</td><td>Each species is an asset. Designers can edit in Inspector without touching code. Supports hot-reload in Editor.</td></tr>
+<tr><td><strong>Evolution Trees</strong></td><td>ScriptableObjects (graph)</td><td>Each node references a MonsterData asset plus conditions. The web structure from the GDD maps directly to a graph of SO references.</td></tr>
+<tr><td><strong>Move Sets / Skills</strong></td><td>ScriptableObjects</td><td>Skills reference attributes and types from the GDD's 18-tree taxonomy. Each skill is an individual asset.</td></tr>
+<tr><td><strong>Save Data</strong></td><td>JSON serialization</td><td>Runtime state (player position, monster stats, bond levels, inventory) serializes to JSON. ScriptableObjects are <em>templates</em>, not save state.</td></tr>
+</tbody>
+</table>
+
+<div class="warn-note"><strong>Rule:</strong> ScriptableObjects are read-only at runtime. Never write to a ScriptableObject during play — it persists in the Editor and will corrupt your template data. Runtime state goes into plain C# classes that serialize to JSON.</div>
+
+<h2>2.3 World Management</h2>
+<p>The open world is divided into <strong>chunks</strong> — rectangular groups of tiles and objects stored as child GameObjects of a parent "Chunk" object. Only chunks near the player are active. Distant chunks are disabled (<code>SetActive(false)</code>), not destroyed. This avoids instantiation cost and garbage collection spikes.</p>
+<p>Two approaches, choose based on world size:</p>
+<table class="tbl">
+<thead><tr><th>Approach</th><th>When to Use</th><th>How It Works</th></tr></thead>
+<tbody>
+<tr><td><strong>GameObject Chunks</strong></td><td>Small-to-medium worlds (under ~200 chunks)</td><td>All chunks exist in one scene. A manager script toggles <code>SetActive</code> based on player distance. Simpler, faster to iterate.</td></tr>
+<tr><td><strong>Additive Scene Streaming</strong></td><td>Large worlds (200+ chunks, multiple biomes)</td><td>Each chunk is its own scene. Loaded/unloaded additively via <code>SceneManager.LoadSceneAsync</code>. Higher memory ceiling, more complex to author.</td></tr>
+</tbody>
+</table>
+
+<div class="note">Start with GameObject Chunks. Migrate to Additive Scenes only if profiling shows memory pressure. Premature scene-streaming adds authoring complexity for no player-visible benefit.</div>
+
+<h2>2.4 Pathfinding</h2>
+<table class="tbl">
+<thead><tr><th>Option</th><th>Recommendation</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>A* Pathfinding Project (Lite)</strong></td><td>Primary choice</td><td>Free version covers 2D grid graphs. Supports dynamic obstacles, graph updates, seeker components. Well-documented. Import via Asset Store.</td></tr>
+<tr><td><strong>Unity NavMesh (2D surface)</strong></td><td>Fallback</td><td>Requires NavMeshSurface2D bake. Less intuitive for tile-based worlds. Use only if A* is unavailable or if the project later needs 3D hybrid.</td></tr>
+</tbody>
+</table>
+
+<h2>2.5 Performance Constraints</h2>
+<table class="tbl">
+<thead><tr><th>Rule</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td><strong>No heavy logic in <code>Update()</code></strong></td><td>Frame-dependent checks (input polling, animation state) are fine. Distance checks, AI decisions, and pathfinding recalculations must use <strong>timers</strong>, <strong>coroutines</strong>, or <strong>event callbacks</strong>.</td></tr>
+<tr><td><strong>Event-driven over polling</strong></td><td>Use C# <code>event</code>/<code>Action</code> delegates, Unity Events, or a lightweight message bus. Example: monster doesn't poll "am I close to player?" — instead, it subscribes to a proximity trigger event.</td></tr>
+<tr><td><strong>Object pooling for spawns</strong></td><td>Monsters, projectiles, and VFX that appear/disappear frequently must use a pool. Never <code>Instantiate</code>/<code>Destroy</code> in a loop during gameplay.</td></tr>
+<tr><td><strong>Profile before optimizing</strong></td><td>Use Unity Profiler (Window → Analysis → Profiler). Optimize the spike you can measure, not the one you imagine.</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- §3 — REQUIRED INSTRUCTION FORMAT -->
+<section>
+<div id="sec-3" class="sec-eyebrow">Section 3 · Part 1 · Architecture</div>
+<h1>Required Instruction Format <span class="status s-locked">Locked</span></h1>
+<p>Every feature in this document — and every feature requested against this directive — must be delivered in three parts. No exceptions. If a response is missing any part, it is incomplete.</p>
+
+<h2>3.1 The Three Deliverables</h2>
+<table class="tbl">
+<thead><tr><th>#</th><th>Deliverable</th><th>What It Contains</th></tr></thead>
+<tbody>
+<tr><td><strong>1</strong></td><td>Clean C# Script</td><td>Fully commented. Production-grade naming (<code>PascalCase</code> for public, <code>_camelCase</code> for private fields). No magic numbers — use <code>[SerializeField]</code> with <code>[Header]</code> and <code>[Tooltip]</code> attributes so every tunable is exposed and labeled in Inspector. Every script must have a <code>[RequireComponent]</code> attribute if it depends on other components.</td></tr>
+<tr><td><strong>2</strong></td><td>Inspector Instructions</td><td>Step-by-step: what GameObject to create, what Components to add (Colliders, Rigidbodies, SpriteRenderers, etc.), what to drag into which slot, what layers/tags to set. Written so someone who has never opened this project can follow it cold.</td></tr>
+<tr><td><strong>3</strong></td><td>Variable Tuning</td><td>Recommended starting values for every exposed variable (speed, radius, smoothing, etc.). Includes the "feels right" range — the min and max you'd reasonably try. Includes a rationale sentence for why the default is what it is.</td></tr>
+</tbody>
+</table>
+
+<div class="design-note"><strong>Why this format matters:</strong> The gap between a GDD and a playable game is not "writing code." It's knowing which GameObject to attach it to, which Rigidbody2D settings to use, and what value to put in the "Move Speed" field. This format closes that gap completely.</div>
+
+<h2>3.2 Code Style Rules</h2>
+<table class="tbl">
+<thead><tr><th>Rule</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>Public fields use <code>[SerializeField]</code> on private backing fields</td><td><code>[SerializeField] private float _moveSpeed = 5f;</code></td></tr>
+<tr><td>Group Inspector fields with <code>[Header("Section Name")]</code></td><td><code>[Header("Movement")] [SerializeField] ...</code></td></tr>
+<tr><td>Explain non-obvious fields with <code>[Tooltip("...")]</code></td><td><code>[Tooltip("Units per second")] ...</code></td></tr>
+<tr><td>Require dependencies explicitly</td><td><code>[RequireComponent(typeof(Rigidbody2D))]</code></td></tr>
+<tr><td>Cache component references in <code>Awake()</code></td><td><code>_rb = GetComponent&lt;Rigidbody2D&gt;();</code></td></tr>
+<tr><td>Use <code>FixedUpdate()</code> for physics, <code>Update()</code> for input</td><td>Input read in Update, movement applied in FixedUpdate</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- §4 — DEVELOPMENT ROADMAP -->
+<section>
+<div id="sec-4" class="sec-eyebrow">Section 4 · Part 1 · Architecture</div>
+<h1>Development Roadmap <span class="status s-locked">Locked</span></h1>
+
+<h2>4.1 Phase Overview</h2>
+<div class="phase-grid">
+  <div class="phase-card">
+    <div class="phase-card-num">Phase 1</div>
+    <div class="phase-card-name">Foundation &amp; Player Controller</div>
+    <div class="phase-card-desc">Get a character on screen that moves correctly. 8-directional input, physics-based movement, sprite sorting so the player walks behind trees. This is the "can I walk around and it feels good" milestone.</div>
+  </div>
+  <div class="phase-card">
+    <div class="phase-card-num">Phase 2</div>
+    <div class="phase-card-name">Monster Database</div>
+    <div class="phase-card-desc">Build the ScriptableObject template that defines a monster species. Spawn a "partner" monster from that data. This is the "a creature exists in the world and has stats" milestone.</div>
+  </div>
+  <div class="phase-card">
+    <div class="phase-card-num">Phase 3</div>
+    <div class="phase-card-name">Companion AI &amp; Pathfinding</div>
+    <div class="phase-card-desc">Make the monster follow the player intelligently. State machine with Follow/Idle/Wander states. A* pathfinding with obstacle avoidance. Personal space buffer. This is the "my companion feels alive" milestone.</div>
+  </div>
+  <div class="phase-card">
+    <div class="phase-card-num">Phase 4</div>
+    <div class="phase-card-name">Open World Optimization</div>
+    <div class="phase-card-desc">Build the chunk manager that enables/disables map sections based on player position. Event-driven architecture cleanup. This is the "the world is big and it doesn't lag" milestone.</div>
+  </div>
+</div>
+
+<h2>4.2 Dependency Chain</h2>
+<p>Phases are strictly sequential. Each depends on the previous phase being complete and tested.</p>
+<div class="dep-chain">
+  <span class="dep-node active">Phase 1 · Player</span>
+  <span class="dep-arrow">→</span>
+  <span class="dep-node">Phase 2 · Monsters</span>
+  <span class="dep-arrow">→</span>
+  <span class="dep-node">Phase 3 · Companion AI</span>
+  <span class="dep-arrow">→</span>
+  <span class="dep-node">Phase 4 · World</span>
+</div>
+
+<div class="note">Phase 1 is the current active phase. Do not skip ahead. A broken player controller will cascade bugs into every subsequent phase. Get movement right first.</div>
+
+<h2>4.3 GDD Section Mapping</h2>
+<p>How each development phase maps back to the Game Design Document:</p>
+<table class="tbl">
+<thead><tr><th>Dev Phase</th><th>GDD Sections Referenced</th><th>What Design Decisions Feed In</th></tr></thead>
+<tbody>
+<tr><td><strong>Phase 1</strong></td><td>§1 (Overview), §2 (Engine)</td><td>World perspective, movement feel, art scale, camera behavior</td></tr>
+<tr><td><strong>Phase 2</strong></td><td>§3 (Creatures), §4 (Temper), §5 (Attributes), §7 (Personality)</td><td>Species data structure, stat schema, tier system, evolution node shape</td></tr>
+<tr><td><strong>Phase 3</strong></td><td>§6 (Bond), §12 (Origin), §3 (Companion following)</td><td>Bond-driven behavior changes, Origin affects AI personality, follow distance reflects bond level</td></tr>
+<tr><td><strong>Phase 4</strong></td><td>§19 (World Design), §21 (Progression Loop)</td><td>Region size, biome boundaries, sub-region chunk granularity, streaming trigger distances</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ═══════════════════════════════ PART 2 ═══════════════════════════════ -->
+<div id="part-2" class="part-divider">
+  <div class="part-num">Part 2</div>
+  <div class="part-title">Phase 1 — Foundation &amp; Player Controller</div>
+  <div class="part-desc">Get a character on screen. Make it move. Make the depth sorting work. This is the foundation everything else is built on.</div>
+</div>
+
+<!-- §5 — PLAYER CONTROLLER -->
+<section>
+<div id="sec-5" class="sec-eyebrow">Section 5 · Part 2 · Phase 1</div>
+<h1>Player Controller <span class="status s-active">Active</span></h1>
+
+<h2>5.1 Requirements</h2>
+<ul>
+  <li>8-directional movement (cardinal + diagonal) using <code>Rigidbody2D</code> physics</li>
+  <li>Input via Unity's <strong>new Input System</strong> (not legacy <code>Input.GetAxis</code>)</li>
+  <li>Diagonal movement must be normalized (no faster diagonal speed)</li>
+  <li>Smooth acceleration and deceleration — not instant start/stop</li>
+  <li>Animation state drives walk/idle sprite based on facing direction</li>
+  <li>Rigidbody2D set to <strong>Dynamic</strong> with gravity scale 0 (top-down, no falling)</li>
+</ul>
+
+<h2>5.2 C# Script — <code>PlayerController.cs</code></h2>
+<div class="code-block">
+<div class="code-header"><span class="code-lang">C#</span> PlayerController.cs</div>
+<pre><span class="kw">using</span> UnityEngine;
+<span class="kw">using</span> UnityEngine.InputSystem;
+
+<span class="cmt">/// &lt;summary&gt;
+/// Top-down 8-directional player movement using Rigidbody2D.
+/// Reads input in Update(), applies physics in FixedUpdate().
+/// &lt;/summary&gt;</span>
+[<span class="attr">RequireComponent</span>(<span class="kw">typeof</span>(<span class="type">Rigidbody2D</span>))]
+<span class="kw">public class</span> <span class="type">PlayerController</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="attr">Header</span>(<span class="str">"Movement"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"Max speed in units per second"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _moveSpeed = <span class="num">5f</span>;
+
+    [<span class="attr">Tooltip</span>(<span class="str">"How quickly the player reaches max speed (higher = snappier)"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _acceleration = <span class="num">50f</span>;
+
+    [<span class="attr">Tooltip</span>(<span class="str">"How quickly the player stops (higher = less slide)"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _deceleration = <span class="num">40f</span>;
+
+    [<span class="attr">Header</span>(<span class="str">"Animation"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"Reference to the Animator component"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private</span> <span class="type">Animator</span> _animator;
+
+    <span class="cmt">// ── Cached References ──</span>
+    <span class="kw">private</span> <span class="type">Rigidbody2D</span> _rb;
+    <span class="kw">private</span> <span class="type">Vector2</span> _inputVector;
+    <span class="kw">private</span> <span class="type">Vector2</span> _currentVelocity;
+    <span class="kw">private</span> <span class="type">Vector2</span> _lastFacingDirection = <span class="type">Vector2</span>.down;
+
+    <span class="cmt">// ── Animator Hash IDs (avoid string lookups every frame) ──</span>
+    <span class="kw">private static readonly int</span> AnimMoveX = <span class="type">Animator</span>.StringToHash(<span class="str">"MoveX"</span>);
+    <span class="kw">private static readonly int</span> AnimMoveY = <span class="type">Animator</span>.StringToHash(<span class="str">"MoveY"</span>);
+    <span class="kw">private static readonly int</span> AnimIsMoving = <span class="type">Animator</span>.StringToHash(<span class="str">"IsMoving"</span>);
+
+    <span class="kw">private void</span> <span class="fn">Awake</span>()
+    {
+        _rb = GetComponent&lt;<span class="type">Rigidbody2D</span>&gt;();
+        _rb.gravityScale = <span class="num">0f</span>;
+        _rb.freezeRotation = <span class="kw">true</span>;
+    }
+
+    <span class="cmt">// ── Called by the New Input System's PlayerInput component ──</span>
+    <span class="kw">public void</span> <span class="fn">OnMove</span>(<span class="type">InputAction.CallbackContext</span> context)
+    {
+        _inputVector = context.ReadValue&lt;<span class="type">Vector2</span>&gt;();
+    }
+
+    <span class="kw">private void</span> <span class="fn">Update</span>()
+    {
+        <span class="cmt">// Update animator with current facing direction</span>
+        <span class="kw">bool</span> isMoving = _inputVector.sqrMagnitude > <span class="num">0.01f</span>;
+
+        <span class="kw">if</span> (isMoving)
+        {
+            _lastFacingDirection = _inputVector.normalized;
+        }
+
+        <span class="kw">if</span> (_animator != <span class="kw">null</span>)
+        {
+            _animator.SetFloat(AnimMoveX, _lastFacingDirection.x);
+            _animator.SetFloat(AnimMoveY, _lastFacingDirection.y);
+            _animator.SetBool(AnimIsMoving, isMoving);
+        }
+    }
+
+    <span class="kw">private void</span> <span class="fn">FixedUpdate</span>()
+    {
+        <span class="type">Vector2</span> targetVelocity = _inputVector.normalized * _moveSpeed;
+
+        <span class="cmt">// Accelerate toward target, decelerate when no input</span>
+        <span class="kw">float</span> rate = targetVelocity.sqrMagnitude > <span class="num">0.01f</span>
+            ? _acceleration : _deceleration;
+
+        _currentVelocity = <span class="type">Vector2</span>.MoveTowards(
+            _currentVelocity, targetVelocity,
+            rate * <span class="type">Time</span>.fixedDeltaTime
+        );
+
+        _rb.linearVelocity = _currentVelocity;
+    }
+}</pre>
+</div>
+
+<h2>5.3 Inspector Setup</h2>
+<div class="inspector-box">
+  <div class="inspector-title">Player GameObject Setup</div>
+  <div class="inspector-row"><span class="inspector-key">Create</span><span class="inspector-val">Empty GameObject → name it <code>Player</code></span></div>
+  <div class="inspector-row"><span class="inspector-key">Tag</span><span class="inspector-val">Set to <code>Player</code> (create tag if needed)</span></div>
+  <div class="inspector-row"><span class="inspector-key">Layer</span><span class="inspector-val">Create layer <code>Player</code>, assign it</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: SpriteRenderer</span><span class="inspector-val">Assign your player idle sprite. Set <code>Sorting Layer</code> to "Characters"</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: Animator</span><span class="inspector-val">Create an Animator Controller with parameters: <code>MoveX</code> (float), <code>MoveY</code> (float), <code>IsMoving</code> (bool). Build a blend tree for 8-directional walk/idle.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: Rigidbody2D</span><span class="inspector-val"><code>Body Type: Dynamic</code>, <code>Gravity Scale: 0</code>, <code>Freeze Rotation: Z ✓</code>, <code>Collision Detection: Continuous</code>, <code>Interpolate: Interpolate</code></span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: CapsuleCollider2D</span><span class="inspector-val">Direction: Vertical. Size to cover the player's feet only (not full sprite). Offset Y downward so collisions happen at foot level.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: PlayerInput</span><span class="inspector-val">Create an Input Actions asset with a "Player" action map. Add "Move" action (Value, Vector2, bound to WASD + Arrow Keys + Left Stick). Set Behavior to "Send Messages" or "Invoke Unity Events" and wire <code>OnMove</code>.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: PlayerController.cs</span><span class="inspector-val">Drag the Animator component into the <code>_animator</code> slot.</span></div>
+</div>
+
+<h2>5.4 Variable Tuning</h2>
+<div class="tuning-grid">
+  <div class="tuning-card">
+    <div class="tuning-card-label">Move Speed</div>
+    <div class="tuning-card-val">5.0</div>
+    <div class="tuning-card-unit">units/sec</div>
+    <div class="tuning-card-note">Range: 3–8. At 5, the player crosses a 16-tile screen in about 3 seconds. Feels brisk but not rushed. Lower for "cozy" feel, higher for action feel.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Acceleration</div>
+    <div class="tuning-card-val">50</div>
+    <div class="tuning-card-unit">units/sec²</div>
+    <div class="tuning-card-note">Range: 20–100. At 50, the player reaches full speed in ~0.1s. Feels responsive without being instant. Lower for "weight" feel.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Deceleration</div>
+    <div class="tuning-card-val">40</div>
+    <div class="tuning-card-unit">units/sec²</div>
+    <div class="tuning-card-note">Range: 20–80. Slightly lower than acceleration gives a tiny "slide" on stop — feels natural. Match to acceleration for perfectly crisp stops.</div>
+  </div>
+</div>
+</section>
+
+<!-- §6 — SPRITE SORTING -->
+<section>
+<div id="sec-6" class="sec-eyebrow">Section 6 · Part 2 · Phase 1</div>
+<h1>Sprite Sorting &amp; Depth Logic <span class="status s-active">Active</span></h1>
+
+<h2>6.1 The Problem</h2>
+<p>In a top-down 2D game, the player must walk <em>behind</em> a tree when above it and <em>in front of</em> the tree when below it. Without sorting logic, sprites overlap randomly or based on creation order.</p>
+
+<h2>6.2 Solution: Y-Position Sorting</h2>
+<p>Unity's 2D renderer can sort sprites by their Y position. Objects higher on screen (larger Y) render behind objects lower on screen. Two ways to set this up:</p>
+
+<table class="tbl">
+<thead><tr><th>Method</th><th>Setup</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td><strong>Transparency Sort Axis (global)</strong></td><td><code>Edit → Project Settings → Graphics → Transparency Sort Mode: Custom Axis → Y=1, X=0, Z=0</code></td><td>Simplest. Works for all sprites on the same sorting layer. May need pivot point adjustment on tall sprites.</td></tr>
+<tr><td><strong>Runtime sortingOrder script</strong></td><td>Attach a script that sets <code>SpriteRenderer.sortingOrder = -(int)(transform.position.y * 100)</code></td><td>More control per-object. Small performance cost. Use for objects that need special sorting (multi-tile buildings).</td></tr>
+</tbody>
+</table>
+
+<div class="note">Use the global Transparency Sort Axis first. Only add per-object scripts for edge cases (tall buildings, multi-sprite NPCs).</div>
+
+<h2>6.3 Sorting Layers</h2>
+<p>Create these Sorting Layers in order (rendered bottom-to-top):</p>
+<table class="tbl">
+<thead><tr><th>Order</th><th>Layer Name</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td>0</td><td><strong>Ground</strong></td><td>Grass, dirt, water, paths — always behind everything</td></tr>
+<tr><td>1</td><td><strong>GroundDecor</strong></td><td>Flowers, puddles, shadows, cracks — on top of ground</td></tr>
+<tr><td>2</td><td><strong>Characters</strong></td><td>Player, monsters, NPCs — sorted by Y within this layer</td></tr>
+<tr><td>3</td><td><strong>Foreground</strong></td><td>Tree canopies, roof overhangs — always in front of characters</td></tr>
+<tr><td>4</td><td><strong>UI_World</strong></td><td>Floating health bars, name tags, interaction prompts</td></tr>
+</tbody>
+</table>
+
+<h2>6.4 Inspector Setup</h2>
+<div class="inspector-box">
+  <div class="inspector-title">Sorting Layer Configuration</div>
+  <div class="inspector-row"><span class="inspector-key">Project Settings → Tags &amp; Layers</span><span class="inspector-val">Add Sorting Layers in order: Ground, GroundDecor, Characters, Foreground, UI_World</span></div>
+  <div class="inspector-row"><span class="inspector-key">Project Settings → Graphics</span><span class="inspector-val">Transparency Sort Mode → <code>Custom Axis</code>. Transparency Sort Axis → <code>(0, 1, 0)</code></span></div>
+  <div class="inspector-row"><span class="inspector-key">Tree sprite (trunk)</span><span class="inspector-val">Sorting Layer: <code>Characters</code>. Pivot point at base of trunk (bottom-center). Y-sorting handles the rest.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Tree sprite (canopy)</span><span class="inspector-val">If the tree has a separate canopy overlay, put it on <code>Foreground</code> layer so the player always walks under it.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Player sprite</span><span class="inspector-val">Sorting Layer: <code>Characters</code>. Pivot at feet.</span></div>
+</div>
+
+<h2>6.5 Pivot Point Rule</h2>
+<div class="design-note"><strong>Critical:</strong> Every sprite that participates in Y-sorting must have its <strong>pivot point at its feet / base</strong>. A tree's pivot is at the bottom of the trunk. The player's pivot is at their feet. If the pivot is centered, a tall tree will sort against its middle, causing visual popping. Set pivots in the Sprite Editor (<code>Sprite Editor → set Pivot to Bottom</code>).</div>
+</section>
+
+<!-- ═══════════════════════════════ PART 3 ═══════════════════════════════ -->
+<div id="part-3" class="part-divider">
+  <div class="part-num">Part 3</div>
+  <div class="part-title">Phase 2 — Monster Database</div>
+  <div class="part-desc">Define what a monster <em>is</em> as data. Build the ScriptableObject template. Spawn a partner from that template.</div>
+</div>
+
+<!-- §7 — MONSTER DATA SO -->
+<section>
+<div id="sec-7" class="sec-eyebrow">Section 7 · Part 3 · Phase 2</div>
+<h1>MonsterData ScriptableObject <span class="status s-pending">Pending Phase 2</span></h1>
+
+<h2>7.1 Purpose</h2>
+<p>Every monster species is defined by a <code>MonsterData</code> ScriptableObject asset. This is the read-only template — it defines what a "Flamewolf" <em>is</em>, not a specific Flamewolf the player owns. Runtime instances (owned monsters with bond levels, current HP, etc.) live in a separate <code>MonsterInstance</code> plain C# class.</p>
+
+<h2>7.2 Schema — What MonsterData Contains</h2>
+<table class="tbl">
+<thead><tr><th>Field</th><th>Type</th><th>GDD Source</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><strong>speciesName</strong></td><td>string</td><td>§25 (Roster)</td><td>Display name of this species</td></tr>
+<tr><td><strong>speciesID</strong></td><td>int</td><td>—</td><td>Unique ID for serialization / save data lookup</td></tr>
+<tr><td><strong>tier</strong></td><td>enum (T1–T7)</td><td>§3 (Tiers)</td><td>Evolution tier. Determines stat scaling and available slots.</td></tr>
+<tr><td><strong>baseStats</strong></td><td>StatBlock (8 ints)</td><td>§5 (Attributes)</td><td>The 8 combat attributes at level-equivalent baseline. Maps to GDD: Power, Guard, Speed, Aura, Focus, Instinct, Vitality, Resolve.</td></tr>
+<tr><td><strong>primalType</strong></td><td>enum</td><td>§9 (Primal)</td><td>Primary elemental type (Flame, Tide, Terra, etc.)</td></tr>
+<tr><td><strong>originType</strong></td><td>enum</td><td>§12 (Origin)</td><td>Default Origin assignment</td></tr>
+<tr><td><strong>defaultTemper</strong></td><td>enum</td><td>§4 (Temper)</td><td>Which of the 3 Temper variants this data represents</td></tr>
+<tr><td><strong>sprites</strong></td><td>MonsterSprites</td><td>—</td><td>Idle, walk, attack sprite sheets. Separate per-direction if using 4/8 directional art.</td></tr>
+<tr><td><strong>evolutionLevel</strong></td><td>int</td><td>§3 (Evolution)</td><td>The level (or bond threshold) at which this species becomes eligible to evolve</td></tr>
+<tr><td><strong>evolutionOptions</strong></td><td>MonsterData[]</td><td>§3 (Evolution Web)</td><td>Array of species this monster can evolve into. The "web" — not a single chain.</td></tr>
+<tr><td><strong>skillTreeTypes</strong></td><td>SkillTreeType[]</td><td>§14 (Skill Trees)</td><td>Which of the 18 skill tree types this species has access to</td></tr>
+</tbody>
+</table>
+
+<h2>7.3 C# Script — <code>MonsterData.cs</code></h2>
+<div class="code-block">
+<div class="code-header"><span class="code-lang">C#</span> MonsterData.cs — ScriptableObject Template</div>
+<pre><span class="kw">using</span> UnityEngine;
+
+<span class="cmt">/// &lt;summary&gt;
+/// Read-only species template. One asset per species per Temper variant.
+/// Created via: Assets → Create → MonFarm → Monster Data
+/// &lt;/summary&gt;</span>
+[<span class="attr">CreateAssetMenu</span>(fileName = <span class="str">"NewMonster"</span>, menuName = <span class="str">"MonFarm/Monster Data"</span>)]
+<span class="kw">public class</span> <span class="type">MonsterData</span> : <span class="type">ScriptableObject</span>
+{
+    [<span class="attr">Header</span>(<span class="str">"Identity"</span>)]
+    <span class="kw">public string</span> speciesName;
+    <span class="kw">public int</span> speciesID;
+    <span class="kw">public</span> <span class="type">Tier</span> tier;
+
+    [<span class="attr">Header</span>(<span class="str">"Typing"</span>)]
+    <span class="kw">public</span> <span class="type">PrimalType</span> primalType;
+    <span class="kw">public</span> <span class="type">OriginType</span> originType;
+    <span class="kw">public</span> <span class="type">TemperVariant</span> defaultTemper;
+
+    [<span class="attr">Header</span>(<span class="str">"Base Stats (GDD §5)"</span>)]
+    <span class="kw">public</span> <span class="type">StatBlock</span> baseStats;
+
+    [<span class="attr">Header</span>(<span class="str">"Visuals"</span>)]
+    <span class="kw">public</span> <span class="type">Sprite</span> icon;
+    <span class="kw">public</span> <span class="type">RuntimeAnimatorController</span> animatorController;
+
+    [<span class="attr">Header</span>(<span class="str">"Evolution (GDD §3)"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"Bond % or level required to evolve"</span>)]
+    <span class="kw">public int</span> evolutionThreshold;
+    [<span class="attr">Tooltip</span>(<span class="str">"Species this can evolve into — the web, not a chain"</span>)]
+    <span class="kw">public</span> <span class="type">MonsterData</span>[] evolutionOptions;
+
+    [<span class="attr">Header</span>(<span class="str">"Skills (GDD §14)"</span>)]
+    <span class="kw">public</span> <span class="type">SkillTreeType</span>[] skillTreeTypes;
+}
+
+<span class="cmt">// ── Supporting Types ──</span>
+
+[<span class="type">System.Serializable</span>]
+<span class="kw">public struct</span> <span class="type">StatBlock</span>
+{
+    [<span class="attr">Tooltip</span>(<span class="str">"Physical attack power"</span>)]    <span class="kw">public int</span> power;
+    [<span class="attr">Tooltip</span>(<span class="str">"Physical defense"</span>)]          <span class="kw">public int</span> guard;
+    [<span class="attr">Tooltip</span>(<span class="str">"Action speed / turn order"</span>)]  <span class="kw">public int</span> speed;
+    [<span class="attr">Tooltip</span>(<span class="str">"Special attack resource"</span>)]    <span class="kw">public int</span> aura;
+    [<span class="attr">Tooltip</span>(<span class="str">"Skill accuracy / crit"</span>)]       <span class="kw">public int</span> focus;
+    [<span class="attr">Tooltip</span>(<span class="str">"AI behavior / evasion"</span>)]       <span class="kw">public int</span> instinct;
+    [<span class="attr">Tooltip</span>(<span class="str">"Hit points"</span>)]                <span class="kw">public int</span> vitality;
+    [<span class="attr">Tooltip</span>(<span class="str">"Status resistance / mental"</span>)] <span class="kw">public int</span> resolve;
+}
+
+<span class="kw">public enum</span> <span class="type">Tier</span> { T1, T2, T3, T4, T5, T6, T7 }
+
+<span class="kw">public enum</span> <span class="type">PrimalType</span>
+{
+    Flame, Tide, Terra, Gale, Volt, Frost, Flora, Shadow
+}
+
+<span class="kw">public enum</span> <span class="type">OriginType</span>
+{
+    Wild, Forged, Cursed, Sacred, Void, Ethereal
+}
+
+<span class="kw">public enum</span> <span class="type">TemperVariant</span> { Alpha, Beta, Gamma }
+
+<span class="kw">public enum</span> <span class="type">SkillTreeType</span>
+{
+    TypeA, TypeB, TypeC, TypeD, TypeE, TypeF,
+    TypeG, TypeH, TypeI, TypeJ, TypeK, TypeL,
+    TypeM, TypeN, TypeO, TypeP, TypeQ, TypeR
+}</pre>
+</div>
+
+<h2>7.4 Inspector Instructions</h2>
+<div class="inspector-box">
+  <div class="inspector-title">Creating a Monster Species Asset</div>
+  <div class="inspector-row"><span class="inspector-key">Create the asset</span><span class="inspector-val"><code>Assets → Create → MonFarm → Monster Data</code>. Name it after the species (e.g., <code>Flamewolf_Alpha</code>).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Identity section</span><span class="inspector-val">Fill in species name, assign a unique integer ID (start at 1001, increment), select tier.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Typing section</span><span class="inspector-val">Select Primal type, Origin type, and Temper variant from dropdowns. These map directly to GDD §9, §12, §4.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Base Stats</span><span class="inspector-val">Enter the 8 attributes. Values are <em>base</em> — runtime modifiers (bond, personality, level) are applied on top. Pending GDD Phase 2 calibration (#5).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Evolution Options</span><span class="inspector-val">Drag other MonsterData assets into the array. This creates the branching web. A species can have 0 (final form) to N evolution targets.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Folder structure</span><span class="inspector-val"><code>Assets/Data/Monsters/{Tier}/</code> — group by tier for organization.</span></div>
+</div>
+</section>
+
+<!-- §8 — MONSTER SPAWNING -->
+<section>
+<div id="sec-8" class="sec-eyebrow">Section 8 · Part 3 · Phase 2</div>
+<h1>Monster Spawning &amp; Partner Setup <span class="status s-pending">Pending Phase 2</span></h1>
+
+<h2>8.1 Purpose</h2>
+<p>Spawn a visual monster in the world from a <code>MonsterData</code> template. The first use case is spawning the player's starting partner. Later, this same system handles wild encounters, NPC companions, and overworld roaming creatures.</p>
+
+<h2>8.2 Runtime Instance vs Template</h2>
+<table class="tbl">
+<thead><tr><th>Concept</th><th>Class</th><th>Lifetime</th></tr></thead>
+<tbody>
+<tr><td><strong>Template</strong></td><td><code>MonsterData</code> (ScriptableObject)</td><td>Asset — exists forever in project. Read-only.</td></tr>
+<tr><td><strong>Instance</strong></td><td><code>MonsterInstance</code> (plain C# class)</td><td>Created at runtime. Contains current HP, bond level, XP, equipped skills. Serialized to save file.</td></tr>
+<tr><td><strong>World Representation</strong></td><td><code>MonsterWorldEntity</code> (MonoBehaviour)</td><td>The actual GameObject in the scene. Has SpriteRenderer, Animator, Collider. References a MonsterInstance.</td></tr>
+</tbody>
+</table>
+
+<div class="design-note"><strong>Separation of concerns:</strong> The template defines what a species <em>is</em>. The instance tracks what a <em>specific</em> creature has become. The world entity is just the visual body — destroy the GameObject, the instance data persists in the save system.</div>
+
+<h2>8.3 Inspector Setup — Monster Prefab</h2>
+<div class="inspector-box">
+  <div class="inspector-title">Monster Prefab Structure</div>
+  <div class="inspector-row"><span class="inspector-key">Create</span><span class="inspector-val">Empty GameObject → name it <code>MonsterEntity</code></span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: SpriteRenderer</span><span class="inspector-val">Sorting Layer: <code>Characters</code>. Sprite left empty (set at runtime from MonsterData).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: Animator</span><span class="inspector-val">Controller left empty (set at runtime from MonsterData.animatorController).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: Rigidbody2D</span><span class="inspector-val"><code>Body Type: Dynamic</code>, <code>Gravity Scale: 0</code>, <code>Freeze Rotation: Z ✓</code></span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: CircleCollider2D</span><span class="inspector-val">Radius: 0.3. Offset Y downward to foot level. Used for physics / obstacle collisions.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Add: MonsterWorldEntity.cs</span><span class="inspector-val">This is the MonoBehaviour that receives a MonsterInstance at spawn time and configures the visual components.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Save as Prefab</span><span class="inspector-val"><code>Assets/Prefabs/Monsters/MonsterEntity.prefab</code></span></div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════ PART 4 ═══════════════════════════════ -->
+<div id="part-4" class="part-divider">
+  <div class="part-num">Part 4</div>
+  <div class="part-title">Phase 3 — Companion AI &amp; Pathfinding</div>
+  <div class="part-desc">Make the monster follow the player. Give it a state machine. Make it navigate around obstacles. Give it personal space.</div>
+</div>
+
+<!-- §9 — COMPANION STATE MACHINE -->
+<section>
+<div id="sec-9" class="sec-eyebrow">Section 9 · Part 4 · Phase 3</div>
+<h1>Companion State Machine <span class="status s-pending">Pending Phase 3</span></h1>
+
+<h2>9.1 States</h2>
+<table class="tbl">
+<thead><tr><th>State</th><th>Condition to Enter</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td><strong>Idle</strong></td><td>Player is stationary and within follow radius</td><td>Monster stops moving. Plays idle animation. Faces player.</td></tr>
+<tr><td><strong>Follow</strong></td><td>Player moves beyond personal space buffer</td><td>Monster pathfinds toward player's position. Maintains a buffer distance — doesn't stack on top of player.</td></tr>
+<tr><td><strong>Catch Up</strong></td><td>Player moves beyond a "leash" distance</td><td>Monster moves at increased speed (1.5× base) to close the gap. Transitions back to Follow once within follow radius.</td></tr>
+<tr><td><strong>Wander</strong></td><td>Player has been idle for 5+ seconds</td><td>Monster picks a random point within a small radius and walks to it. Returns to Idle after reaching the point. Creates the illusion of a living creature exploring nearby.</td></tr>
+<tr><td><strong>Teleport</strong></td><td>Distance exceeds maximum leash (scene transitions, player sprints far)</td><td>Monster teleports to a point near the player with a brief VFX. Safety net — prevents permanent separation.</td></tr>
+</tbody>
+</table>
+
+<h2>9.2 Key Concepts</h2>
+<p><strong>Personal Space Buffer:</strong> The companion never gets closer than a minimum distance to the player. This prevents the "stepping on your feet" problem. The buffer should be roughly 1–1.5 tiles.</p>
+<p><strong>Smoothed Arrival:</strong> When the companion reaches its target position, it doesn't snap-stop. It decelerates over a short distance. This is the single most important "feels alive" detail.</p>
+<p><strong>Bond-Driven Behavior (GDD §6):</strong> As bond level increases, the companion's follow distance tightens, wander radius increases (more confident), and it responds faster to player movement. These are tuning values, not state changes.</p>
+
+<h2>9.3 Variable Tuning</h2>
+<div class="tuning-grid">
+  <div class="tuning-card">
+    <div class="tuning-card-label">Follow Speed</div>
+    <div class="tuning-card-val">4.5</div>
+    <div class="tuning-card-unit">units/sec</div>
+    <div class="tuning-card-note">Range: 3–6. Slightly slower than player (5.0) so the companion trails behind naturally. Faster feels robotic.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Personal Space</div>
+    <div class="tuning-card-val">1.2</div>
+    <div class="tuning-card-unit">units (tiles)</div>
+    <div class="tuning-card-note">Range: 0.8–2.0. The minimum distance the companion maintains from the player. At 1.2 the creature is "beside" you, not "on top" of you.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Catch-Up Threshold</div>
+    <div class="tuning-card-val">5.0</div>
+    <div class="tuning-card-unit">units</div>
+    <div class="tuning-card-note">Range: 3–8. Distance at which the companion switches to Catch Up (1.5× speed). If too low, it sprints constantly. If too high, it lags behind.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Teleport Threshold</div>
+    <div class="tuning-card-val">15.0</div>
+    <div class="tuning-card-unit">units</div>
+    <div class="tuning-card-note">Range: 10–25. If the companion is this far from the player, it teleports. Safety net for edge cases.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Wander Radius</div>
+    <div class="tuning-card-val">2.0</div>
+    <div class="tuning-card-unit">units</div>
+    <div class="tuning-card-note">Range: 1–4. How far the companion wanders during idle. Larger feels more independent. Bond level can scale this.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Wander Idle Delay</div>
+    <div class="tuning-card-val">5.0</div>
+    <div class="tuning-card-unit">seconds</div>
+    <div class="tuning-card-note">Range: 3–10. How long the player must be stationary before the companion starts wandering. Shorter feels more alive.</div>
+  </div>
+</div>
+</section>
+
+<!-- §10 — PATHFINDING -->
+<section>
+<div id="sec-10" class="sec-eyebrow">Section 10 · Part 4 · Phase 3</div>
+<h1>Pathfinding &amp; Obstacle Avoidance <span class="status s-pending">Pending Phase 3</span></h1>
+
+<h2>10.1 A* Pathfinding Setup</h2>
+<p>Import A* Pathfinding Project (Lite) from the Unity Asset Store. The free version supports grid graphs, which is exactly what a tile-based world needs.</p>
+
+<div class="inspector-box">
+  <div class="inspector-title">A* Pathfinding Configuration</div>
+  <div class="inspector-row"><span class="inspector-key">Create: A* GameObject</span><span class="inspector-val">Add an empty GameObject named <code>A*</code>. Add the <code>Pathfinder</code> component.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Graph Type</span><span class="inspector-val">Add a <code>Grid Graph</code>. Set width/depth to cover your playable area. Node size: 0.5 (half a tile for finer navigation).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Collision Testing</span><span class="inspector-val">Set collision mask to your "Obstacles" physics layer. Diameter: match node size. Height testing off (2D).</span></div>
+  <div class="inspector-row"><span class="inspector-key">Monster Prefab</span><span class="inspector-val">Add <code>Seeker</code> component + <code>AIPath</code> component (or <code>AILerp</code> for smoother movement). Set max speed to match follow speed tuning.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Obstacle Layer</span><span class="inspector-val">All trees, fences, buildings, and water tiles must be on an "Obstacles" physics layer with colliders. The grid graph scans these on startup.</span></div>
+</div>
+
+<h2>10.2 Avoiding "Stuck on Corners" Problem</h2>
+<p>The most common companion AI bug: the monster gets stuck on the corner of an obstacle because the collider edge catches it. Three mitigations:</p>
+<ul>
+  <li><strong>Use CircleCollider2D</strong> on the monster (not BoxCollider2D). Circles slide along edges naturally.</li>
+  <li><strong>Erosion on the grid graph:</strong> Set erosion iterations to 1 in the A* graph settings. This makes nodes adjacent to walls unwalkable, keeping the path away from edges.</li>
+  <li><strong>Obstacle padding:</strong> Set <code>AIPath.pickNextWaypointDist</code> high enough (0.5–1.0) that the monster doesn't try to hug corners.</li>
+</ul>
+
+<h2>10.3 Path Recalculation Frequency</h2>
+<div class="warn-note"><strong>Performance rule:</strong> Do not recalculate the path every frame. Use <code>AIPath.repathRate = 0.5f</code> (recalculate every 0.5 seconds). The visual smoothing of <code>AIPath</code> hides the gap between recalculations. If the player hasn't moved, skip the recalculation entirely — subscribe to a "player moved" event rather than polling.</div>
+</section>
+
+<!-- ═══════════════════════════════ PART 5 ═══════════════════════════════ -->
+<div id="part-5" class="part-divider">
+  <div class="part-num">Part 5</div>
+  <div class="part-title">Phase 4 — Open World Optimization</div>
+  <div class="part-desc">Make the world big without making it slow. Chunk management, event-driven patterns, and the rules for Update().</div>
+</div>
+
+<!-- §11 — WORLD CHUNK MANAGER -->
+<section>
+<div id="sec-11" class="sec-eyebrow">Section 11 · Part 5 · Phase 4</div>
+<h1>World Chunk Manager <span class="status s-pending">Pending Phase 4</span></h1>
+
+<h2>11.1 Concept</h2>
+<p>The world is divided into a grid of chunks. Each chunk is a parent GameObject containing all tiles, objects, NPCs, and creatures for that area. The <code>WorldChunkManager</code> script tracks the player's position and enables/disables chunks based on distance.</p>
+
+<h2>11.2 C# Script — <code>WorldChunkManager.cs</code></h2>
+<div class="code-block">
+<div class="code-header"><span class="code-lang">C#</span> WorldChunkManager.cs</div>
+<pre><span class="kw">using</span> UnityEngine;
+<span class="kw">using</span> System.Collections.Generic;
+
+<span class="cmt">/// &lt;summary&gt;
+/// Enables/disables world chunks based on player proximity.
+/// Does NOT use Update() — recalculates on a timer.
+/// &lt;/summary&gt;</span>
+<span class="kw">public class</span> <span class="type">WorldChunkManager</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="attr">Header</span>(<span class="str">"References"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"The player's Transform"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private</span> <span class="type">Transform</span> _playerTransform;
+
+    [<span class="attr">Header</span>(<span class="str">"Chunk Settings"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"Distance in units to keep chunks active"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _activateRadius = <span class="num">30f</span>;
+
+    [<span class="attr">Tooltip</span>(<span class="str">"Distance beyond which chunks are disabled"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _deactivateRadius = <span class="num">40f</span>;
+
+    [<span class="attr">Tooltip</span>(<span class="str">"Seconds between chunk visibility checks"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private float</span> _checkInterval = <span class="num">0.5f</span>;
+
+    [<span class="attr">Header</span>(<span class="str">"Chunks"</span>)]
+    [<span class="attr">Tooltip</span>(<span class="str">"Parent objects for each chunk — auto-detected if empty"</span>)]
+    [<span class="attr">SerializeField</span>] <span class="kw">private</span> <span class="type">List</span>&lt;<span class="type">GameObject</span>&gt; _chunks = <span class="kw">new</span>();
+
+    <span class="kw">private float</span> _timer;
+
+    <span class="kw">private void</span> <span class="fn">Start</span>()
+    {
+        <span class="cmt">// Auto-detect chunks if list is empty</span>
+        <span class="kw">if</span> (_chunks.Count == <span class="num">0</span>)
+        {
+            <span class="kw">foreach</span> (<span class="type">Transform</span> child <span class="kw">in</span> transform)
+                _chunks.Add(child.gameObject);
+        }
+
+        <span class="cmt">// Initial evaluation</span>
+        EvaluateChunks();
+    }
+
+    <span class="kw">private void</span> <span class="fn">Update</span>()
+    {
+        <span class="cmt">// Timer-based, not every frame</span>
+        _timer += <span class="type">Time</span>.deltaTime;
+        <span class="kw">if</span> (_timer &lt; _checkInterval) <span class="kw">return</span>;
+        _timer = <span class="num">0f</span>;
+
+        EvaluateChunks();
+    }
+
+    <span class="kw">private void</span> <span class="fn">EvaluateChunks</span>()
+    {
+        <span class="type">Vector2</span> playerPos = _playerTransform.position;
+
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; _chunks.Count; i++)
+        {
+            <span class="kw">float</span> dist = <span class="type">Vector2</span>.Distance(
+                playerPos, _chunks[i].transform.position
+            );
+
+            <span class="kw">bool</span> isActive = _chunks[i].activeSelf;
+
+            <span class="cmt">// Hysteresis: different thresholds for on/off
+            // prevents flickering at boundary</span>
+            <span class="kw">if</span> (!isActive &amp;&amp; dist &lt; _activateRadius)
+                _chunks[i].SetActive(<span class="kw">true</span>);
+            <span class="kw">else if</span> (isActive &amp;&amp; dist > _deactivateRadius)
+                _chunks[i].SetActive(<span class="kw">false</span>);
+        }
+    }
+}</pre>
+</div>
+
+<h2>11.3 Variable Tuning</h2>
+<div class="tuning-grid">
+  <div class="tuning-card">
+    <div class="tuning-card-label">Activate Radius</div>
+    <div class="tuning-card-val">30</div>
+    <div class="tuning-card-unit">units</div>
+    <div class="tuning-card-note">Range: 20–50. Must be larger than the camera viewport. At 320×180 reference resolution, the viewport is ~20 units wide. 30 gives a buffer of ~5 units off-screen on each side.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Deactivate Radius</div>
+    <div class="tuning-card-val">40</div>
+    <div class="tuning-card-unit">units</div>
+    <div class="tuning-card-note">Range: 30–60. Must be larger than activate radius (hysteresis). The gap prevents chunks from flickering on/off when the player is near a boundary.</div>
+  </div>
+  <div class="tuning-card">
+    <div class="tuning-card-label">Check Interval</div>
+    <div class="tuning-card-val">0.5</div>
+    <div class="tuning-card-unit">seconds</div>
+    <div class="tuning-card-note">Range: 0.2–1.0. How often the manager checks chunk distances. At 0.5, it runs twice per second — plenty fast for walking speed. Lower if the player can move very fast (sprint, teleport).</div>
+  </div>
+</div>
+
+<h2>11.4 Inspector Setup</h2>
+<div class="inspector-box">
+  <div class="inspector-title">World Chunk Structure</div>
+  <div class="inspector-row"><span class="inspector-key">Create: WorldManager</span><span class="inspector-val">Empty GameObject at scene root. Add <code>WorldChunkManager.cs</code>.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Create: Chunk children</span><span class="inspector-val">Each chunk is a child of WorldManager. Name them <code>Chunk_0_0</code>, <code>Chunk_1_0</code>, etc. (grid coordinates). Each chunk's position is its center point.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Chunk contents</span><span class="inspector-val">All tiles, trees, NPCs, etc. for that area are children of the chunk. When the chunk is disabled, everything inside it is disabled.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Player reference</span><span class="inspector-val">Drag the Player GameObject into the <code>_playerTransform</code> slot.</span></div>
+  <div class="inspector-row"><span class="inspector-key">Auto-detection</span><span class="inspector-val">Leave the Chunks list empty — the script auto-populates it from children on Start(). Or manually drag chunks for explicit control.</span></div>
+</div>
+</section>
+
+<!-- §12 — PERFORMANCE RULES -->
+<section>
+<div id="sec-12" class="sec-eyebrow">Section 12 · Part 5 · Phase 4</div>
+<h1>Performance Rules &amp; Event-Driven Patterns <span class="status s-pending">Pending Phase 4</span></h1>
+
+<h2>12.1 The Update() Rule</h2>
+<p><code>Update()</code> runs every frame — 60+ times per second. Anything inside it must be cheap. Here's what's allowed and what isn't:</p>
+
+<table class="tbl">
+<thead><tr><th>Allowed in Update()</th><th>Move to Timer / Event / Coroutine</th></tr></thead>
+<tbody>
+<tr><td>Input polling (<code>InputAction.ReadValue</code>)</td><td>Distance checks between objects</td></tr>
+<tr><td>Animation parameter updates</td><td>Pathfinding recalculations</td></tr>
+<tr><td>Simple boolean state checks</td><td>AI decision-making</td></tr>
+<tr><td>UI element updates (health bar fill)</td><td>Chunk visibility evaluation</td></tr>
+<tr><td>Camera follow (smooth damp)</td><td>Save/load operations</td></tr>
+</tbody>
+</table>
+
+<h2>12.2 Event-Driven Pattern Examples</h2>
+<p>Instead of polling, subscribe to events. This is the single biggest performance and architecture win.</p>
+
+<div class="code-block">
+<div class="code-header"><span class="code-lang">C#</span> Event-Driven Pattern — Player Health Example</div>
+<pre><span class="cmt">// ── BAD: Polling in Update ──</span>
+<span class="kw">void</span> <span class="fn">Update</span>() {
+    healthBar.fillAmount = player.CurrentHP / player.MaxHP; <span class="cmt">// runs 60×/sec for no reason</span>
+}
+
+<span class="cmt">// ── GOOD: Event-driven ──</span>
+<span class="kw">void</span> <span class="fn">OnEnable</span>() {
+    player.OnHealthChanged += UpdateHealthBar; <span class="cmt">// subscribe once</span>
+}
+
+<span class="kw">void</span> <span class="fn">OnDisable</span>() {
+    player.OnHealthChanged -= UpdateHealthBar; <span class="cmt">// always unsubscribe</span>
+}
+
+<span class="kw">void</span> <span class="fn">UpdateHealthBar</span>(<span class="kw">float</span> current, <span class="kw">float</span> max) {
+    healthBar.fillAmount = current / max; <span class="cmt">// runs only when HP changes</span>
+}</pre>
+</div>
+
+<h2>12.3 Timer Pattern</h2>
+<div class="code-block">
+<div class="code-header"><span class="code-lang">C#</span> Timer Pattern — Throttled Checks</div>
+<pre><span class="cmt">// For things that need periodic checks but not every frame</span>
+<span class="kw">private float</span> _aiTimer;
+[<span class="attr">SerializeField</span>] <span class="kw">private float</span> _aiTickRate = <span class="num">0.25f</span>;
+
+<span class="kw">void</span> <span class="fn">Update</span>()
+{
+    _aiTimer += <span class="type">Time</span>.deltaTime;
+    <span class="kw">if</span> (_aiTimer &lt; _aiTickRate) <span class="kw">return</span>;
+    _aiTimer = <span class="num">0f</span>;
+
+    <span class="cmt">// Expensive logic runs 4×/sec instead of 60×/sec</span>
+    EvaluateAIState();
+}</pre>
+</div>
+
+<h2>12.4 Object Pooling Rule</h2>
+<p>Any object that is frequently created and destroyed must use a pool. This includes:</p>
+<ul>
+  <li>Wild monster spawns/despawns in chunks</li>
+  <li>Projectile and VFX particles during battle</li>
+  <li>Floating damage numbers</li>
+  <li>Interaction prompt UI elements</li>
+</ul>
+
+<div class="note">Unity 2021+ includes <code>UnityEngine.Pool.ObjectPool&lt;T&gt;</code> as a built-in generic pool. Use it instead of writing your own. For GameObjects specifically, consider a simple wrapper that calls <code>SetActive(true/false)</code> instead of <code>Instantiate/Destroy</code>.</div>
+</section>
+
+</div>
+</body>
+</html>
