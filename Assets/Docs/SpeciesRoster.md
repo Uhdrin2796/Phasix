@@ -9,7 +9,7 @@ GDD reference: §25 (Pending), §3 (Evolution web — Locked), §4 (Temper — L
 
 ## How to Use This File
 Each species entry here is the design source before it becomes a ScriptableObject asset.
-When an entry is complete and approved, create a `MonsterData` SO in `Assets/_Phasix/Data/Species/`.
+When an entry is complete and approved, create a `MonsterData` SO in `Assets/Data/Species/`.
 
 ---
 

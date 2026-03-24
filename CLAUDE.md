@@ -1,5 +1,5 @@
 # Phasix — Claude Code Project Memory
-**Auto-loaded by Claude Code. Full spec: Assets/_Phasix/Docs/ClaudeCode_Primer.md**
+**Auto-loaded by Claude Code. Full spec: Assets/Docs/ClaudeCode_Primer.md**
 GDD v0.7.9 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
 
 ---
@@ -42,8 +42,9 @@ Senior Unity Developer and C# Architect. Every response: real scripts, real Insp
 
 ## Folder Structure
 ```
-Assets/_Phasix/
-  Docs/          ← GDD, Technical Directive, Primer, CHANGELOG, DECISIONS, LoreBible
+Assets/
+  Docs/          ← GDD, Technical Directive, Primer, CHANGELOG, DECISIONS, Roadmap, NumericalCalibration, SpeciesRoster, LoreBible
+  Docs/Prototypes/ ← Pre-dev encounter prototypes (Vorthex, dialogue tree) — revisit Phase 3
   Scripts/
     Core/        ← GameManager, EventBus, SaveManager
     Player/      ← PlayerController, CameraFollow
@@ -134,9 +135,13 @@ Flag these with `// TODO: pending GDD §XX design phase` and leave data slots em
 ---
 
 ## Reference Files in This Project
-- `Assets/_Phasix/Docs/ClaudeCode_Primer.md` — full 311-line spec, read for deep detail
-- `Assets/_Phasix/Docs/GDD_CreatureRPG_v0_7_9.html` — master design doc
-- `Assets/_Phasix/Docs/TechnicalDirective_v0_1_0.html` — implementation patterns, existing scripts
-- `Assets/_Phasix/Docs/CHANGELOG.md` — what was built and when
-- `Assets/_Phasix/Docs/DECISIONS.md` — implementation decisions not in the GDD
-- `Assets/_Phasix/Docs/LoreBible_Phasix.md` — world lore, factions, naming conventions
+- `Assets/Docs/ClaudeCode_Primer.md` — full 311-line spec, read for deep detail
+- `Assets/Docs/GDD_CreatureRPG_v0.7.9.html` — master design doc
+- `Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html` — implementation patterns, existing scripts
+- `Assets/Docs/CHANGELOG.md` — what was built and when
+- `Assets/Docs/DECISIONS.md` — implementation decisions not in the GDD
+- `Assets/Docs/Roadmap_v2.md` — 20-month phased development plan
+- `Assets/Docs/NumericalCalibration.md` — tuning register (all values pending calibration)
+- `Assets/Docs/SpeciesRoster.md` — species design template (no species designed yet)
+- `Assets/Docs/LoreBible_Phasix.html` — world lore, factions, Five Frequencies, Phasix psychology
+- `Assets/Docs/Prototypes/README.md` — index of pre-dev encounter prototypes (revisit Phase 3)

@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon-Farm · Dialogue Tree Visualizer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --void: #04050a;
+    --deep: #0b0d16;
+    --panel: #10131f;
+    --surface: #161927;
+    --border: #1e2235;
+    --border-glow: #2a3050;
+
+    --phase-cyan: #38d9f5;
+    --phase-blue: #4a6fff;
+    --phase-purple: #9b59f7;
+    --phase-gold: #f5c842;
+    --phase-red: #f55442;
+    --phase-green: #42f5a8;
+
+    --text-primary: #e8ecff;
+    --text-secondary: #7a84a8;
+    --text-muted: #3d4460;
+
+    --node-start: #38d9f5;
+    --node-player: #4a6fff;
+    --node-npc: #9b59f7;
+    --node-outcome-good: #42f5a8;
+    --node-outcome-bad: #f55442;
+    --node-outcome-neutral: #f5c842;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--void);
+    color: var(--text-primary);
+    font-family: 'Crimson Pro', Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  .header {
+    position: relative;
+    z-index: 10;
+    padding: 28px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(56,217,245,0.04) 0%, transparent 100%);
+  }
+
+  .header-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--phase-cyan), var(--phase-blue));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 20px rgba(56,217,245,0.3);
+  }
+
+  .header-text h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--phase-cyan);
+  }
+
+  .header-text p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'DM Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .header-badge {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-glow);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+  }
+
+  /* Main layout */
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 81px);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Left panel - dialogue player */
+  .dialogue-panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: var(--deep);
+    overflow: hidden;
+  }
+
+  .scene-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(155,89,247,0.06) 0%, transparent 100%);
+  }
+
+  .scene-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--phase-purple);
+    margin-bottom: 6px;
+  }
+
+  .scene-title {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+
+  .scene-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* Dialogue log */
+  .dialogue-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .dialogue-log::-webkit-scrollbar { width: 4px; }
+  .dialogue-log::-webkit-scrollbar-track { background: transparent; }
+  .dialogue-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .dialogue-entry {
+    padding: 10px 24px;
+    animation: fadeSlide 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .entry-speaker {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .entry-speaker::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .speaker-npc .entry-speaker { color: var(--phase-purple); }
+  .speaker-npc .entry-speaker::before { background: var(--phase-purple); box-shadow: 0 0 6px var(--phase-purple); }
+  .speaker-player .entry-speaker { color: var(--phase-blue); }
+  .speaker-player .entry-speaker::before { background: var(--phase-blue); box-shadow: 0 0 6px var(--phase-blue); }
+  .speaker-narrator .entry-speaker { color: var(--phase-gold); }
+  .speaker-narrator .entry-speaker::before { background: var(--phase-gold); }
+
+  .entry-text {
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: var(--text-primary);
+  }
+
+  .speaker-narrator .entry-text {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .speaker-player .entry-text {
+    color: #c5d0ff;
+  }
+
+  /* Choices */
+  .choices-area {
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .choices-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .choice-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.4;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .choice-btn::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--phase-blue);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .choice-btn:hover {
+    border-color: var(--phase-blue);
+    background: rgba(74, 111, 255, 0.08);
+    transform: translateX(2px);
+  }
+
+  .choice-btn:hover::before { opacity: 1; }
+
+  .choice-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .choice-number {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--phase-blue);
+    margin-right: 8px;
+    opacity: 0.7;
+  }
+
+  .outcome-display {
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .outcome-good { background: rgba(66,245,168,0.08); border: 1px solid rgba(66,245,168,0.2); color: var(--phase-green); }
+  .outcome-bad { background: rgba(245,84,66,0.08); border: 1px solid rgba(245,84,66,0.2); color: var(--phase-red); }
+  .outcome-neutral { background: rgba(245,200,66,0.08); border: 1px solid rgba(245,200,66,0.2); color: var(--phase-gold); }
+
+  .restart-btn {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 9px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .restart-btn:hover {
+    border-color: var(--phase-cyan);
+    color: var(--phase-cyan);
+  }
+
+  /* Right panel - tree visualizer */
+  .tree-panel {
+    position: relative;
+    overflow: hidden;
+    background: var(--void);
+  }
+
+  .tree-panel-header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 14px 24px;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+    background: rgba(4,5,10,0.8);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .tree-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Path tracker */
+  .path-tracker {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(11,13,22,0.92);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  .path-tracker span {
+    color: var(--phase-cyan);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">◈</div>
+  <div class="header-text">
+    <h1>Mon-Farm · Dialogue System</h1>
+    <p>interactive_tree_visualizer.v1 · scene: first_encounter</p>
+  </div>
+  <div class="header-badge">ALGORITHM MAP</div>
+</div>
+
+<div class="layout">
+
+  <!-- Dialogue Panel -->
+  <div class="dialogue-panel">
+    <div class="scene-header">
+      <div class="scene-label">Scene 001 · Verdant Scar Region</div>
+      <div class="scene-title">The Fractured Grove</div>
+      <div class="scene-desc">A Phasix stirs in the rift-light. An Ashveil researcher bars your path, suspicious of your presence.</div>
+    </div>
+
+    <div class="dialogue-log" id="dialogueLog"></div>
+
+    <div class="choices-area" id="choicesArea">
+      <div class="choices-label">Your Response</div>
+      <div id="choiceButtons"></div>
+    </div>
+  </div>
+
+  <!-- Tree Panel -->
+  <div class="tree-panel">
+    <div class="tree-panel-header">
+      <span class="tree-label">◈ Dialogue Tree · Algorithm View</span>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#38d9f5"></div>Start</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#9b59f7"></div>NPC</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4a6fff"></div>Player Choice</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#42f5a8"></div>Bond +</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f5c842"></div>Neutral</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f55442"></div>Bond −</div>
+      </div>
+    </div>
+    <canvas id="treeCanvas"></canvas>
+    <div class="path-tracker" id="pathTracker">Path: <span id="pathDisplay">START</span></div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  DIALOGUE DATA STRUCTURE
+// ─────────────────────────────────────────────
+const TREE = {
+  start: {
+    id: 'start',
+    type: 'narrator',
+    text: 'The air hums with Phase residue. Through the fractured bark of a resonance tree, something watches you — a creature half-formed from light and instinct. Before you can approach, a figure steps from the shadows.',
+    next: 'npc_1'
+  },
+  npc_1: {
+    id: 'npc_1',
+    type: 'npc',
+    speaker: 'Researcher Vael',
+    text: "This grove is under Ashveil observation. Unauthorized contact with a Phasix disrupts the bond-formation window. State your purpose — or leave.",
+    choices: [
+      { text: "I'm a licensed Tamer. I have every right to be here.", next: 'npc_2a', label: 'Assert Authority' },
+      { text: "I meant no disruption. I only wanted to observe.", next: 'npc_2b', label: 'Show Humility' },
+      { text: "That creature reached out to me first. Ask it.", next: 'npc_2c', label: 'Invoke the Phasix' }
+    ]
+  },
+
+  // Branch A — Assert Authority
+  npc_2a: {
+    id: 'npc_2a',
+    type: 'npc',
+    speaker: 'Researcher Vael',
+    text: "Licensed. Right." ,
+    subtext: "Her eyes narrow, scanning the seal at your belt — real enough, but she doesn't lower her guard.",
+    text2: "A license covers sanctioned zones. This grove is flagged restricted since the last Fracture pulse. So. Try again.",
+    choices: [
+      { text: "Fine. I'll wait outside the perimeter. But I'll be watching.", next: 'outcome_a_neutral', label: 'Tactical Retreat' },
+      { text: "The Fracture pulse is why I'm here. I sensed the bond window.", next: 'npc_3a', label: 'Reveal Knowledge' }
+    ]
+  },
+
+  npc_3a: {
+    id: 'npc_3a',
+    type: 'npc',
+    speaker: 'Researcher Vael',
+    text: "…You sensed the window.",
+    subtext: "A pause. She tilts her head — the suspicion shifts, just slightly, into something like curiosity.",
+    text2: "That's not something you learn from a manual. That's attunement. Ashveil hasn't seen a natural attuned in three seasons.",
+    choices: [
+      { text: "I don't fully understand it either. It just… pulls.", next: 'outcome_a_good', label: 'Honest Vulnerability' },
+      { text: "It's a skill I've developed. I study rift behavior.", next: 'outcome_a_neutral2', label: 'Measured Claim' }
+    ]
+  },
+
+  // Branch B — Show Humility
+  npc_2b: {
+    id: 'npc_2b',
+    type: 'npc',
+    speaker: 'Researcher Vael',
+    text: "Observe.",
+    subtext: "She says the word like she's testing how it tastes.",
+    text2: "Most Tamers come here hungry. Wanting to claim, to bond, to collect. You're the first to use that word in a while. What exactly were you hoping to see?",
+    choices: [
+      { text: "How it moves before it chooses. Before the bond decides anything.", next: 'outcome_b_good', label: 'Show Insight' },
+      { text: "Honestly? I don't know. Something drew me here.", next: 'outcome_b_neutral', label: 'Admit Uncertainty' },
+      { text: "I was just passing through. I'll go.", next: 'outcome_b_bad', label: 'Deflect & Leave' }
+    ]
+  },
+
+  // Branch C — Invoke the Phasix
+  npc_2c: {
+    id: 'npc_2c',
+    type: 'npc',
+    speaker: 'Researcher Vael',
+    text: "...",
+    subtext: "Silence. Then — behind her — the rift-light flickers. The Phasix shifts. Its luminous eyes blink once, toward you.",
+    text2: "Vael turns slowly, watching it. She exhales, something between frustration and awe.",
+    choices: [
+      { text: "Don't interfere. Let it decide.", next: 'outcome_c_good', label: 'Trust the Bond' },
+      { text: "I told you. I didn't come here to cause trouble.", next: 'outcome_c_neutral', label: 'Reassure' }
+    ]
+  },
+
+  // Outcomes
+  outcome_a_good: {
+    id: 'outcome_a_good', type: 'outcome', outcomeType: 'good',
+    text: "Vael steps aside. 'Don't touch it. Not yet. But… stay.' The Phasix presses its muzzle toward the rift-light, and for a moment, you feel the pull of something ancient and unfinished. Bond window: OPEN. Relationship with Vael: +12. Ashveil Standing: +5."
+  },
+  outcome_a_neutral2: {
+    id: 'outcome_a_neutral2', type: 'outcome', outcomeType: 'neutral',
+    text: "She nods, a careful nod. 'There's a researcher's tent past the second rift-stone. Come speak with me after the window closes.' Respect earned — but no warmth. Bond window: MISSED (interrupted). Relationship with Vael: +3."
+  },
+  outcome_a_neutral: {
+    id: 'outcome_a_neutral', type: 'outcome', outcomeType: 'neutral',
+    text: "You step back to the grove's edge. From here, you watch the Phasix dissolve into Phase-light as the bond window closes. Vael doesn't look at you. The opportunity passes. Bond window: MISSED. Relationship with Vael: +0."
+  },
+  outcome_b_good: {
+    id: 'outcome_b_good', type: 'outcome', outcomeType: 'good',
+    text: "Vael's posture softens — fractionally, but visibly. 'That's the question most researchers spend years forgetting to ask.' She gestures toward the grove. 'Come. Quietly.' Bond window: OPEN. Relationship with Vael: +18. Ashveil Standing: +8."
+  },
+  outcome_b_neutral: {
+    id: 'outcome_b_neutral', type: 'outcome', outcomeType: 'neutral',
+    text: "'Something drew you here.' She repeats it without mockery. 'Then maybe something will answer.' She steps aside — not welcoming, but not blocking. Bond window: OPEN (brief). Relationship with Vael: +6."
+  },
+  outcome_b_bad: {
+    id: 'outcome_b_bad', type: 'outcome', outcomeType: 'bad',
+    text: "She watches you go, saying nothing. The Phasix fades back into the rift unseen. Vael makes a note in her field log — a small, precise notation. Bond window: CLOSED. Relationship with Vael: −4. Reputation: Unremarkable."
+  },
+  outcome_c_good: {
+    id: 'outcome_c_good', type: 'outcome', outcomeType: 'good',
+    text: "The Phasix takes three slow steps toward you. Vael doesn't move — she watches with the quiet reverence of someone witnessing a proof they'd stopped believing in. The bond-light ignites. Bond window: OPEN (FULL). Relationship with Vael: +22. Phasix Bond: INITIATED. Ashveil Access: ELEVATED."
+  },
+  outcome_c_neutral: {
+    id: 'outcome_c_neutral', type: 'outcome', outcomeType: 'neutral',
+    text: "She exhales. 'I can see that.' The Phasix settles, watching both of you with equal and unreadable attention. Vael finally steps aside. 'You have until the light shifts.' Bond window: OPEN (limited). Relationship with Vael: +8."
+  }
+};
+
+// ─────────────────────────────────────────────
+//  TREE LAYOUT (positions for canvas rendering)
+// ─────────────────────────────────────────────
+const NODE_LAYOUT = {
+  start:            { x: 0.5,  y: 0.06 },
+  npc_1:            { x: 0.5,  y: 0.16 },
+
+  npc_2a:           { x: 0.2,  y: 0.29 },
+  npc_2b:           { x: 0.5,  y: 0.29 },
+  npc_2c:           { x: 0.8,  y: 0.29 },
+
+  npc_3a:           { x: 0.12, y: 0.44 },
+
+  outcome_a_neutral:  { x: 0.27,  y: 0.55 },
+  outcome_a_neutral2: { x: 0.12,  y: 0.68 },
+  outcome_a_good:     { x: 0.01,  y: 0.68 },
+
+  outcome_b_bad:      { x: 0.40,  y: 0.44 },
+  outcome_b_neutral:  { x: 0.52,  y: 0.44 },
+  outcome_b_good:     { x: 0.64,  y: 0.44 },
+
+  outcome_c_neutral:  { x: 0.76,  y: 0.44 },
+  outcome_c_good:     { x: 0.88,  y: 0.44 },
+};
+
+const CONNECTIONS = [
+  ['start', 'npc_1'],
+  ['npc_1', 'npc_2a'], ['npc_1', 'npc_2b'], ['npc_1', 'npc_2c'],
+  ['npc_2a', 'npc_3a'], ['npc_2a', 'outcome_a_neutral'],
+  ['npc_3a', 'outcome_a_good'], ['npc_3a', 'outcome_a_neutral2'],
+  ['npc_2b', 'outcome_b_good'], ['npc_2b', 'outcome_b_neutral'], ['npc_2b', 'outcome_b_bad'],
+  ['npc_2c', 'outcome_c_good'], ['npc_2c', 'outcome_c_neutral'],
+];
+
+const NODE_COLORS = {
+  start: '#38d9f5',
+  narrator: '#38d9f5',
+  npc: '#9b59f7',
+  player: '#4a6fff',
+  outcome_good: '#42f5a8',
+  outcome_bad: '#f55442',
+  outcome_neutral: '#f5c842',
+};
+
+function getNodeColor(id) {
+  const node = TREE[id];
+  if (!node) return '#fff';
+  if (node.type === 'outcome') return NODE_COLORS['outcome_' + node.outcomeType];
+  return NODE_COLORS[node.type] || '#fff';
+}
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let currentNode = 'start';
+let visitedNodes = new Set();
+let pathHistory = ['START'];
+let activeChoiceEdges = [];
+
+// ─────────────────────────────────────────────
+//  CANVAS RENDERING
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('treeCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const panel = canvas.parentElement;
+  canvas.width = panel.offsetWidth;
+  canvas.height = panel.offsetHeight;
+  drawTree();
+}
+
+function getNodePos(id) {
+  const layout = NODE_LAYOUT[id];
+  if (!layout) return null;
+  return {
+    x: layout.x * canvas.width,
+    y: layout.y * canvas.height + 55
+  };
+}
+
+function drawTree() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid dots
+  ctx.fillStyle = 'rgba(30, 34, 53, 0.4)';
+  for (let x = 0; x < canvas.width; x += 28) {
+    for (let y = 0; y < canvas.height; y += 28) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Draw connections
+  CONNECTIONS.forEach(([from, to]) => {
+    const a = getNodePos(from);
+    const b = getNodePos(to);
+    if (!a || !b) return;
+
+    const isVisited = visitedNodes.has(from) && visitedNodes.has(to);
+    const isActive = activeChoiceEdges.some(e => e[0] === from && e[1] === to);
+    const isCurrent = from === currentNode || to === currentNode;
+
+    let color, width, alpha;
+    if (isActive) { color = '#4a6fff'; width = 2.5; alpha = 1; }
+    else if (isVisited) { color = getNodeColor(to); width = 1.5; alpha = 0.6; }
+    else { color = '#1e2235'; width = 1; alpha = 1; }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(isVisited ? [] : [4, 6]);
+
+    // Bezier curve
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.bezierCurveTo(a.x, a.y + (b.y - a.y) * 0.5, b.x, b.y - (b.y - a.y) * 0.5, b.x, b.y);
+    ctx.stroke();
+
+    // Arrow
+    if (isVisited || isActive) {
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      const arrowSize = 6;
+      ctx.setLineDash([]);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(b.x - 8 * Math.cos(angle), b.y - 8 * Math.sin(angle));
+      ctx.lineTo(b.x - 8 * Math.cos(angle) - arrowSize * Math.cos(angle - 0.4), b.y - 8 * Math.sin(angle) - arrowSize * Math.sin(angle - 0.4));
+      ctx.lineTo(b.x - 8 * Math.cos(angle) - arrowSize * Math.cos(angle + 0.4), b.y - 8 * Math.sin(angle) - arrowSize * Math.sin(angle + 0.4));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+
+  // Draw nodes
+  Object.keys(NODE_LAYOUT).forEach(id => {
+    const pos = getNodePos(id);
+    if (!pos) return;
+    const node = TREE[id];
+    if (!node) return;
+
+    const isCurrent = id === currentNode;
+    const isVisited = visitedNodes.has(id);
+    const color = getNodeColor(id);
+    const radius = isCurrent ? 10 : (isVisited ? 8 : 6);
+
+    // Glow for current
+    if (isCurrent) {
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radius + 4, 0, Math.PI * 2);
+      ctx.fillStyle = color + '22';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Node circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    if (isCurrent) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 15;
+    }
+    ctx.fillStyle = isVisited || isCurrent ? color : '#10131f';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isCurrent ? 2.5 : (isVisited ? 1.5 : 1);
+    ctx.stroke();
+    ctx.fill();
+    ctx.restore();
+
+    // Node label
+    const label = id === 'start' ? 'START'
+      : node.type === 'outcome' ? 'END'
+      : node.type === 'npc' ? 'NPC'
+      : node.type === 'narrator' ? 'NARR'
+      : 'NODE';
+
+    ctx.save();
+    ctx.font = `500 8px DM Mono, monospace`;
+    ctx.fillStyle = isCurrent ? '#fff' : (isVisited ? color : '#3d4460');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Short ID label below
+    ctx.fillStyle = isCurrent ? color : (isVisited ? color + 'cc' : '#2a3050');
+    ctx.font = `400 7.5px DM Mono, monospace`;
+    ctx.fillText(id.replace(/_/g, ' ').substring(0, 12), pos.x, pos.y + radius + 9);
+    ctx.restore();
+  });
+}
+
+// ─────────────────────────────────────────────
+//  DIALOGUE ENGINE
+// ─────────────────────────────────────────────
+function addEntry(type, speaker, text) {
+  const log = document.getElementById('dialogueLog');
+  const entry = document.createElement('div');
+  entry.className = `dialogue-entry speaker-${type}`;
+  entry.style.animationDelay = '0ms';
+  entry.innerHTML = `
+    <div class="entry-speaker">${speaker}</div>
+    <div class="entry-text">${text}</div>
+  `;
+  log.appendChild(entry);
+  setTimeout(() => log.scrollTop = log.scrollHeight, 50);
+}
+
+function renderNode(id) {
+  currentNode = id;
+  visitedNodes.add(id);
+  const node = TREE[id];
+
+  activeChoiceEdges = [];
+
+  if (node.type === 'narrator') {
+    addEntry('narrator', '⬥ Narrator', node.text);
+    setTimeout(() => renderNode(node.next), 400);
+
+  } else if (node.type === 'npc') {
+    if (node.subtext) {
+      addEntry('narrator', '⬥ Narrator', node.subtext);
+    }
+    addEntry('npc', `◈ ${node.speaker}`, node.text);
+    if (node.text2) {
+      addEntry('npc', `◈ ${node.speaker}`, node.text2);
+    }
+    renderChoices(node.choices, id);
+
+  } else if (node.type === 'outcome') {
+    const area = document.getElementById('choiceButtons');
+    const cls = `outcome-${node.outcomeType}`;
+    area.innerHTML = `<div class="outcome-display ${cls}">${node.text}</div>
+      <button class="restart-btn" onclick="restartTree()">↺ Restart Scene</button>`;
+    document.querySelector('.choices-label').textContent = 'Scene Outcome';
+  }
+
+  updatePath(id);
+  drawTree();
+}
+
+function renderChoices(choices, parentId) {
+  const area = document.getElementById('choiceButtons');
+  area.innerHTML = '';
+  document.querySelector('.choices-label').textContent = 'Your Response';
+
+  choices.forEach((choice, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="choice-number">[${i + 1}]</span>${choice.text}`;
+    btn.addEventListener('click', () => {
+      // highlight chosen edge
+      activeChoiceEdges = [[parentId, choice.next]];
+      // disable all buttons
+      area.querySelectorAll('button').forEach(b => b.disabled = true);
+      // log player choice
+      addEntry('player', '▸ You', choice.text);
+      visitedNodes.add(choice.next);
+      drawTree();
+      setTimeout(() => renderNode(choice.next), 500);
+    });
+    area.appendChild(btn);
+  });
+}
+
+function updatePath(id) {
+  const label = id === 'start' ? 'START'
+    : id.replace(/_/g, ' ').toUpperCase();
+  pathHistory.push(label);
+  document.getElementById('pathDisplay').textContent = pathHistory.slice(-4).join(' → ');
+}
+
+function restartTree() {
+  currentNode = 'start';
+  visitedNodes.clear();
+  activeChoiceEdges = [];
+  pathHistory = ['START'];
+  document.getElementById('dialogueLog').innerHTML = '';
+  document.getElementById('pathDisplay').textContent = 'START';
+  renderNode('start');
+}
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+setTimeout(() => renderNode('start'), 200);
+</script>
+</body>
+</html>

@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon-Farm · Phasix Encounter</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --void: #030408;
+  --deep: #080a12;
+  --panel: #0d1020;
+  --surface: #121526;
+  --border: #1a1e30;
+  --border-lit: #252a45;
+
+  --rage-1: #f5a623;
+  --rage-2: #f56e23;
+  --rage-3: #f52323;
+  --calm: #38d9f5;
+  --calm-2: #42f5a8;
+  --neutral: #c0c8ff;
+  --phase-blue: #4a6fff;
+  --phase-purple: #9b59f7;
+  --gold: #f5c842;
+
+  --text-primary: #e8ecff;
+  --text-secondary: #6b749a;
+  --text-muted: #2e3452;
+
+  --hp-green: #42f5a8;
+  --hp-yellow: #f5c842;
+  --hp-red: #f55442;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--void);
+  color: var(--text-primary);
+  font-family: 'Crimson Pro', Georgia, serif;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── ANIMATED BG ── */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bg-rift {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(155,89,247,0.06) 0%, transparent 70%);
+  animation: riftPulse 4s ease-in-out infinite;
+}
+
+@keyframes riftPulse {
+  0%,100% { transform: translate(-50%,-50%) scale(1); opacity:0.5; }
+  50% { transform: translate(-50%,-50%) scale(1.15); opacity:1; }
+}
+
+.bg-particles {
+  position: absolute;
+  inset: 0;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: floatUp linear infinite;
+  opacity: 0;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.3; }
+  100% { transform: translateY(-80vh) translateX(var(--drift)); opacity: 0; }
+}
+
+/* ── MAIN LAYOUT ── */
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── PHASES ── */
+.phase { display: none; flex-direction: column; height: 100%; }
+.phase.active { display: flex; }
+
+/* ══════════════════════════════════
+   PHASE 1 — ENCOUNTER DIALOGUE
+══════════════════════════════════ */
+#phase-encounter {
+  justify-content: flex-end;
+  background: radial-gradient(ellipse at 50% 30%, rgba(155,89,247,0.08) 0%, transparent 60%);
+}
+
+.encounter-scene {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 20px;
+}
+
+.phasix-visual {
+  width: 160px;
+  height: 160px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phasix-core {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #9b59f7 0%, #4a1a9b 60%, transparent 100%);
+  box-shadow: 0 0 40px rgba(155,89,247,0.6), 0 0 80px rgba(155,89,247,0.2);
+  animation: phasixFloat 3s ease-in-out infinite;
+  position: relative;
+}
+
+.phasix-core::after {
+  content: '◈';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: rgba(255,255,255,0.9);
+  animation: phasixSpin 8s linear infinite;
+}
+
+@keyframes phasixFloat {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes phasixSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.phasix-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(155,89,247,0.3);
+  animation: ringExpand 3s ease-out infinite;
+}
+.phasix-ring:nth-child(1) { width:100px; height:100px; animation-delay:0s; }
+.phasix-ring:nth-child(2) { width:130px; height:130px; animation-delay:0.8s; }
+.phasix-ring:nth-child(3) { width:160px; height:160px; animation-delay:1.6s; }
+
+@keyframes ringExpand {
+  0% { opacity:0.8; transform:scale(0.8); }
+  100% { opacity:0; transform:scale(1.2); }
+}
+
+.encounter-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--phase-purple);
+  text-align: center;
+  animation: fadeIn 1s ease both;
+}
+
+.encounter-name {
+  font-family: 'Cinzel', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  text-shadow: 0 0 30px rgba(155,89,247,0.5);
+  animation: fadeIn 1s 0.3s ease both;
+}
+
+/* ── DIALOGUE BOX ── */
+.dialogue-box {
+  background: rgba(8,10,18,0.95);
+  border: 1px solid var(--border-lit);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: 100%;
+  max-width: 700px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  animation: slideUp 0.4s ease both;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dialogue-speaker {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.speaker-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dialogue-text {
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  min-height: 48px;
+}
+
+.dialogue-narrator {
+  font-style: italic;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+}
+
+.dialogue-continue {
+  margin-top: 14px;
+  text-align: right;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: color 0.2s;
+  animation: blink 1.5s ease-in-out infinite;
+  user-select: none;
+}
+
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.dialogue-continue:hover { color: var(--phase-purple); }
+
+/* ═══════════════════════════════
+   PHASE 2 — BATTLE
+═══════════════════════════════ */
+#phase-battle {
+  display: none;
+  flex-direction: column;
+}
+#phase-battle.active { display: flex; }
+
+.battle-header {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(8,10,18,0.8);
+  backdrop-filter: blur(8px);
+}
+
+.battle-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--text-secondary);
+}
+
+.threshold-pips {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.threshold-pip {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border-lit);
+  background: var(--panel);
+  transition: all 0.4s;
+}
+
+.threshold-pip.triggered {
+  background: var(--phase-purple);
+  border-color: var(--phase-purple);
+  box-shadow: 0 0 8px var(--phase-purple);
+}
+
+/* HP Bars */
+.hp-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(8,10,18,0.6);
+}
+
+.hp-block { }
+
+.hp-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.hp-label span { color: var(--text-secondary); }
+
+.hp-track {
+  height: 8px;
+  background: var(--panel);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.hp-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease, background 0.4s ease;
+}
+
+.rage-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rage-indicator {
+  display: flex;
+  gap: 3px;
+}
+
+.rage-pip {
+  width: 10px; height: 4px;
+  border-radius: 2px;
+  background: var(--border-lit);
+  transition: background 0.4s;
+}
+
+.rage-pip.active { background: var(--rage-2); box-shadow: 0 0 4px var(--rage-2); }
+
+/* Modifier display */
+.modifier-banner {
+  padding: 8px 24px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  border-bottom: 1px solid var(--border);
+  min-height: 34px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  transition: border-color 0.4s;
+}
+
+@keyframes modReveal {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  60%  { opacity: 1; transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Battle scene placeholder */
+.battle-arena {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.battle-placeholder {
+  border: 1px dashed var(--border-lit);
+  border-radius: 12px;
+  padding: 24px 40px;
+  text-align: center;
+  max-width: 360px;
+}
+
+.battle-placeholder-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.battle-placeholder-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.battle-placeholder-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+/* Phasix battle sprite */
+.battle-phasix {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.battle-core {
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  animation: battleFloat 2s ease-in-out infinite;
+  transition: all 0.5s;
+}
+
+@keyframes battleFloat {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(5deg); }
+}
+
+.battle-core.calm-state { background: radial-gradient(circle, #38d9f5, #1a7a9b); box-shadow: 0 0 30px rgba(56,217,245,0.4); }
+.battle-core.neutral-state { background: radial-gradient(circle, #9b59f7, #4a1a9b); box-shadow: 0 0 30px rgba(155,89,247,0.5); }
+.battle-core.rage-state-1 { background: radial-gradient(circle, #f5a623, #9b4a00); box-shadow: 0 0 30px rgba(245,166,35,0.5); animation: battleFloat 1.5s ease-in-out infinite, shudder 0.3s ease-in-out infinite; }
+.battle-core.rage-state-2 { background: radial-gradient(circle, #f52323, #7a0a0a); box-shadow: 0 0 40px rgba(245,35,35,0.7); animation: battleFloat 1s ease-in-out infinite, shudder 0.2s ease-in-out infinite; }
+
+@keyframes shudder {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+.sim-btn {
+  background: var(--surface);
+  border: 1px solid var(--border-lit);
+  border-radius: 6px;
+  padding: 10px 20px;
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sim-btn:hover {
+  border-color: var(--phase-purple);
+  color: var(--phase-purple);
+  background: rgba(155,89,247,0.08);
+}
+
+/* ═══════════════════════════════
+   PHASE 3 — THRESHOLD DIALOGUE
+═══════════════════════════════ */
+.threshold-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3,4,8,0.92);
+  backdrop-filter: blur(16px);
+  padding: 24px;
+}
+
+.threshold-overlay.active { display: flex; }
+
+.threshold-header {
+  text-align: center;
+  margin-bottom: 24px;
+  animation: fadeIn 0.5s ease both;
+}
+
+.threshold-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.threshold-title {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.threshold-scene-text {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-secondary);
+  max-width: 560px;
+  text-align: center;
+  line-height: 1.7;
+  margin-bottom: 28px;
+  animation: fadeIn 0.5s 0.2s ease both;
+  opacity: 0;
+}
+
+.phasix-dialogue-line {
+  background: rgba(13,16,32,0.95);
+  border: 1px solid var(--border-lit);
+  border-radius: 10px;
+  padding: 16px 20px;
+  max-width: 560px;
+  width: 100%;
+  margin-bottom: 20px;
+  animation: fadeIn 0.5s 0.4s ease both;
+  opacity: 0;
+  position: relative;
+}
+
+.phasix-dialogue-line::before {
+  content: '';
+  position: absolute;
+  left: -1px; top: 20px; bottom: 20px;
+  width: 3px;
+  border-radius: 2px;
+}
+
+.phasix-speaker {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phasix-text {
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+/* Choices grid */
+.cope-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 560px;
+  width: 100%;
+  animation: fadeIn 0.5s 0.6s ease both;
+  opacity: 0;
+}
+
+.cope-btn {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.cope-btn:hover {
+  border-color: var(--phase-blue);
+  background: rgba(74,111,255,0.08);
+  transform: translateY(-2px);
+}
+
+.cope-btn-label {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cope-btn-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.cope-btn-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+/* Reaction display */
+.reaction-panel {
+  max-width: 560px;
+  width: 100%;
+  animation: fadeIn 0.4s ease both;
+}
+
+.reaction-modifier {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.reaction-modifier.mega { background: rgba(56,217,245,0.1); border: 1px solid rgba(56,217,245,0.3); color: var(--calm); }
+.reaction-modifier.buff { background: rgba(66,245,168,0.08); border: 1px solid rgba(66,245,168,0.25); color: var(--calm-2); }
+.reaction-modifier.neutral { background: rgba(192,200,255,0.06); border: 1px solid rgba(192,200,255,0.15); color: var(--neutral); }
+.reaction-modifier.debuff { background: rgba(245,84,66,0.08); border: 1px solid rgba(245,84,66,0.25); color: var(--hp-red); }
+
+.reaction-text {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-left: 2px solid var(--border-lit);
+}
+
+.continue-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.continue-btn:hover { border-color: var(--phase-purple); color: var(--phase-purple); }
+
+/* ═══════════════════════════════
+   PHASE 4 — CAPTURE ENDING
+═══════════════════════════════ */
+#phase-capture {
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  gap: 20px;
+}
+
+.capture-phasix {
+  width: 120px; height: 120px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.capture-core {
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  animation: phasixFloat 3s ease-in-out infinite;
+}
+
+.capture-title {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+}
+
+.capture-rate-display {
+  font-family: 'Cinzel', serif;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  margin: 4px 0;
+}
+
+.capture-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--text-muted);
+}
+
+.capture-dialogue {
+  background: rgba(8,10,18,0.9);
+  border: 1px solid var(--border-lit);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 560px;
+  width: 100%;
+}
+
+.capture-reflection {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 14px;
+}
+
+.capture-final {
+  font-size: 15.5px;
+  line-height: 1.7;
+}
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 560px;
+}
+
+.stat-chip {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-chip span { font-weight: 500; }
+
+.play-again-btn {
+  margin-top: 8px;
+  padding: 12px 28px;
+  background: transparent;
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.play-again-btn:hover { border-color: var(--phase-purple); color: var(--phase-purple); }
+
+/* ── TENSION BAR ── */
+.tension-block {
+  grid-column: 1 / -1;
+  padding: 6px 0 2px;
+}
+
+.tension-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.tension-end-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.tension-center-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color 0.5s;
+}
+
+.tension-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  overflow: visible;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.tension-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    rgba(245,110,35,0.55) 0%,
+    rgba(245,110,35,0.15) 30%,
+    rgba(46,52,82,0.3) 50%,
+    rgba(56,217,245,0.15) 70%,
+    rgba(56,217,245,0.55) 100%
+  );
+}
+
+.tension-center-tick {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--border-lit);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.tension-indicator {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  left: 50%;
+  z-index: 2;
+  transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.5s, box-shadow 0.5s;
+  background: var(--neutral);
+  box-shadow: 0 0 8px rgba(192,200,255,0.6);
+  border: 2px solid rgba(255,255,255,0.2);
+}
+
+/* ── RAGE FLASH ── */
+.rage-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+/* ── SCROLLABLE dialogue log on battle ── */
+.battle-log {
+  width: 100%;
+  max-width: 400px;
+  max-height: 80px;
+  overflow-y: auto;
+  margin-top: 10px;
+  scrollbar-width: none;
+}
+
+.log-entry {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  padding: 2px 0;
+  letter-spacing: 0.06em;
+  animation: fadeIn 0.3s ease both;
+}
+</style>
+</head>
+<body>
+
+<div class="bg-layer">
+  <div class="bg-rift"></div>
+  <div class="bg-particles" id="bgParticles"></div>
+</div>
+
+<div class="rage-flash" id="rageFlash"></div>
+
+<div id="app">
+
+<!-- ══════════════════════════════════
+     PHASE 1: ENCOUNTER
+══════════════════════════════════ -->
+<div id="phase-encounter" class="phase active">
+  <div class="encounter-scene">
+    <div class="phasix-visual" id="encounterPhasix">
+      <div class="phasix-ring"></div>
+      <div class="phasix-ring"></div>
+      <div class="phasix-ring"></div>
+      <div class="phasix-core"></div>
+    </div>
+    <div class="encounter-label">◈ Wild Phasix Appeared</div>
+    <div class="encounter-name">VORTHEX</div>
+  </div>
+
+  <div style="padding: 0 24px 28px; display:flex; justify-content:center;">
+    <div class="dialogue-box" style="max-width:600px;">
+      <div class="dialogue-speaker" id="encSpeaker">
+        <span class="speaker-dot" style="background:var(--phase-purple);box-shadow:0 0 6px var(--phase-purple);"></span>
+        <span style="color:var(--phase-purple);">Narrator</span>
+      </div>
+      <div class="dialogue-text" id="encText"></div>
+      <div class="dialogue-continue" id="encContinue" onclick="advanceEncounter()">▸ Continue</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     PHASE 2: BATTLE
+══════════════════════════════════ -->
+<div id="phase-battle" class="phase">
+  <div class="battle-header">
+    <div class="battle-title">◈ BATTLE · VERDANT SCAR</div>
+    <div class="threshold-pips">
+      <div class="threshold-pip" id="pip1" title="Threshold 1: 80%"></div>
+      <div class="threshold-pip" id="pip2" title="Threshold 2: 55%"></div>
+      <div class="threshold-pip" id="pip3" title="Threshold 3: 30%"></div>
+    </div>
+  </div>
+
+  <div class="hp-bars">
+    <div class="hp-block">
+      <div class="hp-label">
+        Vorthex (Phasix)
+        <span id="enemyHpText">100%</span>
+      </div>
+      <div class="hp-track">
+        <div class="hp-fill" id="enemyHp" style="width:100%;background:var(--hp-green);"></div>
+      </div>
+    </div>
+    <div class="hp-block">
+      <div class="hp-label">
+        Player
+        <span id="playerHpText">100%</span>
+      </div>
+      <div class="hp-track">
+        <div class="hp-fill" id="playerHp" style="width:100%;background:var(--hp-green);"></div>
+      </div>
+    </div>
+    <!-- Tension bar — full width spanning both columns -->
+    <div class="tension-block">
+      <div class="tension-label-row">
+        <span class="tension-end-label" style="color:var(--rage-2);">RAGE</span>
+        <span class="tension-center-label" id="tensionLabel">VORTHEX TENSION &middot; NEUTRAL</span>
+        <span class="tension-end-label" style="color:var(--calm);">CALM</span>
+      </div>
+      <div class="tension-track">
+        <!-- Static gradient background: rage left, gray center, calm right -->
+        <div class="tension-bg"></div>
+        <!-- Neutral center tick -->
+        <div class="tension-center-tick"></div>
+        <!-- Moving indicator -->
+        <div class="tension-indicator" id="tensionIndicator"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modifier-banner" id="modifierBanner">
+    <span style="color:var(--text-muted);">No active modifiers</span>
+  </div>
+
+  <div class="battle-arena">
+    <div class="battle-phasix">
+      <div class="battle-core neutral-state" id="battleCore">◈</div>
+    </div>
+    <div class="battle-placeholder">
+      <div class="battle-placeholder-label">◻ Unity Engine</div>
+      <div class="battle-placeholder-title">Battle Scene</div>
+      <div class="battle-placeholder-sub">Combat animations, attack effects, and turn-based mechanics would render here in the full Unity implementation.</div>
+      <button class="sim-btn" id="simBtn" onclick="simulateDamage()">⚔ Simulate Attack Round</button>
+    </div>
+    <div class="battle-log" id="battleLog"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     PHASE 3: THRESHOLD DIALOGUE OVERLAY
+══════════════════════════════════ -->
+<div id="threshold-overlay" class="threshold-overlay">
+  <div class="threshold-header">
+    <div class="threshold-eyebrow" id="tEyebrow">— Threshold Break —</div>
+    <div class="threshold-title" id="tTitle">The Phasix speaks</div>
+  </div>
+  <div class="threshold-scene-text" id="tSceneText"></div>
+
+  <div class="phasix-dialogue-line" id="tDialogueLine">
+    <div class="phasix-speaker" id="tSpeaker"></div>
+    <div class="phasix-text" id="tPhasixText"></div>
+  </div>
+
+  <div class="cope-choices" id="tChoices"></div>
+  <div class="reaction-panel" id="tReaction" style="display:none;"></div>
+</div>
+
+<!-- ══════════════════════════════════
+     PHASE 4: CAPTURE ENDING
+══════════════════════════════════ -->
+<div id="phase-capture" class="phase">
+  <div class="capture-phasix">
+    <div class="capture-core" id="capCore">◈</div>
+  </div>
+  <div class="capture-title" id="capTitle">Vorthex · Subdued</div>
+  <div class="capture-label">Capture Affinity</div>
+  <div class="capture-rate-display" id="capRate">--</div>
+  <div class="capture-label" id="capRateLabel">--</div>
+
+  <div class="capture-dialogue" id="capDialogue">
+    <div class="capture-reflection" id="capReflection"></div>
+    <div class="capture-final" id="capFinal"></div>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+
+  <button class="play-again-btn" onclick="resetGame()">↺ Play Again</button>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ──────────────────────────────────────
+//  GAME STATE
+// ──────────────────────────────────────
+const G = {
+  enemyHp: 100,
+  playerHp: 100,
+  rage: 0,           // 0-5
+  calmScore: 0,
+  modStack: [],      // { type, label, thresholdIndex, atkDelta, defDelta }
+  thresholdsDone: [false, false, false],
+  thresholdIndex: 0,
+  // Additive deltas — sum of all choices, applied as (1 + delta) multiplier
+  atkDelta: 0,       // e.g. -0.35 means enemy ATK is 35% lower than base
+  defDelta: 0,       // e.g. +0.25 means player takes 25% less damage
+  damagePerRound: { enemy: 18, player: 12 },
+  totalChoices: 0,
+  goodChoices: 0,
+  badChoices: 0,
+  lastChoice: null,
+};
+
+// Derive actual multipliers from additive deltas
+// ATK delta < 0 = enemy hits softer. DEF delta > 0 = player takes less.
+// Floor enemy multiplier at 0.25 (always does some damage)
+// Floor player def multiplier at 0.5 (always takes some damage)
+function getAttackMultiplier() {
+  return Math.max(0.25, 1.0 + G.atkDelta);
+}
+function getDefMultiplier() {
+  return Math.max(0.5, 1.0 - G.defDelta);
+}
+
+// ──────────────────────────────────────
+//  ENCOUNTER DIALOGUE SEQUENCE
+// ──────────────────────────────────────
+const ENCOUNTER_LINES = [
+  { speaker: 'Narrator', color: 'var(--phase-purple)', italic: true,
+    text: 'Deep in the Verdant Scar, something fractures the air. Phase residue hangs thick — not ancient and still, but raw and thrashing. Something is hurting.' },
+  { speaker: 'Narrator', color: 'var(--phase-purple)', italic: true,
+    text: 'The rift-light warps. A shape tears through — not born, but expelled — and slams into the physical world like a scream taking form.' },
+  { speaker: 'Vorthex (Phasix)', color: 'var(--rage-1)', italic: false,
+    text: '…Nobody listens. Nobody ever listens. They just keep — talking and talking and it builds and it BUILDS and I can\'t — I can\'t make it stop—' },
+  { speaker: 'Narrator', color: 'var(--phase-purple)', italic: true,
+    text: 'The Phasix known as Vorthex writhes in the air before you. Its form flickers between shapes — each one a feeling it cannot name. Its eyes land on you.' },
+  { speaker: 'Vorthex (Phasix)', color: 'var(--rage-1)', italic: false,
+    text: 'You. You\'re here too. Are you going to tell me to calm down? Are you going to say it\'s fine? It\'s NOT fine. It\'s never fine.' },
+  { speaker: 'You', color: 'var(--phase-blue)', italic: false,
+    text: '…I\'m not going to tell you anything. Not yet. I just — I see you.' },
+  { speaker: 'Vorthex (Phasix)', color: 'var(--rage-2)', italic: false,
+    text: 'Then you\'re a fool. Because I can\'t control this. And you\'re in the way.' },
+  { speaker: 'Narrator', color: 'var(--phase-purple)', italic: true,
+    text: 'A shockwave of Phase energy erupts from Vorthex. The ground fractures. The battle has no choice — it begins.' },
+];
+
+let encIdx = 0;
+
+function advanceEncounter() {
+  if (encIdx >= ENCOUNTER_LINES.length) {
+    startBattle();
+    return;
+  }
+  const line = ENCOUNTER_LINES[encIdx++];
+  const speaker = document.getElementById('encSpeaker');
+  const text = document.getElementById('encText');
+  const cont = document.getElementById('encContinue');
+
+  speaker.innerHTML = `<span class="speaker-dot" style="background:${line.color};box-shadow:0 0 6px ${line.color};"></span><span style="color:${line.color};">${line.speaker}</span>`;
+  text.style.fontStyle = line.italic ? 'italic' : 'normal';
+  text.style.color = line.italic ? 'var(--text-secondary)' : 'var(--text-primary)';
+  text.textContent = line.text;
+
+  if (encIdx >= ENCOUNTER_LINES.length) {
+    cont.textContent = '▸ Battle begins...';
+  } else {
+    cont.textContent = '▸ Continue';
+  }
+}
+
+// ──────────────────────────────────────
+//  THRESHOLD DIALOGUE DATA
+// ──────────────────────────────────────
+const THRESHOLDS = [
+  // T1 — 66% HP (first crack)
+  {
+    getEyebrow: () => '— First Threshold · Vorthex at 80% —',
+    getTitle: () => 'Something Breaks Through',
+    getScene: (r) => r <= 0
+      ? 'Vorthex staggers — not from the blow, but from something surfacing beneath the fury. For a half-second its form stills. A fragment of something real leaks through.'
+      : 'Vorthex reels from the impact. The anger spikes harder — but beneath it, something frightened presses against the surface.',
+    getPhasixColor: (r) => r <= 0 ? 'var(--rage-1)' : 'var(--rage-2)',
+    getPhasixLine: (r) => r <= 0
+      ? '"I just — I wanted someone to understand. Why is that so hard? Everyone acts like if you can\'t say it perfectly it doesn\'t count. My chest is so tight I can\'t breathe."'
+      : '"You think hitting me helps?! It doesn\'t. Nothing helps. Nothing works. It just piles up and up and I can\'t — GET OUT OF MY HEAD."',
+    choices: [
+      { label: 'Ground It', icon: '◉', desc: 'Name 5 things you can see right now. Start there.',
+        type: 'mega_good', reaction: 'Vorthex goes still. Its form solidifies — edges sharp instead of fraying. "Five things…" It looks around, slowly. "The trees. The rift-light. Your face. The ground. The air moving." A long breath. Something unknots.' },
+      { label: 'Feel Your Feet', icon: '◉', desc: 'Press them into the ground. Let the earth hold some of it.',
+        type: 'mega_good', reaction: 'Vorthex looks down — confused, then trying. Its form stops flickering. Roots of Phase-light thread downward from it like it\'s anchoring itself for the first time. A shudder. Then quiet.' },
+      { label: 'Breathe With Me', icon: '◌', desc: 'In for four counts. Hold for four. Out for four.',
+        type: 'good', reaction: 'Vorthex\'s erratic flickering slows. It doesn\'t fully follow — but something in the rhythm reaches it. "Four… four… four." Its voice comes out smaller. Quieter.' },
+      { label: 'Slow Down', icon: '◌', desc: 'You don\'t have to solve it right now. Just slow down first.',
+        type: 'good', reaction: '"Slow down." Vorthex repeats it like the words are foreign. But its form does — imperceptibly at first, then noticeably. The edges of it stop tearing.' },
+      { label: 'Just Say It', icon: '◇', desc: 'You don\'t have to make it make sense. Just say what it is.',
+        type: 'neutral', reaction: 'Vorthex opens its mouth. Closes it. Opens it again. "I don\'t — I don\'t know what it IS. That\'s the problem." A shudder passes through its form. It doesn\'t calm — but it doesn\'t escalate.' },
+      { label: "I\'m Listening", icon: '◇', desc: 'No fixing. No advice. I just want to hear it.',
+        type: 'neutral', reaction: 'Vorthex stares. The offer sits in the air between you. "Listening." It says the word carefully. It doesn\'t open up — but it doesn\'t lash out either. Something waits.' },
+      { label: 'Push Through It', icon: '✕', desc: "You\'ve felt worse. It passes. Just don\'t stop moving.",
+        type: 'bad', reaction: 'Vorthex\'s eyes flash white. "PUSH THROUGH IT." Its form erupts outward. Whatever crack had opened slams shut in rage.' },
+      { label: "You\'re Overreacting", icon: '✕', desc: "It\'s not that serious. Take a breath and get it together.",
+        type: 'bad', reaction: 'The word hits like a slap. "Overreacting." Vorthex\'s voice drops to something cold. "That\'s what they always say." The Phase-light turns a deep, furious red.' },
+      { label: 'Stop Being Dramatic', icon: '✖', desc: "You\'re making this a bigger deal than it is. Get it together.",
+        type: 'mega_bad', reaction: 'A sound comes out of Vorthex that isn\'t a voice — it\'s pressure. The Phase-light around it doubles in intensity. "Dramatic." The word hangs in the air like smoke. Then it lunges.' },
+      { label: 'Nobody Cares', icon: '✖', desc: "Honestly? Everyone\'s dealing with something. You\'re not special.",
+        type: 'mega_bad', reaction: 'Silence. Then Vorthex\'s form fractures at the edges — cracks of light splitting through it like broken glass. "Nobody cares." It repeats it quietly. Then the quiet ends.' },
+    ]
+  },
+  // T2 — 33% HP (second crack)
+  {
+    getEyebrow: () => '— Second Threshold · Vorthex at 55% —',
+    getTitle: (r) => r >= 3 ? 'The Rage Deepens' : 'Something Quieter Surfaces',
+    getScene: (r) => r >= 3
+      ? 'Vorthex is barely recognizable now. The pent-up emotion has twisted it — every frustration it ever swallowed now burning through its body. It is in pain.'
+      : 'Vorthex falters. Its form, usually erratic, grows strangely still. It is exhausted. The anger is still there — but beneath it, something human is surfacing.',
+    getPhasixColor: (r) => r >= 3 ? 'var(--rage-3)' : 'var(--rage-1)',
+    getPhasixLine: (r) => r >= 3
+      ? '"I can\'t stop. I don\'t know how to stop. Every time I try to say something it comes out wrong and they look at me like I\'m — like I\'m broken — and maybe I am, maybe I\'m just — BROKEN —"'
+      : '"I\'m tired. I\'m so tired of carrying it. I thought if I was angry enough it would go away. It didn\'t go away. Why didn\'t it go away?"',
+    choices: [
+      { label: 'Name the Feeling', icon: '◈', desc: 'Is it anger? Sadness? Fear? Something else? Give it a word.',
+        type: 'mega_good', reaction: 'Vorthex pauses. Its form shifts — trying on shapes. "It\'s… it\'s not anger. Not really. It\'s — scared. I\'ve been scared for a long time and nobody saw it so I made it louder." A tear of Phase-light runs down its face.' },
+      { label: "What\'s Underneath It", icon: '◈', desc: 'Anger is always on top of something else. What is it covering?',
+        type: 'mega_good', reaction: 'Silence. Vorthex\'s rage-light flickers — and beneath it, something smaller and more honest surfaces. "I don\'t know how to ask for help," it says, quietly. "I never learned how."' },
+      { label: 'Move the Body', icon: '◎', desc: 'Shake your hands out. Stomp your feet. Get it out of your chest.',
+        type: 'good', reaction: 'Vorthex looks baffled — then tries it. Its whole form shudders and writhes — not in attack, but in release. Something shifts. It looks lighter. "That\'s… strange. That\'s very strange."' },
+      { label: 'Make Some Noise', icon: '◎', desc: 'Scream into the rift if you need to. Let it out, not in.',
+        type: 'good', reaction: 'Vorthex tilts its head — then releases a sound that shakes the grove. Not an attack. Something more like a howl. When it stops, the silence feels different. Cleaner.' },
+      { label: "You\'re Not Alone", icon: '◯', desc: "I\'m still here. I\'m not leaving. Take as long as you need.",
+        type: 'neutral', reaction: '"Still here." Vorthex repeats it like a question. "Why are you still here." It genuinely doesn\'t understand. The battle doesn\'t stop — but something shifts in its eyes.' },
+      { label: "I\'m Not Going Anywhere", icon: '◯', desc: 'Whatever comes out — I will not leave because of it.',
+        type: 'neutral', reaction: 'Vorthex looks at you for a long moment. It doesn\'t move closer. But it doesn\'t push you away. "Fine," it says. Just: fine. But something in it loosens.' },
+      { label: 'Toughen Up', icon: '✕', desc: "Everybody deals with hard things. You can\'t fall apart every time.",
+        type: 'bad', reaction: 'The silence that follows is terrible. Vorthex\'s form goes dark — not angry. Something worse. Hollow. "Right. Of course." When it speaks again its voice has no warmth left.' },
+      { label: 'Other People Have It Worse', icon: '✕', desc: 'There are people dealing with real problems. Keep perspective.',
+        type: 'bad', reaction: '"Worse." Vorthex\'s voice fractures. "You want to talk to me about worse." The rage that returns is quieter — and colder. That is somehow more frightening.' },
+      { label: 'You Brought This On Yourself', icon: '✖', desc: "If you\'d just handled things better from the start, none of this would have happened.",
+        type: 'mega_bad', reaction: 'Something in Vorthex fractures completely. Not with noise — with silence. Then: "I know." The Phase-light around it goes black at the edges.' },
+      { label: "I Don\'t Have Time For This", icon: '✖', desc: "I\'ve got other things to deal with. Can we speed this up.",
+        type: 'mega_bad', reaction: '"Time." Vorthex repeats the word with an expression that has no name. "Speed this up." The air around it superheats. Whatever had been softening goes rigid.' },
+    ]
+  },
+  // T3 — near defeat
+  {
+    getEyebrow: () => '— Final Threshold · Vorthex at 30% —',
+    getTitle: (r) => r >= 4 ? 'The Last Wall' : r >= 2 ? 'The Breaking Point' : 'The Quiet After',
+    getScene: (r) => r >= 4
+      ? 'Vorthex collapses — not from your strikes, but from the weight of itself. It has been carrying this for so long. The rage flickers. Underneath it: exhaustion, grief, relief.'
+      : r >= 2
+      ? 'Vorthex shudders to a stop. The overwhelming emotion that fueled it is finally spent — and what remains is raw and unguarded. It looks at you.'
+      : 'Vorthex settles to the ground like a tide going out. It has found something it didn\'t know it was looking for. It looks at you with unfamiliar stillness.',
+    getPhasixColor: (r) => r >= 4 ? 'var(--rage-3)' : r >= 2 ? 'var(--rage-2)' : 'var(--calm)',
+    getPhasixLine: (r) => r >= 4
+      ? '"I still don\'t know how to do it. Say the thing. Ask for what I need. I\'ve never known how. And I keep hurting things because of it. I keep hurting myself."'
+      : r >= 2
+      ? '"Is this what it feels like? When it stops? I\'ve never let it stop before. I always just — kept going. Kept building. This feels… different."'
+      : '"I didn\'t think it was possible. To just — let someone see it. Without explaining. Without it being perfect. And still have them stay."',
+    choices: [
+      { label: 'You Can Learn', icon: '◈', desc: "It\'s a skill. Not a gift. It can be learned, slowly, with practice.",
+        type: 'mega_good', reaction: '"A skill." Vorthex turns the word over slowly. "Not something you either have or you don\'t." A long pause. "Then maybe I\'m not — maybe I\'m just not done yet." Its form steadies. The Phase-light shifts from red to a deep, tired violet.' },
+      { label: 'You Can Ask For Help', icon: '◈', desc: "Next time it builds like this — you don\'t have to carry it alone.",
+        type: 'mega_good', reaction: 'Vorthex goes very still. "Ask for help." It says it slowly, like testing whether the words break. They don\'t. Something long-held releases from its form. "I didn\'t think I was allowed to."' },
+      { label: 'Rest Now', icon: '◌', desc: "You don\'t have to figure it out right now. Rest first.",
+        type: 'good', reaction: 'Vorthex doesn\'t answer immediately. It simply lowers itself — form settling, edges softening. "Rest." It says the word like it\'s new. "Okay. Okay." The light around it dims, gently.' },
+      { label: 'Let It Be Over', icon: '◌', desc: "You fought hard. It\'s okay for it to be done now.",
+        type: 'good', reaction: '"Over." Vorthex considers the word. Not with relief — with exhausted recognition. "It can just… be over." It doesn\'t resist when the Phase-light around it begins to quiet.' },
+      { label: 'I Saw You', icon: '◯', desc: 'Not the anger. You. I saw you the whole time.',
+        type: 'neutral', reaction: 'Vorthex\'s form stills completely. It doesn\'t respond in words. But for a moment — just a moment — it meets your eyes without flinching. Something in it exhales.' },
+      { label: 'You Were Heard', icon: '◯', desc: "I don\'t have the answer. But I heard every bit of it.",
+        type: 'neutral', reaction: 'Vorthex blinks. "Heard." Its voice is flat — not hostile. Just processing. It doesn\'t lean in or pull away. But the shaking in its form slows.' },
+      { label: 'Just Capture It', icon: '✕', desc: "Stop. Bond sphere, now. It\'s weak enough.",
+        type: 'bad', reaction: 'Vorthex sees the sphere and its expression closes like a door slamming. Whatever had been opening — shuts. "Of course. Of course that\'s what this was." It doesn\'t fight. But it doesn\'t come either.' },
+      { label: 'This Is Taking Too Long', icon: '✕', desc: "We\'ve been at this for a while. Wrap it up.",
+        type: 'bad', reaction: '"Too long." Something in Vorthex\'s eyes goes flat. "Sorry for taking up your time with my — sorry." The bitterness that follows is quiet and total. It shuts down completely.' },
+      { label: "You\'re Pathetic", icon: '✖', desc: 'Look at yourself. All this over feelings. Pull it together.',
+        type: 'mega_bad', reaction: 'Vorthex doesn\'t explode. It just stops. Its form goes completely still — a stillness that is worse than rage. "Pathetic." When it finally moves again, it moves like something that has decided.' },
+      { label: 'This Means Nothing To Me', icon: '✖', desc: "I\'m just here for the bond. What you\'re going through isn\'t my problem.",
+        type: 'mega_bad', reaction: 'The light around Vorthex goes out. Not dimmed — out. For a moment it\'s just a shape in the dark. Then, quietly: "I know." It accepts the sphere. It doesn\'t forgive it.' },
+    ]
+  }
+];
+
+// ──────────────────────────────────────
+//  BATTLE SYSTEM
+// ──────────────────────────────────────
+function startBattle() {
+  document.getElementById('phase-encounter').classList.remove('active');
+  document.getElementById('phase-battle').classList.add('active');
+  generateParticles();
+  addBattleLog('⚔ Battle begins — Vorthex erupts into the physical world');
+  addBattleLog('▸ Simulate attack rounds to deplete Vorthex\'s HP');
+}
+
+function simulateDamage() {
+  if (G.enemyHp <= 0) return;
+
+  // Deal damage using net additive deltas
+  const enemyDmg = Math.round(G.damagePerRound.enemy * getAttackMultiplier());
+  const playerDmg = Math.round(G.damagePerRound.player * getDefMultiplier());
+
+  G.enemyHp = Math.max(0, G.enemyHp - enemyDmg);
+  G.playerHp = Math.max(0, G.playerHp - playerDmg);
+
+  updateHpBars();
+  addBattleLog(`▸ You deal ${enemyDmg} dmg to Vorthex | Vorthex deals ${playerDmg} dmg to you`);
+
+  // Check thresholds AFTER damage is applied, in order, only trigger one per call
+  const thresholds = [80, 55, 30];
+  for (let i = 0; i < 3; i++) {
+    if (!G.thresholdsDone[i] && G.enemyHp <= thresholds[i]) {
+      G.thresholdsDone[i] = true;
+      document.getElementById(`pip${i+1}`).classList.add('triggered');
+      openThreshold(i);
+      return; // pause here, closeThreshold() handles what comes next
+    }
+  }
+
+  // If HP hit zero and all thresholds already done, go straight to capture
+  if (G.enemyHp <= 0) {
+    showCapture();
+  }
+}
+
+function updateHpBars() {
+  const eHp = document.getElementById('enemyHp');
+  const pHp = document.getElementById('playerHp');
+  eHp.style.width = G.enemyHp + '%';
+  pHp.style.width = G.playerHp + '%';
+  document.getElementById('enemyHpText').textContent = G.enemyHp + '%';
+  document.getElementById('playerHpText').textContent = G.playerHp + '%';
+
+  const hpColor = (hp) => hp > 50 ? 'var(--hp-green)' : hp > 25 ? 'var(--hp-yellow)' : 'var(--hp-red)';
+  eHp.style.background = hpColor(G.enemyHp);
+  pHp.style.background = hpColor(G.playerHp);
+
+  // ── Tension bar ──
+  // Net emotional state: positive = calmer, negative = angrier
+  // Range: Rage max ~5, Calm max ~12. Normalize to 0-100 where 50 = neutral.
+  const RAGE_MAX  = 5;
+  const CALM_MAX  = 12;
+  const net = G.calmScore - G.rage;           // raw net value
+  const norm = net / (CALM_MAX + RAGE_MAX);   // -1 (full rage) to +1 (full calm)
+  const pct = Math.min(96, Math.max(4, 50 + norm * 46)); // map to 4-96% bar position
+
+  const indicator = document.getElementById('tensionIndicator');
+  const tensionLabel = document.getElementById('tensionLabel');
+
+  if (indicator) {
+    indicator.style.left = pct + '%';
+    // Color and glow shifts with position
+    if (pct < 35) {
+      indicator.style.background = 'var(--rage-2)';
+      indicator.style.boxShadow = '0 0 10px rgba(245,110,35,0.7)';
+    } else if (pct < 45) {
+      indicator.style.background = 'var(--rage-1)';
+      indicator.style.boxShadow = '0 0 8px rgba(245,166,35,0.5)';
+    } else if (pct < 55) {
+      indicator.style.background = 'var(--neutral)';
+      indicator.style.boxShadow = '0 0 8px rgba(192,200,255,0.5)';
+    } else if (pct < 65) {
+      indicator.style.background = 'var(--calm-2)';
+      indicator.style.boxShadow = '0 0 8px rgba(66,245,168,0.5)';
+    } else {
+      indicator.style.background = 'var(--calm)';
+      indicator.style.boxShadow = '0 0 10px rgba(56,217,245,0.7)';
+    }
+  }
+
+  if (tensionLabel) {
+    if (pct < 35)      { tensionLabel.textContent = 'VORTHEX TENSION · FRACTURING'; tensionLabel.style.color = 'var(--rage-2)'; }
+    else if (pct < 45) { tensionLabel.textContent = 'VORTHEX TENSION · STRAINED';   tensionLabel.style.color = 'var(--rage-1)'; }
+    else if (pct < 55) { tensionLabel.textContent = 'VORTHEX TENSION · NEUTRAL';    tensionLabel.style.color = 'var(--text-muted)'; }
+    else if (pct < 65) { tensionLabel.textContent = 'VORTHEX TENSION · EASING';     tensionLabel.style.color = 'var(--calm-2)'; }
+    else               { tensionLabel.textContent = 'VORTHEX TENSION · RESONANT';   tensionLabel.style.color = 'var(--calm)'; }
+  }
+
+  // Update battle core visual state
+  const core = document.getElementById('battleCore');
+  if (G.rage >= 4) core.className = 'battle-core rage-state-2';
+  else if (G.rage >= 2) core.className = 'battle-core rage-state-1';
+  else if (G.calmScore >= 4) core.className = 'battle-core calm-state';
+  else core.className = 'battle-core neutral-state';
+}
+
+function addBattleLog(msg) {
+  const log = document.getElementById('battleLog');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.textContent = msg;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ──────────────────────────────────────
+//  THRESHOLD DIALOGUE
+// ──────────────────────────────────────
+function openThreshold(idx) {
+  G.thresholdIndex = idx;
+  const T = THRESHOLDS[idx];
+  const overlay = document.getElementById('threshold-overlay');
+
+  document.getElementById('tEyebrow').textContent = T.getEyebrow();
+  document.getElementById('tTitle').textContent = typeof T.getTitle === 'function' ? T.getTitle(G.rage) : T.getTitle;
+  document.getElementById('tSceneText').textContent = T.getScene(G.rage);
+
+  const speakerColor = T.getPhasixColor(G.rage);
+  document.getElementById('tSpeaker').innerHTML = `<span class="speaker-dot" style="background:${speakerColor};box-shadow:0 0 6px ${speakerColor};"></span><span style="color:${speakerColor};">Vorthex (Phasix)</span>`;
+  document.getElementById('tDialogueLine').style.borderLeftColor = speakerColor + '60';
+  document.getElementById('tPhasixText').textContent = T.getPhasixLine(G.rage);
+
+  // Build choices (harder if more rage)
+  const choicesDiv = document.getElementById('tChoices');
+  choicesDiv.innerHTML = '';
+  document.getElementById('tReaction').style.display = 'none';
+  document.getElementById('tChoices').style.display = 'grid';
+
+  // Randomly draw 4 from the full pool of 10 — no type guarantee
+  // This means all 4 could be bad, or all good — that's intentional
+  const shuffled = [...T.choices].sort(() => Math.random() - 0.5);
+  const picked = shuffled.slice(0, 4);
+
+  picked.forEach((c) => {
+    const btn = document.createElement('button');
+    btn.className = 'cope-btn';
+    btn.innerHTML = `
+      <div class="cope-btn-label">
+        <span>${c.icon}</span> ${c.label}
+      </div>
+      <div class="cope-btn-desc">${c.desc}</div>
+    `;
+    btn.addEventListener('click', () => selectCoping(c, T));
+    choicesDiv.appendChild(btn);
+  });
+
+  overlay.classList.add('active');
+}
+
+const MODIFIER_CONFIG = {
+  mega_good: {
+    color: 'var(--calm)', icon: '✦✦', label: 'DEEP RESONANCE',
+    stats: [
+      { text: 'Rage −3', positive: true },
+      { text: 'Calm +4', positive: true },
+      { text: 'Enemy ATK −35%', positive: true },
+      { text: 'Player DEF +25%', positive: true },
+    ]
+  },
+  good: {
+    color: 'var(--calm-2)', icon: '✦', label: 'RESONANCE',
+    stats: [
+      { text: 'Rage −1', positive: true },
+      { text: 'Calm +2', positive: true },
+      { text: 'Enemy ATK −15%', positive: true },
+    ]
+  },
+  neutral: {
+    color: 'var(--neutral)', icon: '●', label: 'STILLNESS',
+    stats: [
+      { text: 'No stat change', positive: null },
+      { text: 'Relationship +5', positive: true },
+    ]
+  },
+  bad: {
+    color: 'var(--rage-1)', icon: '▼', label: 'BACKLASH',
+    stats: [
+      { text: 'Rage +2', positive: false },
+      { text: 'Enemy ATK +25%', positive: false },
+    ]
+  },
+  mega_bad: {
+    color: 'var(--rage-3)', icon: '▼▼', label: 'FRACTURE',
+    stats: [
+      { text: 'Rage +3', positive: false },
+      { text: 'Calm −1', positive: false },
+      { text: 'Enemy ATK +45%', positive: false },
+      { text: 'Player DEF −35%', positive: false },
+    ]
+  },
+};
+
+function selectCoping(choice, T) {
+  G.totalChoices++;
+
+  // Apply modifier effects — additive deltas
+  // atkDelta: negative = enemy hits softer, positive = enemy hits harder
+  // defDelta: positive = player takes less damage, negative = player takes more
+  const TIER_DELTAS = {
+    mega_good: { atk: -0.35, def: +0.25, rage: -3, calm: +4, good: true,  bad: false },
+    good:      { atk: -0.15, def:  0.00, rage: -1, calm: +2, good: true,  bad: false },
+    neutral:   { atk:  0.00, def:  0.00, rage:  0, calm:  0, good: false, bad: false },
+    bad:       { atk: +0.25, def:  0.00, rage: +2, calm:  0, good: false, bad: true  },
+    mega_bad:  { atk: +0.45, def: -0.35, rage: +3, calm: -1, good: false, bad: true  },
+  };
+  // T2 bad tiers get +1 extra rage (scaling difficulty)
+  const d = TIER_DELTAS[choice.type];
+  if (!d) return;
+
+  G.atkDelta += d.atk;
+  G.defDelta += d.def;
+  G.rage = Math.max(0, Math.min(5, G.rage + d.rage + (d.bad && G.thresholdIndex === 1 ? 1 : 0)));
+  G.calmScore = Math.max(0, G.calmScore + d.calm);
+  if (d.good) G.goodChoices++;
+  if (d.bad)  { G.badChoices++; rageFlash(); }
+
+  updateHpBars();
+  G.lastChoice = choice;
+  updateModifierBannerVague(choice);
+
+  // Build stat pills — show this choice's individual delta + updated net
+  const cfg = MODIFIER_CONFIG[choice.type];
+  const TIER_DELTAS_INLINE = {
+    mega_good: { atk: -0.35, def: +0.25 },
+    good:      { atk: -0.15, def:  0.00 },
+    neutral:   { atk:  0.00, def:  0.00 },
+    bad:       { atk: +0.25, def:  0.00 },
+    mega_bad:  { atk: +0.45, def: -0.35 },
+  };
+  const td = TIER_DELTAS_INLINE[choice.type] || { atk: 0, def: 0 };
+  const thisAtkPct = Math.round(td.atk * 100);
+  const thisDefPct = Math.round(td.def * 100);
+  const netAtkPct  = Math.round(G.atkDelta * 100);
+  const netDefPct  = Math.round(G.defDelta * 100);
+
+  function inlinePill(label, thisVal, netVal, invertGood) {
+    if (thisVal === 0 && netVal === 0) return '';
+    const isGood = invertGood ? netVal < 0 : netVal > 0;
+    const col = netVal === 0 ? 'var(--text-muted)' : isGood ? 'var(--calm-2)' : 'var(--rage-2)';
+    const thisSign = thisVal >= 0 ? '+' : '';
+    const netSign  = netVal  >= 0 ? '+' : '';
+    return '<span style="color:' + col + ';font-family:DM Mono,monospace;font-size:9px;padding:2px 8px;border:1px solid ' + col + '44;border-radius:10px;white-space:nowrap;">'
+      + label + ' ' + thisSign + thisVal + '%'
+      + (G.modStack.length > 0 ? ' <span style="opacity:0.5">→ net ' + netSign + netVal + '%</span>' : '')
+      + '</span>';
+  }
+
+  const statsHtml = [
+    inlinePill('Enemy ATK', thisAtkPct, netAtkPct, true),
+    inlinePill('Player DEF', thisDefPct, netDefPct, false),
+    ...cfg.stats.filter(s => !s.text.includes('ATK') && !s.text.includes('DEF')).map(s => {
+      const col = s.positive === true ? 'var(--calm-2)' : s.positive === false ? 'var(--rage-2)' : 'var(--text-muted)';
+      return '<span style="color:' + col + ';font-family:DM Mono,monospace;font-size:9px;padding:2px 8px;border:1px solid ' + col + '44;border-radius:10px;white-space:nowrap;">' + s.text + '</span>';
+    }),
+  ].filter(Boolean).join('');
+
+  // Show reaction + inline modifier reveal
+  document.getElementById('tChoices').style.display = 'none';
+  const reaction = document.getElementById('tReaction');
+  reaction.style.display = 'block';
+
+  reaction.innerHTML = `
+    <div class="reaction-text">${choice.reaction}</div>
+    <div style="
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      padding:10px 14px;margin-bottom:12px;
+      border-radius:8px;border:1px solid ${cfg.color}33;
+      background:${cfg.color}0d;
+      animation:modReveal 0.4s ease both;
+    ">
+      <span style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.18em;color:${cfg.color};white-space:nowrap;">${cfg.icon} ${cfg.label}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;">${statsHtml}</span>
+    </div>
+    <button class="continue-btn" onclick="closeThreshold()">↩ Return to Battle</button>
+  `;
+}
+
+function updateModifierBannerVague(choice) {
+  const banner = document.getElementById('modifierBanner');
+  const lines = {
+    mega_good: { text: 'Something deep in the air shifts.', color: 'var(--calm)' },
+    good:      { text: 'The tension eases, slightly.', color: 'var(--calm-2)' },
+    neutral:   { text: 'The moment passes without change.', color: 'var(--text-muted)' },
+    bad:       { text: 'The air grows heavier.', color: 'var(--rage-1)' },
+    mega_bad:  { text: 'Something fractures. The air burns.', color: 'var(--rage-3)' },
+  }[choice.type];
+  if (!lines) return;
+  banner.style.color = lines.color;
+  banner.style.borderBottomColor = lines.color + '33';
+  banner.innerHTML = '<span style="font-style:italic;font-family:Crimson Pro,serif;font-size:13px;">' + lines.text + '</span>';
+}
+
+function renderModifierStack() {
+  const banner = document.getElementById('modifierBanner');
+  if (G.modStack.length === 0) {
+    banner.style.color = 'var(--text-muted)';
+    banner.style.borderBottomColor = 'transparent';
+    banner.innerHTML = '<span style="color:var(--text-muted);">No active modifiers</span>';
+    return;
+  }
+
+  // ── Net resolved stats ──
+  const netAtk = Math.round(G.atkDelta * 100);  // e.g. -20 means enemy ATK -20%
+  const netDef = Math.round(G.defDelta * 100);   // e.g. +25 means player DEF +25%
+
+  function statPill(label, value, invertGood) {
+    // invertGood: true = lower is better (ATK), false = higher is better (DEF)
+    const isGood = invertGood ? value < 0 : value > 0;
+    const isNeutral = value === 0;
+    const col = isNeutral ? 'var(--text-muted)' : isGood ? 'var(--calm-2)' : 'var(--rage-2)';
+    const sign = value > 0 ? '+' : '';
+    return '<span style="display:inline-flex;align-items:center;gap:4px;color:' + col
+      + ';font-family:DM Mono,monospace;font-size:9px;padding:3px 9px;border:1px solid '
+      + col + '44;border-radius:10px;white-space:nowrap;">'
+      + label + '&nbsp;<strong>' + sign + value + '%</strong></span>';
+  }
+
+  const netHtml = statPill('Enemy ATK', netAtk, true) + statPill('Player DEF', netDef, false);
+
+  // ── History breakdown ──
+  const thresholdLabels = ['T1·66%', 'T2·33%', 'T3·Final'];
+  const histHtml = G.modStack.map((entry, i) => {
+    const config = MODIFIER_CONFIG[entry.type];
+    const isNew = i === G.modStack.length - 1;
+    const atkStr = entry.atkDelta !== 0 ? (entry.atkDelta > 0 ? '+' : '') + Math.round(entry.atkDelta * 100) + '% ATK' : '';
+    const defStr = entry.defDelta !== 0 ? (entry.defDelta > 0 ? '+' : '') + Math.round(entry.defDelta * 100) + '% DEF' : '';
+    const parts = [atkStr, defStr].filter(Boolean).join(' / ') || 'no combat change';
+    return '<span style="font-family:DM Mono,monospace;font-size:8px;color:var(--text-muted);white-space:nowrap;'
+      + (isNew ? 'animation:modReveal 0.4s ease both;display:inline-block;' : '')
+      + '">'
+      + '<span style="color:' + config.color + '">' + thresholdLabels[entry.thresholdIndex]
+      + ' ' + config.label + '</span> ' + parts
+      + '</span>';
+  }).join('<span style="color:var(--text-muted);font-size:9px;padding:0 4px;">→</span>');
+
+  // ── Border color: last entry's tier color ──
+  const lastColor = MODIFIER_CONFIG[G.modStack[G.modStack.length - 1].type].color;
+  banner.style.borderBottomColor = lastColor + '55';
+
+  banner.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:6px;width:100%;padding:2px 0;">'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +   '<span style="font-family:DM Mono,monospace;font-size:8px;letter-spacing:0.12em;color:var(--text-muted);flex-shrink:0;">NET</span>'
+    +   netHtml
+    + '</div>'
+    + '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">'
+    +   histHtml
+    + '</div>'
+    + '</div>';
+}
+
+function closeThreshold() {
+  document.getElementById('threshold-overlay').classList.remove('active');
+  if (G.lastChoice) {
+    const TIER_DELTAS_CLOSE = {
+      mega_good: { atk: -0.35, def: +0.25 },
+      good:      { atk: -0.15, def:  0.00 },
+      neutral:   { atk:  0.00, def:  0.00 },
+      bad:       { atk: +0.25, def:  0.00 },
+      mega_bad:  { atk: +0.45, def: -0.35 },
+    };
+    const d = TIER_DELTAS_CLOSE[G.lastChoice.type] || { atk: 0, def: 0 };
+    G.modStack.push({
+      type: G.lastChoice.type,
+      label: G.lastChoice.label,
+      thresholdIndex: G.thresholdIndex,
+      atkDelta: d.atk,
+      defDelta: d.def,
+    });
+    renderModifierStack();
+    const cfg = MODIFIER_CONFIG[G.lastChoice.type];
+    const netAtk = Math.round(G.atkDelta * 100);
+    const netDef = Math.round(G.defDelta * 100);
+    const netStr = 'Net: Enemy ATK ' + (netAtk >= 0 ? '+' : '') + netAtk + '% / Player DEF ' + (netDef >= 0 ? '+' : '') + netDef + '%';
+    addBattleLog('◈ T' + (G.thresholdIndex + 1) + ': ' + cfg.label + ' applied · ' + netStr);
+  }
+  if (G.enemyHp <= 0) {
+    setTimeout(() => showCapture(), 300);
+  }
+}
+
+function rageFlash() {
+  const f = document.getElementById('rageFlash');
+  f.style.background = 'rgba(245,35,35,0.15)';
+  f.style.opacity = '1';
+  setTimeout(() => { f.style.opacity = '0'; }, 300);
+}
+
+// ──────────────────────────────────────
+//  CAPTURE ENDING
+// ──────────────────────────────────────
+function showCapture() {
+  document.getElementById('phase-battle').classList.remove('active');
+  document.getElementById('phase-capture').classList.add('active');
+
+  // Calculate capture rate
+  const baseRate = 50;
+  const calmBonus = G.calmScore * 8;
+  const ragepenalty = G.rage * 8;
+  const goodBonus = G.goodChoices * 10;
+  const badPenalty = G.badChoices * 15;
+  const captureRate = Math.min(99, Math.max(5, baseRate + calmBonus + goodBonus - ragepenalty - badPenalty));
+
+  // Determine emotional state category
+  const state = captureRate >= 80 ? 'calm' : captureRate >= 50 ? 'neutral' : 'angered';
+
+  // Set capture visual
+  const core = document.getElementById('capCore');
+  const title = document.getElementById('capTitle');
+  const rateEl = document.getElementById('capRate');
+  const rateLabel = document.getElementById('capRateLabel');
+
+  const stateConfig = {
+    calm: { color: 'var(--calm)', glow: 'rgba(56,217,245,0.4)', coreClass: 'battle-core calm-state', bond: 'Resonant Bond', label: 'High Affinity · Willing Partner' },
+    neutral: { color: 'var(--phase-purple)', glow: 'rgba(155,89,247,0.4)', coreClass: 'battle-core neutral-state', bond: 'Cautious Bond', label: 'Standard Affinity · Guarded Trust' },
+    angered: { color: 'var(--rage-2)', glow: 'rgba(245,110,35,0.4)', coreClass: 'battle-core rage-state-1', bond: 'Reluctant Bond', label: 'Low Affinity · Unresolved Tension' },
+  }[state];
+
+  core.className = stateConfig.coreClass;
+  title.style.color = stateConfig.color;
+  title.textContent = `Vorthex · ${stateConfig.bond}`;
+  rateEl.textContent = captureRate + '%';
+  rateEl.style.color = stateConfig.color;
+  rateLabel.textContent = stateConfig.label;
+
+  // Reflective dialogue
+  const reflections = {
+    calm: 'The Phase-light around Vorthex shifts from violent red to a deep, exhausted indigo. It does not flee when you extend your hand. It rests its head — briefly, tentatively — against your palm. Something in it recognizes you.',
+    neutral: 'Vorthex does not resist the bond sphere. But it does not lean into it either. It watches you with eyes that are still deciding. There is distance here — but also, somewhere beneath it, the small fragile beginning of trust.',
+    angered: 'Vorthex goes still as the bond locks in. But there is no warmth in its stillness. Something unresolved hums beneath the surface — waiting. This bond was taken, not given. It will remember that.',
+  };
+
+  const finals = {
+    calm: '"You stayed," Vorthex says, quietly. "Even when it got loud. You stayed." It looks at you — not performing, not accusing. Just looking. "I\'d like to learn how to be less loud. If you\'re willing to help."',
+    neutral: 'Vorthex doesn\'t speak for a long time. Then, finally: "I don\'t know if I trust you yet. But I didn\'t know if I could survive that much feeling either. And here we both are." A pause. "That\'s something, I suppose."',
+    angered: '"I know what you did," Vorthex says, voice flat. "You waited for me to break. Then you took." It doesn\'t look away. "Fine. But I\'ll be watching. And I remember everything."',
+  };
+
+  document.getElementById('capReflection').textContent = reflections[state];
+  document.getElementById('capFinal').textContent = finals[state];
+
+  // Stats
+  const stats = document.getElementById('statsRow');
+  stats.innerHTML = `
+    <div class="stat-chip">Rage at Close <span style="color:${G.rage >= 4 ? 'var(--hp-red)' : G.rage >= 2 ? 'var(--hp-yellow)' : 'var(--hp-green)'};">${G.rage}/5</span></div>
+    <div class="stat-chip">Good Choices <span style="color:var(--calm-2);">${G.goodChoices}/${G.totalChoices}</span></div>
+    <div class="stat-chip">Calm Score <span style="color:var(--calm);">+${G.calmScore}</span></div>
+    <div class="stat-chip">Capture <span style="color:${stateConfig.color};">${captureRate}%</span></div>
+  `;
+}
+
+// ──────────────────────────────────────
+//  PARTICLES
+// ──────────────────────────────────────
+function generateParticles() {
+  const container = document.getElementById('bgParticles');
+  container.innerHTML = '';
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 3 + 1;
+    const colors = ['#9b59f7','#4a6fff','#38d9f5','#f5a623'];
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${Math.random()*100}%;
+      bottom:${Math.random()*20}%;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      --drift:${(Math.random()-0.5)*80}px;
+      animation-duration:${4+Math.random()*6}s;
+      animation-delay:${Math.random()*6}s;
+    `;
+    container.appendChild(p);
+  }
+}
+
+function resetGame() {
+  Object.assign(G, {
+    enemyHp: 100, playerHp: 100, rage: 0, calmScore: 0,
+    modStack: [],
+    thresholdsDone: [false, false, false], thresholdIndex: 0,
+    atkDelta: 0, defDelta: 0,
+    damagePerRound: { enemy: 18, player: 12 },
+    totalChoices: 0, goodChoices: 0, badChoices: 0,
+    lastChoice: null,
+  });
+  document.querySelectorAll('.threshold-pip').forEach(p => p.classList.remove('triggered'));
+  document.getElementById('phase-capture').classList.remove('active');
+  document.getElementById('phase-battle').classList.remove('active');
+  document.getElementById('threshold-overlay').classList.remove('active');
+  document.getElementById('battleLog').innerHTML = '';
+  document.getElementById('modifierBanner').innerHTML = '<span style="color:var(--text-muted);">No active modifiers</span>';
+  updateHpBars();
+  encIdx = 0;
+  document.getElementById('phase-encounter').classList.add('active');
+  advanceEncounter();
+}
+
+// ──────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────
+generateParticles();
+advanceEncounter();
+</script>
+</body>
+</html>

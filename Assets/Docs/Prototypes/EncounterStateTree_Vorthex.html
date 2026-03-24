@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vorthex - State Machine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=DM+Mono:wght@300;400;500&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+:root{--void:#030408;--panel:#0b0d18;--border:#1a1e2e;--border-lit:#252a45;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--void);color:#e8ecff;font-family:'DM Mono',monospace;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+.hdr{flex-shrink:0;padding:11px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;background:rgba(3,4,8,0.97);z-index:30;}
+.hdr-t{font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.2em;color:#6b749a;}
+.hdr-s{font-size:8px;color:#2e3452;margin-top:2px;}
+.tabs{display:flex;gap:2px;margin-left:20px;}
+.tab{padding:5px 14px;font-family:'DM Mono',monospace;font-size:9px;border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all 0.15s;color:#2e3452;background:transparent;}
+.tab.active{border-color:#9b59f7;color:#9b59f7;background:rgba(155,89,247,0.08);}
+.tab:hover:not(.active){color:#6b749a;}
+.legend{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
+.leg{display:flex;align-items:center;gap:4px;font-size:7.5px;color:#2e3452;}
+.leg-dot{width:7px;height:7px;border-radius:50%;}
+.ctrls{display:flex;gap:6px;margin-left:10px;}
+.ctrl{padding:4px 9px;background:transparent;border:1px solid var(--border);border-radius:4px;color:#2e3452;font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;transition:all 0.15s;}
+.ctrl:hover{border-color:#9b59f7;color:#9b59f7;}
+.panels{flex:1;display:flex;overflow:hidden;position:relative;}
+.panel{position:absolute;inset:0;display:none;overflow:hidden;}
+.panel.active{display:block;}
+.split{display:flex;height:100%;}
+.lp{position:relative;overflow:hidden;width:60%;border-right:1px solid var(--border);cursor:grab;}
+.lp:active{cursor:grabbing;}
+.rp{width:40%;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.plbl{position:absolute;top:12px;left:16px;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:#2e3452;z-index:5;pointer-events:none;}
+canvas{position:absolute;top:0;left:0;}
+.op{padding:16px;display:flex;flex-direction:column;gap:8px;}
+.dw{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:4px;}
+.dt{font-size:8px;letter-spacing:0.12em;color:#2e3452;margin-bottom:8px;text-transform:uppercase;}
+.db{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-bottom:8px;}
+.ds{height:100%;}
+.dls{display:flex;gap:10px;flex-wrap:wrap;}
+.dl{display:flex;align-items:center;gap:5px;font-size:8px;}
+.dd{width:7px;height:7px;border-radius:50%;}
+.bs{margin-bottom:6px;}
+.bh{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px 6px 0 0;margin-bottom:2px;}
+.bn{font-family:'Cinzel',serif;font-size:10px;font-weight:600;letter-spacing:0.08em;}
+.bc{font-size:8px;margin-left:auto;opacity:0.7;}
+.pr{display:flex;align-items:center;padding:4px 8px;border-radius:4px;margin-bottom:2px;border:1px solid transparent;transition:all 0.12s;gap:0;}
+.pr:hover{border-color:var(--border-lit);background:rgba(255,255,255,0.03);}
+.pc{display:flex;gap:4px;flex:1;}
+.chip{font-size:7.5px;padding:2px 6px;border-radius:8px;white-space:nowrap;}
+.prt{font-family:'Cinzel',serif;font-size:13px;font-weight:600;min-width:44px;text-align:right;flex-shrink:0;}
+.pst{font-size:7px;color:#2e3452;min-width:76px;text-align:right;flex-shrink:0;}
+.of{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;height:100%;}
+.sl{position:sticky;top:0;background:rgba(3,4,8,0.95);padding:10px 16px;border-bottom:1px solid var(--border);font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:#2e3452;z-index:5;}
+.tt{position:fixed;z-index:100;background:rgba(8,10,20,0.97);border:1px solid var(--border-lit);border-radius:8px;padding:10px 14px;max-width:240px;pointer-events:none;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.7);}
+.te{font-size:8px;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:4px;}
+.tl{font-family:'Cinzel',serif;font-size:12px;color:#e8ecff;margin-bottom:5px;line-height:1.3;}
+.tb{font-family:'Crimson Pro',serif;font-size:12px;font-style:italic;color:#6b749a;line-height:1.55;}
+.tp{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;}
+.tpi{font-size:8px;padding:2px 7px;border-radius:8px;}</style>
+</head>
+<body>
+<div class="hdr">
+  <div>
+    <div class="hdr-t">&#9672; VORTHEX &middot; ENCOUNTER ANALYSIS</div>
+    <div class="hdr-s">125 paths &rarr; 26 distinct capture rates &rarr; 3 bonds &middot; Random 4-from-10: all-bad draws possible</div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('split')">Split View</button>
+    <button class="tab" onclick="switchTab('tree')">State Machine</button>
+    <button class="tab" onclick="switchTab('outputs')">All Outputs</button>
+  </div>
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#38d9f5;outline:2px solid #38d9f5;outline-offset:1px"></div>Deep Resonance</div>
+    <div class="leg"><div class="leg-dot" style="background:#42f5a8"></div>Resonance</div>
+    <div class="leg"><div class="leg-dot" style="background:#a0aacc"></div>Stillness</div>
+    <div class="leg"><div class="leg-dot" style="background:#f5a623"></div>Backlash</div>
+    <div class="leg"><div class="leg-dot" style="background:#f55442;outline:2px solid #f55442;outline-offset:1px"></div>Fracture</div>
+    <div class="leg" style="margin-left:6px"><div class="leg-dot" style="background:#38d9f5"></div>Resonant</div>
+    <div class="leg"><div class="leg-dot" style="background:#9b59f7"></div>Cautious</div>
+    <div class="leg"><div class="leg-dot" style="background:#f59a23"></div>Reluctant</div>
+  </div>
+  <div class="ctrls">
+    <button class="ctrl" id="btnR" onclick="resetView()">&#8853; Reset</button>
+    <button class="ctrl" id="btnI" onclick="zoom(1.13)">+</button>
+    <button class="ctrl" id="btnO" onclick="zoom(0.88)">&minus;</button>
+  </div>
+</div>
+<div class="panels">
+  <div class="panel active" id="panel-split">
+    <div class="split">
+      <div class="lp" id="lp"><div class="plbl">STATE MACHINE</div><canvas id="cS"></canvas></div>
+      <div class="rp"><div class="sl">OUTPUT SPACE &mdash; 125 PATHS</div><div class="op" id="opS"></div></div>
+    </div>
+  </div>
+  <div class="panel" id="panel-tree"><canvas id="cT"></canvas></div>
+  <div class="panel of" id="panel-outputs">
+    <div class="sl">ALL POSSIBLE OUTPUTS &mdash; 125 PATHS</div>
+    <div class="op" id="opF"></div>
+  </div>
+</div>
+<div class="tt" id="tt"><div class="te" id="te"></div><div class="tl" id="tl"></div><div class="tb" id="tb"></div><div class="tp" id="tp"></div></div>
+<script>
+const ALL_PATHS=[
+[99,'bad','good','mega_good',0,6,2,1,'Resonant Bond'],
+[99,'bad','mega_good','good',0,6,2,1,'Resonant Bond'],
+[99,'bad','mega_good','mega_good',0,8,2,1,'Resonant Bond'],
+[99,'good','bad','mega_good',0,6,2,1,'Resonant Bond'],
+[99,'good','good','good',0,6,3,0,'Resonant Bond'],
+[99,'good','good','mega_good',0,8,3,0,'Resonant Bond'],
+[99,'good','good','neutral',0,4,2,0,'Resonant Bond'],
+[99,'good','mega_good','good',0,8,3,0,'Resonant Bond'],
+[99,'good','mega_good','mega_good',0,10,3,0,'Resonant Bond'],
+[99,'good','mega_good','neutral',0,6,2,0,'Resonant Bond'],
+[99,'good','neutral','good',0,4,2,0,'Resonant Bond'],
+[99,'good','neutral','mega_good',0,6,2,0,'Resonant Bond'],
+[99,'mega_bad','good','mega_good',0,6,2,1,'Resonant Bond'],
+[99,'mega_bad','mega_good','good',0,6,2,1,'Resonant Bond'],
+[99,'mega_bad','mega_good','mega_good',0,8,2,1,'Resonant Bond'],
+[99,'mega_good','bad','mega_good',0,8,2,1,'Resonant Bond'],
+[99,'mega_good','good','good',0,8,3,0,'Resonant Bond'],
+[99,'mega_good','good','mega_good',0,10,3,0,'Resonant Bond'],
+[99,'mega_good','good','neutral',0,6,2,0,'Resonant Bond'],
+[99,'mega_good','mega_bad','mega_good',0,7,2,1,'Resonant Bond'],
+[99,'mega_good','mega_good','bad',2,8,2,1,'Resonant Bond'],
+[99,'mega_good','mega_good','good',0,10,3,0,'Resonant Bond'],
+[99,'mega_good','mega_good','mega_good',0,12,3,0,'Resonant Bond'],
+[99,'mega_good','mega_good','neutral',0,8,2,0,'Resonant Bond'],
+[99,'mega_good','neutral','good',0,6,2,0,'Resonant Bond'],
+[99,'mega_good','neutral','mega_good',0,8,2,0,'Resonant Bond'],
+[99,'neutral','good','good',0,4,2,0,'Resonant Bond'],
+[99,'neutral','good','mega_good',0,6,2,0,'Resonant Bond'],
+[99,'neutral','mega_good','good',0,6,2,0,'Resonant Bond'],
+[99,'neutral','mega_good','mega_good',0,8,2,0,'Resonant Bond'],
+[95,'good','mega_bad','mega_good',0,5,2,1,'Resonant Bond'],
+[95,'mega_good','bad','good',1,6,2,1,'Resonant Bond'],
+[92,'mega_good','neutral','neutral',0,4,1,0,'Resonant Bond'],
+[92,'neutral','mega_good','neutral',0,4,1,0,'Resonant Bond'],
+[92,'neutral','neutral','mega_good',0,4,1,0,'Resonant Bond'],
+[87,'bad','good','good',0,4,2,1,'Resonant Bond'],
+[87,'good','mega_good','bad',2,6,2,1,'Resonant Bond'],
+[87,'mega_bad','good','good',0,4,2,1,'Resonant Bond'],
+[87,'mega_good','good','bad',2,6,2,1,'Resonant Bond'],
+[87,'mega_good','mega_good','mega_bad',3,7,2,1,'Resonant Bond'],
+[79,'good','bad','good',1,4,2,1,'Cautious Bond'],
+[79,'mega_good','mega_bad','good',2,5,2,1,'Cautious Bond'],
+[77,'bad','mega_good','neutral',0,4,1,1,'Cautious Bond'],
+[77,'bad','neutral','mega_good',0,4,1,1,'Cautious Bond'],
+[77,'mega_bad','mega_good','neutral',0,4,1,1,'Cautious Bond'],
+[77,'mega_bad','neutral','mega_good',0,4,1,1,'Cautious Bond'],
+[77,'neutral','bad','mega_good',0,4,1,1,'Cautious Bond'],
+[77,'neutral','mega_bad','mega_good',0,4,1,1,'Cautious Bond'],
+[76,'good','neutral','neutral',0,2,1,0,'Cautious Bond'],
+[76,'neutral','good','neutral',0,2,1,0,'Cautious Bond'],
+[76,'neutral','neutral','good',0,2,1,0,'Cautious Bond'],
+[71,'good','good','bad',2,4,2,1,'Cautious Bond'],
+[71,'good','mega_good','mega_bad',3,5,2,1,'Cautious Bond'],
+[71,'mega_good','good','mega_bad',3,5,2,1,'Cautious Bond'],
+[63,'good','mega_bad','good',2,3,2,1,'Cautious Bond'],
+[61,'bad','neutral','good',0,2,1,1,'Cautious Bond'],
+[61,'mega_good','neutral','bad',2,4,1,1,'Cautious Bond'],
+[61,'neutral','mega_good','bad',2,4,1,1,'Cautious Bond'],
+[55,'good','good','mega_bad',3,3,2,1,'Cautious Bond'],
+[54,'bad','bad','mega_good',1,4,1,2,'Cautious Bond'],
+[54,'bad','mega_bad','mega_good',1,4,1,2,'Cautious Bond'],
+[54,'mega_bad','bad','mega_good',1,4,1,2,'Cautious Bond'],
+[54,'mega_bad','mega_bad','mega_good',1,4,1,2,'Cautious Bond'],
+[53,'bad','good','neutral',1,2,1,1,'Cautious Bond'],
+[53,'mega_bad','neutral','good',1,2,1,1,'Cautious Bond'],
+[53,'mega_good','bad','neutral',3,4,1,1,'Cautious Bond'],
+[53,'neutral','bad','good',1,2,1,1,'Cautious Bond'],
+[50,'neutral','neutral','neutral',0,0,0,0,'Cautious Bond'],
+[46,'bad','mega_good','bad',2,4,1,2,'Reluctant Bond'],
+[46,'mega_bad','mega_good','bad',2,4,1,2,'Reluctant Bond'],
+[45,'good','neutral','bad',2,2,1,1,'Reluctant Bond'],
+[45,'mega_bad','good','neutral',2,2,1,1,'Reluctant Bond'],
+[45,'mega_good','neutral','mega_bad',3,3,1,1,'Reluctant Bond'],
+[45,'neutral','good','bad',2,2,1,1,'Reluctant Bond'],
+[45,'neutral','mega_bad','good',2,2,1,1,'Reluctant Bond'],
+[45,'neutral','mega_good','mega_bad',3,3,1,1,'Reluctant Bond'],
+[37,'good','bad','neutral',3,2,1,1,'Reluctant Bond'],
+[37,'mega_good','mega_bad','neutral',4,3,1,1,'Reluctant Bond'],
+[30,'bad','mega_good','mega_bad',3,3,1,2,'Reluctant Bond'],
+[30,'mega_bad','mega_good','mega_bad',3,3,1,2,'Reluctant Bond'],
+[29,'good','neutral','mega_bad',3,1,1,1,'Reluctant Bond'],
+[29,'neutral','good','mega_bad',3,1,1,1,'Reluctant Bond'],
+[22,'bad','bad','good',3,2,1,2,'Reluctant Bond'],
+[22,'bad','good','bad',3,2,1,2,'Reluctant Bond'],
+[22,'bad','mega_bad','good',3,2,1,2,'Reluctant Bond'],
+[22,'mega_bad','bad','good',3,2,1,2,'Reluctant Bond'],
+[22,'mega_bad','mega_bad','good',3,2,1,2,'Reluctant Bond'],
+[22,'mega_good','bad','bad',5,4,1,2,'Reluctant Bond'],
+[21,'good','mega_bad','neutral',4,1,1,1,'Reluctant Bond'],
+[19,'bad','neutral','neutral',2,0,0,1,'Reluctant Bond'],
+[19,'neutral','neutral','bad',2,0,0,1,'Reluctant Bond'],
+[14,'mega_bad','good','bad',4,2,1,2,'Reluctant Bond'],
+[14,'mega_good','bad','mega_bad',5,3,1,2,'Reluctant Bond'],
+[14,'mega_good','mega_bad','bad',5,3,1,2,'Reluctant Bond'],
+[11,'mega_bad','neutral','neutral',3,0,0,1,'Reluctant Bond'],
+[11,'neutral','bad','neutral',3,0,0,1,'Reluctant Bond'],
+[11,'neutral','neutral','mega_bad',3,0,0,1,'Reluctant Bond'],
+[6,'bad','good','mega_bad',4,1,1,2,'Reluctant Bond'],
+[6,'good','bad','bad',5,2,1,2,'Reluctant Bond'],
+[6,'mega_good','mega_bad','mega_bad',5,2,1,2,'Reluctant Bond'],
+[5,'bad','bad','bad',5,0,0,3,'Reluctant Bond'],
+[5,'bad','bad','mega_bad',5,0,0,3,'Reluctant Bond'],
+[5,'bad','bad','neutral',5,0,0,2,'Reluctant Bond'],
+[5,'bad','mega_bad','bad',5,0,0,3,'Reluctant Bond'],
+[5,'bad','mega_bad','mega_bad',5,0,0,3,'Reluctant Bond'],
+[5,'bad','mega_bad','neutral',5,0,0,2,'Reluctant Bond'],
+[5,'bad','neutral','bad',4,0,0,2,'Reluctant Bond'],
+[5,'bad','neutral','mega_bad',5,0,0,2,'Reluctant Bond'],
+[5,'good','bad','mega_bad',5,1,1,2,'Reluctant Bond'],
+[5,'good','mega_bad','bad',5,1,1,2,'Reluctant Bond'],
+[5,'good','mega_bad','mega_bad',5,0,1,2,'Reluctant Bond'],
+[5,'mega_bad','bad','bad',5,0,0,3,'Reluctant Bond'],
+[5,'mega_bad','bad','mega_bad',5,0,0,3,'Reluctant Bond'],
+[5,'mega_bad','bad','neutral',5,0,0,2,'Reluctant Bond'],
+[5,'mega_bad','good','mega_bad',5,1,1,2,'Reluctant Bond'],
+[5,'mega_bad','mega_bad','bad',5,0,0,3,'Reluctant Bond'],
+[5,'mega_bad','mega_bad','mega_bad',5,0,0,3,'Reluctant Bond'],
+[5,'mega_bad','mega_bad','neutral',5,0,0,2,'Reluctant Bond'],
+[5,'mega_bad','neutral','bad',5,0,0,2,'Reluctant Bond'],
+[5,'mega_bad','neutral','mega_bad',5,0,0,2,'Reluctant Bond'],
+[5,'neutral','bad','bad',5,0,0,2,'Reluctant Bond'],
+[5,'neutral','bad','mega_bad',5,0,0,2,'Reluctant Bond'],
+[5,'neutral','mega_bad','bad',5,0,0,2,'Reluctant Bond'],
+[5,'neutral','mega_bad','mega_bad',5,0,0,2,'Reluctant Bond'],
+[5,'neutral','mega_bad','neutral',4,0,0,1,'Reluctant Bond']
+];
+
+const CC={
+  mega_good:{bg:'rgba(56,217,245,0.14)',border:'rgba(56,217,245,0.5)',text:'#38d9f5',label:'Deep Resonance'},
+  good:     {bg:'rgba(66,245,168,0.10)',border:'rgba(66,245,168,0.35)',text:'#42f5a8',label:'Resonance'},
+  neutral:  {bg:'rgba(160,170,204,0.10)',border:'rgba(160,170,204,0.28)',text:'#a0aacc',label:'Stillness'},
+  bad:      {bg:'rgba(245,166,35,0.10)',border:'rgba(245,166,35,0.35)',text:'#f5a623',label:'Backlash'},
+  mega_bad: {bg:'rgba(245,84,66,0.12)',border:'rgba(245,84,66,0.5)',text:'#f55442',label:'Fracture'},
+};
+const BC={
+  'Resonant Bond':{color:'#38d9f5',bg:'rgba(56,217,245,0.07)',border:'rgba(56,217,245,0.2)',pct:'32.0%',n:40},
+  'Cautious Bond':{color:'#9b59f7',bg:'rgba(155,89,247,0.07)',border:'rgba(155,89,247,0.2)',pct:'22.4%',n:28},
+  'Reluctant Bond':{color:'#f59a23',bg:'rgba(245,154,35,0.07)',border:'rgba(245,154,35,0.2)',pct:'45.6%',n:57},
+};
+
+function buildOutput(id) {
+  const el = document.getElementById(id);
+  let h = '<div class="dw">'
+    + '<div class="dt">Bond distribution across 125 paths -- random 4-from-10: all-bad draws possible</div>'
+    + '<div class="db">'
+    + '<div class="ds" style="width:32%;background:#38d9f5"></div>'
+    + '<div class="ds" style="width:22.4%;background:#9b59f7"></div>'
+    + '<div class="ds" style="width:45.6%;background:#f59a23"></div>'
+    + '</div>'
+    + '<div class="dls">'
+    + '<div class="dl"><div class="dd" style="background:#38d9f5"></div><span style="color:#38d9f5">Resonant</span>&nbsp;<span style="color:#2e3452">40 &middot; 32%</span></div>'
+    + '<div class="dl"><div class="dd" style="background:#9b59f7"></div><span style="color:#9b59f7">Cautious</span>&nbsp;<span style="color:#2e3452">28 &middot; 22.4%</span></div>'
+    + '<div class="dl"><div class="dd" style="background:#f59a23"></div><span style="color:#f59a23">Reluctant</span>&nbsp;<span style="color:#2e3452">57 &middot; 45.6%</span></div>'
+    + '<div class="dl" style="margin-left:auto"><span style="color:#2e3452">26 distinct rates</span></div>'
+    + '</div></div>';
+
+  var bonds = ['Resonant Bond','Cautious Bond','Reluctant Bond'];
+  for (var bi = 0; bi < bonds.length; bi++) {
+    var bond = bonds[bi];
+    var cfg = BC[bond];
+    var paths = ALL_PATHS.filter(function(p){return p[8]===bond;});
+    var rows = '';
+    for (var pi = 0; pi < paths.length; pi++) {
+      var p = paths[pi];
+      var rate=p[0],t1=p[1],t2=p[2],t3=p[3],rage=p[4],calm=p[5],good=p[6],bad=p[7];
+      var chips = [t1,t2,t3].map(function(t){
+        var c=CC[t];
+        return '<span class="chip" style="background:'+c.bg+';border:1px solid '+c.border+';color:'+c.text+'">'+c.label+'</span>';
+      }).join('');
+      rows += '<div class="pr"><div class="pc">'+chips+'</div>'
+            + '<div class="pst">R'+rage+' C'+calm+' G'+good+' B'+bad+'</div>'
+            + '<div class="prt" style="color:'+cfg.color+'">'+rate+'%</div></div>';
+    }
+    h += '<div class="bs"><div class="bh" style="background:'+cfg.bg+';border:1px solid '+cfg.border+'">'
+       + '<div class="bn" style="color:'+cfg.color+'">'+bond+'</div>'
+       + '<div class="bc" style="color:'+cfg.color+'">'+cfg.n+' &middot; '+cfg.pct+'</div>'
+       + '</div>'+rows+'</div>';
+  }
+  el.innerHTML = h;
+}
+
+var tab='split';
+function switchTab(t){
+  tab=t;
+  var tabs=document.querySelectorAll('.tab');
+  var names=['split','tree','outputs'];
+  tabs.forEach(function(el,i){el.classList.toggle('active',names[i]===t);});
+  document.querySelectorAll('.panel').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('panel-'+t).classList.add('active');
+  var sc=t!=='outputs';
+  ['btnR','btnI','btnO'].forEach(function(id){document.getElementById(id).style.display=sc?'':'none';});
+  if(t!=='outputs')setTimeout(resizeAll,10);
+}
+
+var SX=1.62,SY=1.15,CY=0.50,COFF=0.09;
+var CXc={enc:0.03,battle:0.12,t1:0.26,st1:0.385,t2:0.50,st2:0.615,t3:0.73,eval_n:0.865,cap:0.96};
+var RYc={mega_good:CY-0.33,good:CY-0.16,neutral:CY+0.00,bad:CY+0.16,mega_bad:CY+0.33};
+var NC={enc:'#9b59f7',battle:'#4a6fff',t1:'#f5c842',t2:'#f59a23',t3:'#f55442',
+  state:'#c084fc',eval_n:'#dde4ff',mega_good:'#38d9f5',good:'#42f5a8',
+  neutral:'#a0aacc',bad:'#f5a623',mega_bad:'#f55442',
+  cap_h:'#38d9f5',cap_m:'#9b59f7',cap_l:'#f59a23'};
+const NODES=[
+  {id:'enc',cx:CXc.enc,cy:CY,r:0.028,color:NC.enc,label:'Encounter',sub:'8-line narrative',eye:'ENCOUNTER PHASE',body:'Linear narrative. Vorthex erupts from the Phase rift. No choices - combat is forced. State: Rage=0, Calm=0.',pills:[]},
+  {id:'battle',cx:CXc.battle,cy:CY,r:0.026,color:NC.battle,label:'Battle Loop',sub:'HP: 100%',eye:'BATTLE LOOP',body:'Attack rounds. ATK/DEF multipliers compound from choices. Thresholds pause at 66%, 33%, ~10% HP.',pills:[{t:'Enemy base: 18/round',c:'#f55442'},{t:'Player base: 12/round',c:'#42f5a8'}]},
+  {id:'t1',cx:CXc.t1,cy:CY,r:0.030,color:NC.t1,label:'Threshold 1',sub:'66% HP',eye:'THRESHOLD 1 - 66% HP',body:'4 drawn randomly from pool of 10 (2 per tier). No type guaranteed. Could be all Fracture. Intentional.',pills:[{t:'Pool: 10 options (2 per tier)',c:'#f5c842'},{t:'Draw: 4 at random - no guarantee',c:'#f5c842'},{t:'All-bad draws possible',c:'#f55442'}]},
+  {id:'st1',cx:CXc.st1,cy:CY,r:0.018,color:NC.state,label:'State',sub:'Rage + Calm',eye:'SHARED STATE POST-T1',body:'Rage and Calm update. Both persist into T2 - dialogue variant selection and ATK/DEF multipliers read from here.',pills:[{t:'Rage: 0-5 clamped',c:'#c084fc'},{t:'Calm: floor 0',c:'#c084fc'}]},
+  {id:'t2',cx:CXc.t2,cy:CY,r:0.030,color:NC.t2,label:'Threshold 2',sub:'33% HP',eye:'THRESHOLD 2 - 33% HP',body:'Reads Rage from T1. Rage>=3 activates enraged Vorthex lines. Bad/Mega-Bad tiers get +1 extra Rage at T2.',pills:[{t:'Rage>=3 - enraged variant',c:'#f55442'},{t:'Bad tiers: +1 Rage scaling at T2',c:'#f59a23'}]},
+  {id:'st2',cx:CXc.st2,cy:CY,r:0.018,color:NC.state,label:'State',sub:'Rage + Calm',eye:'SHARED STATE POST-T2',body:'Rage and Calm update again. T3 reads this for three dialogue variants. Same state feeds capture formula.',pills:[{t:'Rage compounds T1+T2',c:'#f59a23'},{t:'Calm compounds T1+T2',c:'#42f5a8'}]},
+  {id:'t3',cx:CXc.t3,cy:CY,r:0.030,color:NC.t3,label:'Threshold 3',sub:'~10% HP',eye:'THRESHOLD 3 - DEFEAT',body:'Final threshold. Three Vorthex variants by Rage (0-1 / 2-3 / 4-5). Last player input before formula evaluates.',pills:[{t:'Rage 0-1 - Quiet After',c:'#38d9f5'},{t:'Rage 2-3 - Breaking Point',c:'#f5c842'},{t:'Rage 4-5 - Last Wall',c:'#f55442'}]},
+  {id:'eval_n',cx:CXc.eval_n,cy:CY,r:0.030,color:NC.eval_n,label:'Capture\nFormula',sub:'All state evaluated',eye:'CAPTURE RATE FORMULA',body:'Base 50 + (Calm x 8) + (Good x 10) - (Rage x 8) - (Bad x 15). Clamped 5-99%. 26 distinct values from 125 paths.',pills:[{t:'>=80% - Resonant Bond (32%)',c:'#38d9f5'},{t:'50-79% - Cautious (22.4%)',c:'#9b59f7'},{t:'<50% - Reluctant (45.6%)',c:'#f59a23'}]},
+  {id:'cap_h',cx:CXc.cap,cy:CY-0.26,r:0.024,color:NC.cap_h,label:'Resonant\nBond',sub:'>=80% - 40 paths',eye:'RESONANT BOND - 32%',body:'You stayed. Vorthex bonds willingly. Only 32% of paths now - requires consistent good choices from a random pool.',pills:[{t:'Needs multiple good/mega-good draws',c:'#38d9f5'}]},
+  {id:'cap_m',cx:CXc.cap,cy:CY,r:0.024,color:NC.cap_m,label:'Cautious\nBond',sub:'50-79% - 28 paths',eye:'CAUTIOUS BOND - 22.4%',body:'Here we both are. 22.4% of paths. The middle path is the narrowest - hard to land deliberately.',pills:[{t:'Typical: mixed run with lucky draws',c:'#9b59f7'}]},
+  {id:'cap_l',cx:CXc.cap,cy:CY+0.26,r:0.024,color:NC.cap_l,label:'Reluctant\nBond',sub:'<50% - 57 paths',eye:'RELUCTANT BOND - 45.6%',body:'I remember everything. Now the most common outcome at 45.6%. Random pool means bad draws compound hard.',pills:[{t:'Typical: any bad or mega-bad draws',c:'#f59a23'}]},
+  {id:'t1_mg',cx:CXc.t1+COFF,cy:RYc.mega_good,r:0.016,color:NC.mega_good,label:'Deep\nResonance',sub:'Ground It / Feel Feet',eye:'T1 - DEEP RESONANCE',body:'Grounds Vorthex in present moment. Strongest single calming effect available.',pills:[{t:'Rage -3',c:'#38d9f5'},{t:'Calm +4',c:'#38d9f5'},{t:'ATK x0.65',c:'#42f5a8'},{t:'DEF x0.75',c:'#42f5a8'}]},
+  {id:'t1_g', cx:CXc.t1+COFF,cy:RYc.good,    r:0.016,color:NC.good,   label:'Resonance', sub:'Breathe / Slow Down',    eye:'T1 - RESONANCE',   body:'Pacing cue. Partial relief without full resolution.',pills:[{t:'Rage -1',c:'#42f5a8'},{t:'Calm +2',c:'#42f5a8'},{t:'ATK x0.85',c:'#42f5a8'}]},
+  {id:'t1_n', cx:CXc.t1+COFF,cy:RYc.neutral, r:0.016,color:NC.neutral,label:'Stillness', sub:'Just Say It / Listen',   eye:'T1 - STILLNESS',   body:'Presence without fixing. No combat modifier applied.',pills:[{t:'Rage +/-0',c:'#a0aacc'},{t:'Rel +5',c:'#a0aacc'}]},
+  {id:'t1_b', cx:CXc.t1+COFF,cy:RYc.bad,     r:0.016,color:NC.bad,   label:'Backlash',  sub:'Push Through / Overreact',eye:'T1 - BACKLASH',  body:'Dismissal. Shuts whatever cracked open. Rage surges.',pills:[{t:'Rage +2',c:'#f5a623'},{t:'ATK x1.25',c:'#f5a623'}]},
+  {id:'t1_mb',cx:CXc.t1+COFF,cy:RYc.mega_bad,r:0.016,color:NC.mega_bad,label:'Fracture', sub:'Dramatic / Nobody Cares',eye:'T1 - FRACTURE',   body:'Total invalidation. Vorthex fractures. Phase-light surges.',pills:[{t:'Rage +3',c:'#f55442'},{t:'Calm -1',c:'#f55442'},{t:'ATK x1.45',c:'#f55442'},{t:'DEF x1.35',c:'#f55442'}]},
+  {id:'t2_mg',cx:CXc.t2+COFF,cy:RYc.mega_good,r:0.016,color:NC.mega_good,label:'Deep\nResonance',sub:'Name Feeling / Underneath',eye:'T2 - DEEP RESONANCE',body:'Gets below anger to root fear. Deepest shift available at T2.',pills:[{t:'Rage -3',c:'#38d9f5'},{t:'Calm +4',c:'#38d9f5'},{t:'Cap +30%',c:'#38d9f5'}]},
+  {id:'t2_g', cx:CXc.t2+COFF,cy:RYc.good,    r:0.016,color:NC.good,   label:'Resonance', sub:'Move Body / Make Noise', eye:'T2 - RESONANCE',   body:'Somatic release. Physical movement discharges what words cannot reach.',pills:[{t:'Rage -1',c:'#42f5a8'},{t:'Calm +2',c:'#42f5a8'},{t:'ATK x0.85',c:'#42f5a8'}]},
+  {id:'t2_n', cx:CXc.t2+COFF,cy:RYc.neutral, r:0.016,color:NC.neutral,label:'Stillness', sub:'Not Alone / Not Leaving', eye:'T2 - STILLNESS',  body:'Commitment signal. Vorthex does not close off.',pills:[{t:'Rage +/-0',c:'#a0aacc'},{t:'Rel +5',c:'#a0aacc'}]},
+  {id:'t2_b', cx:CXc.t2+COFF,cy:RYc.bad,     r:0.016,color:NC.bad,   label:'Backlash',  sub:'Toughen Up / Others Worse',eye:'T2 - BACKLASH (scaled)',body:'Comparative invalidation. T2 adds +1 extra Rage on bad tiers.',pills:[{t:'Rage +3 (T2 scale)',c:'#f5a623'},{t:'ATK x1.25',c:'#f5a623'}]},
+  {id:'t2_mb',cx:CXc.t2+COFF,cy:RYc.mega_bad,r:0.016,color:NC.mega_bad,label:'Fracture', sub:'Brought This / No Time',  eye:'T2 - FRACTURE (scaled)',body:'Blame and dismissal. T2 adds +1 extra Rage. Compounds everything forward.',pills:[{t:'Rage +4 (T2 scale)',c:'#f55442'},{t:'Calm -1',c:'#f55442'},{t:'ATK x1.45',c:'#f55442'},{t:'DEF x1.35',c:'#f55442'}]},
+  {id:'t3_mg',cx:CXc.t3+COFF,cy:RYc.mega_good,r:0.016,color:NC.mega_good,label:'Deep\nResonance',sub:'You Can Learn / Ask Help',eye:'T3 - DEEP RESONANCE',body:'Hope and agency. Highest single-choice capture impact in the encounter.',pills:[{t:'Calm +4',c:'#38d9f5'},{t:'Cap +40%',c:'#38d9f5'},{t:'Bond: Witnessed',c:'#38d9f5'}]},
+  {id:'t3_g', cx:CXc.t3+COFF,cy:RYc.good,    r:0.016,color:NC.good,   label:'Resonance', sub:'Rest Now / Let It Be Over',eye:'T3 - RESONANCE',  body:'Permission to stop. Compassionate exit. Clears some remaining Rage.',pills:[{t:'Calm +2',c:'#42f5a8'},{t:'Rage -1 extra',c:'#42f5a8'},{t:'Cap +20%',c:'#42f5a8'}]},
+  {id:'t3_n', cx:CXc.t3+COFF,cy:RYc.neutral, r:0.016,color:NC.neutral,label:'Stillness', sub:'I Saw You / You Were Heard',eye:'T3 - STILLNESS', body:'Witness without resolution. Standard capture rate, highest relationship bonus.',pills:[{t:'Rel +10',c:'#a0aacc'},{t:'Cap: base rate',c:'#a0aacc'}]},
+  {id:'t3_b', cx:CXc.t3+COFF,cy:RYc.bad,     r:0.016,color:NC.bad,   label:'Backlash',  sub:'Just Capture / Too Long',  eye:'T3 - BACKLASH',  body:'Transactional closure. Bond perceived as taken not given.',pills:[{t:'Rage +2',c:'#f5a623'},{t:'Cap -15%',c:'#f5a623'}]},
+  {id:'t3_mb',cx:CXc.t3+COFF,cy:RYc.mega_bad,r:0.016,color:NC.mega_bad,label:'Fracture', sub:'Pathetic / Means Nothing',  eye:'T3 - FRACTURE',  body:'Complete dehumanisation. Vorthex accepts the bond but does not forgive it.',pills:[{t:'Rage +3',c:'#f55442'},{t:'Calm -1',c:'#f55442'},{t:'Cap -35%',c:'#f55442'}]},
+];
+const EDGES=[
+  {a:'enc',b:'battle',s:'spine',c:'#4a6fff'},{a:'battle',b:'t1',s:'spine',c:'#f5c842'},
+  {a:'t1',b:'st1',s:'spine',c:'#c084fc'},{a:'st1',b:'t2',s:'spine',c:'#f59a23'},
+  {a:'t2',b:'st2',s:'spine',c:'#c084fc'},{a:'st2',b:'t3',s:'spine',c:'#f55442'},{a:'t3',b:'eval_n',s:'spine',c:'#dde4ff'},
+  {a:'t1',b:'t1_mg',s:'out',c:'#38d9f5'},{a:'t1',b:'t1_g',s:'out',c:'#42f5a8'},{a:'t1',b:'t1_n',s:'out',c:'#a0aacc'},{a:'t1',b:'t1_b',s:'out',c:'#f5a623'},{a:'t1',b:'t1_mb',s:'out',c:'#f55442'},
+  {a:'t1_mg',b:'st1',s:'in',c:'#38d9f5',l:'Rage-3  Calm+4'},{a:'t1_g',b:'st1',s:'in',c:'#42f5a8',l:'Rage-1  Calm+2'},
+  {a:'t1_n',b:'st1',s:'in',c:'#a0aacc',l:'no change'},{a:'t1_b',b:'st1',s:'in',c:'#f5a623',l:'Rage+2'},{a:'t1_mb',b:'st1',s:'in',c:'#f55442',l:'Rage+3  Calm-1'},
+  {a:'t2',b:'t2_mg',s:'out',c:'#38d9f5'},{a:'t2',b:'t2_g',s:'out',c:'#42f5a8'},{a:'t2',b:'t2_n',s:'out',c:'#a0aacc'},{a:'t2',b:'t2_b',s:'out',c:'#f5a623'},{a:'t2',b:'t2_mb',s:'out',c:'#f55442'},
+  {a:'t2_mg',b:'st2',s:'in',c:'#38d9f5',l:'Rage-3  Calm+4'},{a:'t2_g',b:'st2',s:'in',c:'#42f5a8',l:'Rage-1  Calm+2'},
+  {a:'t2_n',b:'st2',s:'in',c:'#a0aacc',l:'no change'},{a:'t2_b',b:'st2',s:'in',c:'#f5a623',l:'Rage+3 (scaled)'},{a:'t2_mb',b:'st2',s:'in',c:'#f55442',l:'Rage+4  Calm-1'},
+  {a:'t3',b:'t3_mg',s:'out',c:'#38d9f5'},{a:'t3',b:'t3_g',s:'out',c:'#42f5a8'},{a:'t3',b:'t3_n',s:'out',c:'#a0aacc'},{a:'t3',b:'t3_b',s:'out',c:'#f5a623'},{a:'t3',b:'t3_mb',s:'out',c:'#f55442'},
+  {a:'t3_mg',b:'eval_n',s:'in',c:'#38d9f5',l:'Calm+4  +40%'},{a:'t3_g',b:'eval_n',s:'in',c:'#42f5a8',l:'Calm+2  +20%'},
+  {a:'t3_n',b:'eval_n',s:'in',c:'#a0aacc',l:'base rate'},{a:'t3_b',b:'eval_n',s:'in',c:'#f5a623',l:'Rage+2  -15%'},{a:'t3_mb',b:'eval_n',s:'in',c:'#f55442',l:'Rage+3  -35%'},
+  {a:'eval_n',b:'cap_h',s:'outcome',c:'#38d9f5',l:'>=80%'},{a:'eval_n',b:'cap_m',s:'outcome',c:'#9b59f7',l:'50-79%'},{a:'eval_n',b:'cap_l',s:'outcome',c:'#f59a23',l:'<50%'},
+];
+
+var camX=0,camY=0,camZ=1,drag=false,dsx,dsy,csx,csy,hov=null;
+function getAC(){
+  if(tab==='split'){var p=document.getElementById('lp');return{c:document.getElementById('cS'),W:p.offsetWidth,H:p.offsetHeight};}
+  if(tab==='tree'){var p=document.getElementById('panel-tree');return{c:document.getElementById('cT'),W:p.offsetWidth,H:p.offsetHeight};}
+  return null;
+}
+function resizeAll(){var ac=getAC();if(!ac)return;ac.c.width=ac.W;ac.c.height=ac.H;drawTree(ac.c,ac.W,ac.H);}
+function tw2(n,W,H){return{x:n.cx*W*SX,y:n.cy*H*SY};}
+function toSc(wx,wy){return{x:wx*camZ+camX,y:wy*camZ+camY};}
+function nSc(id,W,H){var n=NODES.find(function(n){return n.id===id;});if(!n)return null;var w=tw2(n,W,H);return toSc(w.x,w.y);}
+function nR(n,W){return n.r*W*camZ;}
+function drawTree(cv,W,H){
+  var ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+  ctx.save();ctx.strokeStyle='rgba(26,30,46,0.3)';ctx.lineWidth=1;
+  var gs=34*camZ,ox=((camX%gs)+gs)%gs,oy=((camY%gs)+gs)%gs;
+  for(var x=ox;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=oy;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.restore();
+  EDGES.forEach(function(e){dEdge(ctx,e,W,H);});
+  NODES.forEach(function(n){dNode(ctx,n,W,H);});
+}
+function dEdge(ctx,e,W,H){
+  var fs=nSc(e.a,W,H),ts=nSc(e.b,W,H);if(!fs||!ts)return;
+  var fn=NODES.find(function(n){return n.id===e.a;}),tn=NODES.find(function(n){return n.id===e.b;});
+  var fr=fn?nR(fn,W):0,tr=tn?nR(tn,W):0;
+  var ang=Math.atan2(ts.y-fs.y,ts.x-fs.x);
+  var sx=fs.x+Math.cos(ang)*fr,sy=fs.y+Math.sin(ang)*fr,ex=ts.x-Math.cos(ang)*tr,ey=ts.y-Math.sin(ang)*tr;
+  var dx=ex-sx,cp1x=sx+dx*0.42,cp1y=sy,cp2x=sx+dx*0.58,cp2y=ey;
+  ctx.save();ctx.strokeStyle=e.c;ctx.globalAlpha=e.s==='outcome'?0.65:0.6;
+  ctx.lineWidth=e.s==='spine'?2.2*camZ:1.3*camZ;
+  ctx.setLineDash(e.s==='spine'||e.s==='outcome'?[]:[4*camZ,5*camZ]);
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,ex,ey);ctx.stroke();
+  ctx.setLineDash([]);ctx.globalAlpha=0.85;
+  var aA=Math.atan2(ey-cp2y,ex-cp2x),aS=5*camZ;
+  ctx.fillStyle=e.c;ctx.beginPath();ctx.moveTo(ex,ey);
+  ctx.lineTo(ex-aS*Math.cos(aA-0.38),ey-aS*Math.sin(aA-0.38));
+  ctx.lineTo(ex-aS*Math.cos(aA+0.38),ey-aS*Math.sin(aA+0.38));
+  ctx.closePath();ctx.fill();
+  if(e.l&&camZ>0.42){
+    var mx=(sx+ex)/2,my=(sy+ey)/2,lsz=Math.max(6,7.5*camZ);
+    ctx.font='400 '+lsz+'px DM Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    var tm=ctx.measureText(e.l).width;ctx.fillStyle='rgba(3,4,8,0.88)';
+    ctx.beginPath();ctx.rect(mx-tm/2-4,my-lsz/2-3,tm+8,lsz+6);ctx.fill();
+    ctx.fillStyle=e.c;ctx.globalAlpha=0.9;ctx.fillText(e.l,mx,my);
+  }
+  ctx.restore();
+}
+function dNode(ctx,n,W,H){
+  var w=tw2(n,W,H),s=toSc(w.x,w.y),r=nR(n,W),isH=hov===n.id;
+  ctx.save();if(isH){ctx.shadowColor=n.color;ctx.shadowBlur=22;}
+  var g=ctx.createRadialGradient(s.x,s.y,r*0.5,s.x,s.y,r*2.2);g.addColorStop(0,n.color+'25');g.addColorStop(1,'transparent');
+  ctx.beginPath();ctx.arc(s.x,s.y,r*2.2,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  var fg=ctx.createRadialGradient(s.x-r*0.25,s.y-r*0.25,0,s.x,s.y,r);fg.addColorStop(0,n.color+'cc');fg.addColorStop(1,n.color+'42');
+  ctx.beginPath();ctx.arc(s.x,s.y,r,0,Math.PI*2);ctx.fillStyle=fg;ctx.fill();
+  ctx.strokeStyle=n.color;ctx.lineWidth=isH?2.5*camZ:1.5*camZ;ctx.stroke();ctx.restore();
+  if(camZ>0.30){
+    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+    var lines=n.label.split('\n'),lsz=Math.max(5,Math.min(9,r*0.54)),lh=lsz*1.25,th=lines.length*lh;
+    ctx.font='500 '+lsz+'px DM Mono,monospace';ctx.fillStyle='#fff';ctx.globalAlpha=0.95;
+    lines.forEach(function(ln,i){ctx.fillText(ln,s.x,s.y-th/2+i*lh+lh/2);});
+    if(camZ>0.48&&n.sub){var ssz=Math.max(4.5,lsz*0.68);ctx.font='300 '+ssz+'px DM Mono,monospace';ctx.fillStyle=n.color;ctx.globalAlpha=0.6;ctx.fillText(n.sub,s.x,s.y+th/2+ssz*1.2);}
+    ctx.restore();
+  }
+}
+var ttEl=document.getElementById('tt');
+function nodeAt(sx,sy,W,H){
+  for(var i=0;i<NODES.length;i++){var n=NODES[i],w=tw2(n,W,H),s=toSc(w.x,w.y),r=nR(n,W);if((sx-s.x)*(sx-s.x)+(sy-s.y)*(sy-s.y)<=r*r)return n;}
+  return null;
+}
+function showTip(n,mx,my){
+  document.getElementById('te').textContent=n.eye||'';document.getElementById('te').style.color=n.color;
+  document.getElementById('tl').textContent=n.label.replace('\n',' ');
+  document.getElementById('tb').textContent=n.body||'';
+  var phtml='';(n.pills||[]).forEach(function(p){phtml+='<span class="tpi" style="background:'+p.c+'18;border:1px solid '+p.c+'44;color:'+p.c+'">'+p.t+'</span>';});
+  document.getElementById('tp').innerHTML=phtml;
+  ttEl.style.display='block';
+  ttEl.style.left=Math.min(mx+14,window.innerWidth-262)+'px';
+  ttEl.style.top=Math.min(my-8,window.innerHeight-190)+'px';
+}
+function hideTip(){ttEl.style.display='none';}
+function drawActive(){var ac=getAC();if(ac)drawTree(ac.c,ac.W,ac.H);}
+function setupEv(pid,getWH){
+  var el=document.getElementById(pid);
+  el.addEventListener('mousedown',function(e){drag=true;dsx=e.clientX;dsy=e.clientY;csx=camX;csy=camY;});
+  el.addEventListener('mousemove',function(e){
+    var rect=el.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top,wh=getWH();
+    if(drag){camX=csx+(e.clientX-dsx);camY=csy+(e.clientY-dsy);hideTip();drawActive();return;}
+    var n=nodeAt(mx,my,wh.W,wh.H);hov=n?n.id:null;el.style.cursor=n?'pointer':'grab';
+    if(n)showTip(n,e.clientX,e.clientY);else hideTip();drawActive();
+  });
+  el.addEventListener('mouseup',function(){drag=false;});
+  el.addEventListener('mouseleave',function(){drag=false;hideTip();});
+  el.addEventListener('wheel',function(e){
+    e.preventDefault();var rect=el.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    var f=e.deltaY<0?1.1:0.91,nz=Math.min(3.5,Math.max(0.18,camZ*f));
+    camX=mx-(mx-camX)*(nz/camZ);camY=my-(my-camY)*(nz/camZ);camZ=nz;drawActive();
+  },{passive:false});
+}
+setupEv('lp',function(){return{W:document.getElementById('lp').offsetWidth,H:document.getElementById('lp').offsetHeight};});
+setupEv('panel-tree',function(){return{W:document.getElementById('panel-tree').offsetWidth,H:document.getElementById('panel-tree').offsetHeight};});
+function resetView(){var ac=getAC();if(!ac)return;camZ=0.55;camX=ac.W*0.01;camY=ac.H*0.25;drawActive();}
+function zoom(f){var ac=getAC();if(!ac)return;var cx=ac.W/2,cy=ac.H/2,nz=Math.min(3.5,Math.max(0.18,camZ*f));camX=cx-(cx-camX)*(nz/camZ);camY=cy-(cy-camY)*(nz/camZ);camZ=nz;drawActive();}
+window.addEventListener('resize',resizeAll);
+buildOutput('opS');buildOutput('opF');
+setTimeout(function(){resizeAll();resetView();},40);
+</script>
+</body>
+</html>

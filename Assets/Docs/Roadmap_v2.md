@@ -36,7 +36,7 @@
 - Install Unity Hub, create 2D URP project named `Phasix`
 - Configure Git + GitHub, add Unity `.gitignore`
 - Learn Editor layout: Scene, Game, Inspector, Project, Hierarchy
-- Create full folder structure: `Assets/_Phasix/Docs/`, `Scripts/` (8 subfolders), `Data/` (5 subfolders)
+- Create full folder structure: `Assets/Docs/`, `Assets/Scripts/` (8 subfolders), `Assets/Data/` (5 subfolders)
 - Drop all Docs files into place (CLAUDE.md at project root)
 - **Tags:** Unity Hub · 2D URP · Git
 

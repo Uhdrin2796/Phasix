@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon-Farm · Lore & World Framing</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --void: #030408;
+  --deep: #080a12;
+  --panel: #0d1020;
+  --surface: #121526;
+  --border: #1a1e30;
+  --border-lit: #252a45;
+  --phase-purple: #9b59f7;
+  --phase-blue: #4a6fff;
+  --phase-cyan: #38d9f5;
+  --phase-green: #42f5a8;
+  --rage-1: #f5a623;
+  --rage-2: #f56e23;
+  --rage-3: #f52323;
+  --gold: #f5c842;
+  --text-primary: #e8ecff;
+  --text-secondary: #7a84a8;
+  --text-muted: #3d4460;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--void);
+  color: var(--text-primary);
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* ── SIDEBAR NAV ── */
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--deep);
+  border-right: 1px solid var(--border);
+  padding: 28px 0 40px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  z-index: 10;
+}
+
+.sidebar-title {
+  padding: 0 24px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.sidebar-title h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--phase-purple);
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.sidebar-title p {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  letter-spacing: 0.08em;
+}
+
+.nav-section {
+  padding: 0 16px;
+  margin-bottom: 6px;
+}
+
+.nav-section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 8px 6px;
+}
+
+.nav-link {
+  display: block;
+  padding: 7px 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.15s;
+  letter-spacing: 0.04em;
+}
+
+.nav-link:hover {
+  background: rgba(155,89,247,0.08);
+  color: var(--phase-purple);
+}
+
+.nav-link.active {
+  background: rgba(155,89,247,0.12);
+  color: var(--phase-purple);
+  border-left: 2px solid var(--phase-purple);
+  padding-left: 6px;
+}
+
+/* ── MAIN CONTENT ── */
+.main {
+  margin-left: 260px;
+  padding: 60px 80px 120px;
+  max-width: 900px;
+}
+
+/* ── SECTIONS ── */
+.section {
+  margin-bottom: 80px;
+  scroll-margin-top: 40px;
+}
+
+.section-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--phase-purple);
+  margin-bottom: 10px;
+}
+
+.section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.section-sub {
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── PROSE ── */
+p {
+  margin-bottom: 18px;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+em {
+  color: var(--text-secondary);
+}
+
+/* ── HEADINGS ── */
+h2 {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 36px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+h3 {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--phase-cyan);
+  margin: 28px 0 10px;
+  letter-spacing: 0.06em;
+}
+
+/* ── CALLOUT BOXES ── */
+.callout {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-left: 3px solid var(--phase-purple);
+  border-radius: 0 8px 8px 0;
+  padding: 16px 20px;
+  margin: 24px 0;
+}
+
+.callout.cyan { border-left-color: var(--phase-cyan); }
+.callout.gold  { border-left-color: var(--gold); }
+.callout.rage  { border-left-color: var(--rage-2); }
+
+.callout-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--phase-purple);
+  margin-bottom: 6px;
+}
+
+.callout.cyan .callout-label { color: var(--phase-cyan); }
+.callout.gold  .callout-label { color: var(--gold); }
+.callout.rage  .callout-label { color: var(--rage-2); }
+
+.callout p { margin: 0; font-size: 14.5px; }
+
+/* ── LORE QUOTE ── */
+.lore-quote {
+  background: var(--surface);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 24px 0;
+  font-style: italic;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.75;
+  position: relative;
+}
+
+.lore-quote::before {
+  content: '"';
+  position: absolute;
+  top: -6px;
+  left: 18px;
+  font-family: 'Cinzel', serif;
+  font-size: 40px;
+  color: var(--phase-purple);
+  opacity: 0.4;
+  line-height: 1;
+}
+
+.lore-quote-attr {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-top: 10px;
+  text-transform: uppercase;
+  font-style: normal;
+}
+
+/* ── FREQUENCY TABLE ── */
+.freq-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.freq-card {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.freq-name {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.freq-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.freq-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ── BOND OUTCOMES ── */
+.bond-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.bond-card {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 18px 16px;
+}
+
+.bond-name {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.bond-pct {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+
+.bond-quote {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  border-left: 2px solid currentColor;
+  padding-left: 10px;
+}
+
+.bond-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* ── FACTION CARDS ── */
+.faction-card {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 20px 22px;
+  margin-bottom: 14px;
+}
+
+.faction-name {
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.faction-location {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.faction-desc {
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin-bottom: 10px;
+}
+
+.faction-tension {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: 6px;
+  border-left: 2px solid var(--gold);
+}
+
+.faction-tension strong { color: var(--gold); }
+
+/* ── VORTHEX LORE ENTRY ── */
+.lore-entry {
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 20px 0;
+}
+
+.lore-entry-header {
+  background: linear-gradient(135deg, rgba(155,89,247,0.12) 0%, transparent 100%);
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lore-entry-name {
+  font-family: 'Cinzel', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-shadow: 0 0 20px rgba(155,89,247,0.3);
+}
+
+.lore-entry-class {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--phase-purple);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.lore-entry-body {
+  padding: 20px 24px;
+}
+
+.lore-field {
+  margin-bottom: 18px;
+}
+
+.lore-field-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.lore-field-text {
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+/* ── TIER TABLE ── */
+.tier-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+
+.tier-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-lit);
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+.tier-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.tier-table tr:last-child td { border-bottom: none; }
+.tier-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ── FORMULA BOX ── */
+.formula-box {
+  background: var(--surface);
+  border: 1px solid var(--border-lit);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 20px 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 2;
+}
+
+.formula-comment {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ── HERO BANNER ── */
+.hero {
+  padding: 60px 0 50px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 60px;
+}
+
+.hero-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--phase-purple);
+  margin-bottom: 14px;
+}
+
+.hero-title {
+  font-family: 'Cinzel', serif;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+  text-shadow: 0 0 40px rgba(155,89,247,0.2);
+  margin-bottom: 8px;
+}
+
+.hero-subtitle {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  font-weight: 400;
+  margin-bottom: 20px;
+}
+
+.hero-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.hero-meta-item {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-meta-item span {
+  color: var(--phase-purple);
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- ── SIDEBAR ── -->
+<div class="sidebar">
+  <div class="sidebar-title">
+    <h1>Mon-Farm<br>Lore & World</h1>
+    <p>GDD Reference · v0.7.9+</p>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Foundation</div>
+    <a href="#world" class="nav-link">The World</a>
+    <a href="#phase" class="nav-link">The Phase Dimension</a>
+    <a href="#fracture" class="nav-link">The Fracture Event</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Phasix</div>
+    <a href="#what-phasix-are" class="nav-link">What Phasix Are</a>
+    <a href="#emotional-root" class="nav-link">The Emotional Root</a>
+    <a href="#psychology" class="nav-link">Psychological States</a>
+    <a href="#frequencies" class="nav-link">The Five Frequencies</a>
+    <a href="#evolution" class="nav-link">Evolution Stages</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">World</div>
+    <a href="#factions" class="nav-link">The Five Factions</a>
+    <a href="#verdant-scar" class="nav-link">The Verdant Scar</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Encounters</div>
+    <a href="#encounter-framing" class="nav-link">Encounter Framing</a>
+    <a href="#bond-system" class="nav-link">The Bond System</a>
+    <a href="#dialogue-system" class="nav-link">Dialogue System</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Reference</div>
+    <a href="#vorthex" class="nav-link">Vorthex — Lore Entry</a>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="main">
+
+  <div class="hero">
+    <div class="hero-eyebrow">◈ Mon-Farm · Game Design Document</div>
+    <div class="hero-title">Lore &<br>World Framing</div>
+    <div class="hero-subtitle">Phasix · The Phase Dimension · Encounter Design</div>
+    <div class="hero-meta">
+      <div class="hero-meta-item">GDD Version <span>v0.7.9</span></div>
+      <div class="hero-meta-item">Creature Classifier <span>Phasix (working name)</span></div>
+      <div class="hero-meta-item">Prototype <span>Vorthex Encounter</span></div>
+      <div class="hero-meta-item">Engine <span>Unity Latest LTS · 2D URP</span></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── WORLD ─────────────────────────── -->
+  <div class="section" id="world">
+    <div class="section-eyebrow">◈ Foundation</div>
+    <div class="section-title">The World of Mon-Farm</div>
+    <div class="section-sub">A world permanently altered by the tearing of its own membrane</div>
+
+    <p>Mon-Farm is set in a world that was fundamentally altered by a cataclysmic event called <strong>the Fracture</strong> — a tearing of the boundary between the physical world and the Phase dimension. In the aftermath, creatures began manifesting from the Phase: living embodiments of frequency, feeling, and unresolved force. These are the <strong>Phasix</strong>.</p>
+
+    <p>The world is not post-apocalyptic in a ruined-city sense. It is more like a world that has developed an entirely new ecology — one where emotional and psychological phenomena have physical form, and where the boundary between inner and outer experience is no longer metaphorical. What a person feels in a region of high Phase residue may literally take shape beside them. What a community suppresses may accumulate in the rift-lines and eventually erupt as something.</p>
+
+    <div class="callout cyan">
+      <div class="callout-label">Design Principle</div>
+      <p><strong>Tamers</strong> are individuals who can form bonds with Phasix. The bond is not capture in the colonial sense — it is a relationship of mutual recognition. A Tamer who never truly sees a Phasix may technically hold a bond, but the Phasix will remember how it was obtained. The quality of the bond shapes what the Phasix becomes.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── PHASE ─────────────────────────── -->
+  <div class="section" id="phase">
+    <div class="section-eyebrow">◈ Foundation</div>
+    <div class="section-title">The Phase Dimension</div>
+    <div class="section-sub">The space where feeling exists before it has found form</div>
+
+    <p>The Phase is not a place in any geographic sense. It is better understood as the dimension of <strong>unresolved potential</strong> — the space where feeling exists before it has found form, where grief has not yet become action, where rage is still becoming. It exists alongside the physical world at all times, separated by a membrane that the Fracture permanently weakened.</p>
+
+    <p>Phase residue is the substance that bleeds through from the Phase dimension into the physical world. It appears as a luminous atmospheric effect — often described as <strong>rift-light</strong> — and concentrates in areas of historical emotional intensity: battlefields, places of prolonged suppression, sites of sudden loss, locations where communities have collectively avoided something for generations.</p>
+
+    <div class="callout gold">
+      <div class="callout-label">World Detail — Rift-Lines</div>
+      <p>The Fracture created permanent fissures in the world-membrane called <strong>rift-lines</strong>. These are the paths along which Phase energy flows, concentrating at junction points called rift-stones. The distribution of rift-lines determines the regional character of different areas — a rift-line running through forest produces the Verdant Scar; through desert, the Bleachlands; through subterranean rock, the Hollowdeep.</p>
+    </div>
+
+    <p>High-residue areas are where Phasix most commonly manifest. They are also where the boundary between a person's inner experience and their outer environment grows thin. A Tamer operating in a high-residue zone may find that their own unresolved states begin to surface — not psychologically but physically, as distortions in the environment or unexpected responses from nearby Phasix.</p>
+  </div>
+
+  <!-- ─────────────────────────── FRACTURE ─────────────────────────── -->
+  <div class="section" id="fracture">
+    <div class="section-eyebrow">◈ Foundation</div>
+    <div class="section-title">The Fracture Event</div>
+    <div class="section-sub">The cause is contested. The consequences are not.</div>
+
+    <p>The Fracture occurred approximately three generations ago — close enough that living elders remember the days before it, far enough that most people have grown up in a world where Phasix exist as a normal part of the ecology. The precise cause is unknown and contested by the five factions.</p>
+
+    <h3>The Ashveil Position</h3>
+    <p>The Fracture was a natural culmination of accumulated Phase pressure — the dimension had been building for centuries and the membrane simply gave way. The implication is that the Fracture was inevitable and further tears are possible or probable.</p>
+
+    <h3>The Hollowdeep Position</h3>
+    <p>The Fracture was triggered by a deliberate act — a focused attempt to access the Phase dimension by a group whose identity has been lost. This position holds that the Fracture was a wound, not a natural opening, and that it can be studied and potentially sealed.</p>
+
+    <h3>The Verdant Scar Position</h3>
+    <div class="callout rage">
+      <div class="callout-label">Most Uncomfortable Theory</div>
+      <p>The Fracture was a <strong>response</strong> — the Phase dimension reached out, not through accident or intent, but because something in the world had created a sufficient accumulation of unprocessed feeling that the boundary could no longer hold it. This implies the world itself called the Phasix into being.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── WHAT PHASIX ARE ─────────────────────────── -->
+  <div class="section" id="what-phasix-are">
+    <div class="section-eyebrow">◈ Phasix</div>
+    <div class="section-title">What Phasix Are</div>
+    <div class="section-sub">Not animals that wandered in from another dimension</div>
+
+    <p>Phasix are <strong>Phase-crystallised states</strong> — moments when accumulated feeling in the Phase dimension reached sufficient density and coherence to take form. They are not species in the biological sense. A Phasix that embodies rage is not a member of a "rage species" — it is a specific crystallisation of rage that happened in a specific place at a specific time.</p>
+
+    <p>Two Phasix that both embody grief may look entirely different, respond entirely differently, and evolve along entirely different lines depending on the nature of the grief they crystallised from.</p>
+
+    <div class="callout">
+      <div class="callout-label">Critical Design Distinction</div>
+      <p><strong>Phasix have interiority.</strong> They are not simple elemental forces. The rage that crystallises into a Phasix is not generalised rage — it is rage with texture, history, specific provocation. When Vorthex says "Nobody listens, nobody ever listens," that is not a programmed response. It is the voice of the specific frustration that became Vorthex.</p>
+    </div>
+
+    <h2>Core Properties</h2>
+
+    <h3>Phasix Remember</h3>
+    <p>The bond a Phasix forms carries emotional weight. A Phasix that was captured reluctantly will carry that knowledge into its Surge and Convergence forms. A Phasix that bonded through genuine recognition may, over time, develop capacities that a reluctantly-bonded Phasix of the same root will never access.</p>
+
+    <h3>Phasix Can Evolve</h3>
+    <p>Through bonding, sustained interaction, and what Ashveil researchers call Phase Saturation, a Phasix can move through three evolutionary stages: <strong>Breach</strong> (raw emergence), <strong>Surge</strong> (integration of experience), and <strong>Convergence</strong> (resolution into a more complex form). Evolution represents a deepening of the original emotional root into something more differentiated and more capable.</p>
+  </div>
+
+  <!-- ─────────────────────────── EMOTIONAL ROOT ─────────────────────────── -->
+  <div class="section" id="emotional-root">
+    <div class="section-eyebrow">◈ Phasix</div>
+    <div class="section-title">The Emotional Root System</div>
+    <div class="section-sub">Not "anger" — the anger that comes from not being heard</div>
+
+    <p>Every Phasix has an <strong>emotional root</strong> — the specific experiential state from which it crystallised. The emotional root is not a fixed category but a particular texture of experience:</p>
+
+    <div class="lore-quote">
+      Not "anger" but "the anger that comes from not being heard."<br>
+      Not "grief" but "the grief that cannot find its name because it wasn't given permission to be grief in the first place."<br>
+      Not "fear" but "the vigilance that has been running so long it no longer recognises itself as fear."
+    </div>
+
+    <h2>What the Root Determines</h2>
+    <p>The emotional root determines the Phasix's appearance, elemental frequency, combat behaviour, response to Tamers, and evolution path. It is not backstory — <strong>it is the encounter itself.</strong></p>
+
+    <div class="callout cyan">
+      <div class="callout-label">Core Design Statement</div>
+      <p>A Phasix encounter in Mon-Farm is not "fight the creature, then bond with it." It is <strong>"engage with the emotional state this creature embodies, and that engagement will determine both the difficulty of the fight and the nature of what you bond with."</strong> This is why the coping and response choices are drawn from real psychological communication strategies — the game is literally asking: how would you respond to someone in this state?</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── PSYCHOLOGY ─────────────────────────── -->
+  <div class="section" id="psychology">
+    <div class="section-eyebrow">◈ Phasix</div>
+    <div class="section-title">Phasix as Psychological States</div>
+    <div class="section-sub">Physical form as a legible expression of interior experience</div>
+
+    <p>The relationship between a Phasix's form and its emotional root is not symbolic in a simple, readable way. It is more like how a person's body holds stress — legible if you know how to read it.</p>
+
+    <h3>Accumulated / Suppressed States (e.g. Vorthex)</h3>
+    <p>Form tends to be unstable at the edges, flickering, with sudden bursts of intensity followed by apparent stillness. The suppression is visible as a kind of containment that keeps failing. Colours tend toward heat: orange, red, occasionally deep violet when the suppression wins briefly.</p>
+
+    <h3>Grief / Loss States</h3>
+    <p>Form tends toward translucency — more visible as absence than presence. Movements are slow and can be suddenly arrested. Light tends toward blue-grey, occasionally with unexpected flashes of warm colour that pass quickly.</p>
+
+    <h3>Hypervigilance / Anxiety States</h3>
+    <p>Form is in constant small motion — not explosive instability but continuous low-level monitoring movement. Eyes (if present) are large and track everything. Form may split attention in multiple directions simultaneously.</p>
+
+    <h3>Shame / Self-Diminishment States</h3>
+    <p>Form tends to shrink from full expression — it may appear smaller than its true size, or hold its full form but avoid occupying space. The most dangerous expressions come when something triggers the core wound and the shame flips briefly into something harder.</p>
+
+    <h3>Numbness / Dissociation States</h3>
+    <p>The most difficult Phasix to read. Form appears stable — perhaps too stable, with an uncanny stillness. The encounter pattern for these Phasix is less about de-escalation and more about reactivation: helping something feel again rather than calming something that feels too much.</p>
+  </div>
+
+  <!-- ─────────────────────────── FREQUENCIES ─────────────────────────── -->
+  <div class="section" id="frequencies">
+    <div class="section-eyebrow">◈ Phasix</div>
+    <div class="section-title">The Five Elemental Frequencies</div>
+    <div class="section-sub">Every Phasix resonates primarily with one of five Phase frequencies</div>
+
+    <div class="freq-grid">
+      <div class="freq-card">
+        <div class="freq-name" style="color:var(--rage-2);">Ignis</div>
+        <div class="freq-sub">The Surge</div>
+        <div class="freq-desc">Kinetic, outward-moving force. Rage, passion, drive. Explosive attacks. Vorthex is Ignis-primary.</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name" style="color:var(--phase-blue);">Virel</div>
+        <div class="freq-sub">The Root</div>
+        <div class="freq-desc">Accumulated, embedded force. Long-held grief, weight, the things that were never said. Sustained attacks.</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name" style="color:var(--phase-cyan);">Aether</div>
+        <div class="freq-sub">The Drift</div>
+        <div class="freq-desc">Absence, space, distance. Dissociation and loneliness. Indirect attacks, environmental manipulation.</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name" style="color:var(--phase-purple);">Veil</div>
+        <div class="freq-sub">The Mirror</div>
+        <div class="freq-desc">Perception, reflection, recognition. Shame, performance, the gap between self and presentation.</div>
+      </div>
+      <div class="freq-card">
+        <div class="freq-name" style="color:var(--phase-green);">Flux</div>
+        <div class="freq-sub">The Threshold</div>
+        <div class="freq-desc">Change, transition, becoming. Fear of change, liminal states. The rarest and most unstable frequency.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── EVOLUTION ─────────────────────────── -->
+  <div class="section" id="evolution">
+    <div class="section-eyebrow">◈ Phasix</div>
+    <div class="section-title">Evolution Stages</div>
+    <div class="section-sub">Breach → Surge → Convergence · Integration, not replacement</div>
+
+    <h3>Breach — Raw Emergence</h3>
+    <p>A newly-manifested Phasix is in its Breach stage. Its emotional root is fully present but unmodulated — there is no distance between the feeling and the expression of it. Breach-stage Phasix are both the most vulnerable and the most volatile. A bond formed at Breach carries the most weight in either direction.</p>
+
+    <h3>Surge — Integration</h3>
+    <p>A bonded Phasix that has accumulated sufficient Phase Saturation enters its Surge stage. The emotional root is still present but the Phasix has begun to develop a relationship with it. Surge-stage Phasix are capable of more complex behaviour — they may remember specific interactions, develop preferences, and begin to communicate more fluently.</p>
+
+    <h3>Convergence — Resolution</h3>
+    <div class="callout">
+      <div class="callout-label">Design Note — What Convergence Means</div>
+      <p>A Convergence-stage Phasix is <strong>not</strong> a Phasix that no longer feels the original emotion. It is a Phasix that has found a relationship with that feeling that allows it to exist without being consumed by it. Convergence forms vary enormously depending on bond quality — the original emotional root shaped by how it was engaged.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── FACTIONS ─────────────────────────── -->
+  <div class="section" id="factions">
+    <div class="section-eyebrow">◈ World</div>
+    <div class="section-title">The Five Factions</div>
+    <div class="section-sub">Each faction's theory of the Fracture shapes how they relate to Phasix</div>
+
+    <div class="faction-card">
+      <div class="faction-name" style="color:var(--phase-purple);">Ashveil — The Observers</div>
+      <div class="faction-location">Northern Verdant Scar · Observatories and field stations</div>
+      <div class="faction-desc">Academics of the Phase phenomenon — cataloguers, theorists, careful observers. They believe the Fracture was natural and their primary concern is documentation. Their relationship to Tamers is suspicious by default — unsanctioned bonds disrupt observation windows and introduce uncontrolled variables. A Tamer who demonstrates genuine attunement commands real respect.</div>
+      <div class="faction-tension"><strong>Core tension:</strong> Ashveil's commitment to observation sometimes shades into a refusal to intervene. They watch Phasix in distress and document the distress rather than addressing it. Some researchers are aware of this ethical problem. Others are not.</div>
+    </div>
+
+    <div class="faction-card">
+      <div class="faction-name" style="color:var(--phase-blue);">Hollowdeep — The Excavators</div>
+      <div class="faction-location">Subterranean regions · Deep excavation sites</div>
+      <div class="faction-desc">The Hollowdeep believe the Fracture was deliberate — a wound rather than a natural opening. Their primary concern is finding evidence of this, understanding the cause, and determining whether it can be sealed or controlled. Their relationship to Phasix is more extractive — they tend to view Phasix as evidence of the Fracture rather than as beings in their own right.</div>
+      <div class="faction-tension"><strong>Core tension:</strong> Produces some of the most capable researchers in Phase chemistry, and some of the most callous bonds.</div>
+    </div>
+
+    <div class="faction-card">
+      <div class="faction-name" style="color:var(--phase-green);">Verdant Scar — The Cultivators</div>
+      <div class="faction-location">Deep forest zones · Living communities</div>
+      <div class="faction-desc">The Phasix-positive faction. They believe Phasix are a necessary emergence — the world was calling them into being. Their bonds tend to be the strongest because they are the most willing to engage with the emotional root rather than managing it. However, this same orientation can produce an idealism that leaves them unprepared for Phasix whose roots are genuinely difficult.</div>
+      <div class="faction-tension"><strong>Core tension:</strong> Idealism about the bond system makes them vulnerable to self-deception when an encounter doesn't go well.</div>
+    </div>
+
+    <div class="faction-card">
+      <div class="faction-name" style="color:var(--gold);">Bleachlands — The Pragmatists</div>
+      <div class="faction-location">Southern salt-flat regions · Trading routes</div>
+      <div class="faction-desc">The Bleachlands communities care less about the metaphysics of the Fracture than about practical coexistence. Phasix are a resource, a hazard, and occasionally a partner — depending entirely on the specific situation. Their bonds are transactional and often effective precisely because they have no ideology about what the bond should be.</div>
+      <div class="faction-tension"><strong>Core tension:</strong> Also capable of the most clinical callousness when a Phasix stops being useful.</div>
+    </div>
+
+    <div class="faction-card">
+      <div class="faction-name" style="color:var(--rage-1);">Shatterfield — The Seekers</div>
+      <div class="faction-location">No fixed location · Rift-line routes</div>
+      <div class="faction-desc">A loose network rather than a fixed community. They follow rift-lines seeking specific Phasix, often driven by personal histories with the Phase phenomenon. Some are the most skilled and attuned Tamers in the world. Some are running from something. Often both.</div>
+      <div class="faction-tension"><strong>Core tension:</strong> No faction accountability means no one to correct a seeker who is doing harm.</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── VERDANT SCAR ─────────────────────────── -->
+  <div class="section" id="verdant-scar">
+    <div class="section-eyebrow">◈ World · Region</div>
+    <div class="section-title">The Verdant Scar</div>
+    <div class="section-sub">Highest-density Phasix emergence zone · Vorthex's region</div>
+
+    <p>The Verdant Scar is a region of dense forest cut through by a major rift-line running roughly north-to-south. The forest itself is healthy and active — this is not a blighted zone — but the Phase residue concentration makes it one of the highest-density Phasix emergence locations in the known world.</p>
+
+    <p>The rift-line in the Verdant Scar has a particular quality: it runs through an area of historical human habitation where communities were, for generations, required to maintain public composure under conditions of significant private stress. <strong>The suppression accumulated in the rift-line is not dramatic or violent — it is the accumulation of ordinary, sustained, uncommunicated feeling.</strong></p>
+
+    <div class="callout cyan">
+      <div class="callout-label">Regional Character</div>
+      <p>This is why Verdant Scar Phasix tend to embody states related to expression, communication, and the gap between what is felt and what is said. It is an unusual Phasix region in that the creatures here are not generally dangerous in an aggressive sense — they are dangerous in the sense that engaging with them requires engaging with uncomfortable internal states.</p>
+    </div>
+
+    <p>The Ashveil faction's observatory in the Verdant Scar focuses specifically on <strong>bond-formation windows</strong> — the period after a Phasix emerges when it is most amenable to first-contact bonding. The Ashveil believe these windows are ecologically important and that unregulated Tamer activity disrupts their data collection.</p>
+  </div>
+
+  <!-- ─────────────────────────── ENCOUNTER FRAMING ─────────────────────────── -->
+  <div class="section" id="encounter-framing">
+    <div class="section-eyebrow">◈ Encounters</div>
+    <div class="section-title">Encounter Framing</div>
+    <div class="section-sub">Three narrative purposes before combat begins</div>
+
+    <p>Every Phasix encounter has a narrative context that precedes the combat-dialogue system. The framing serves three purposes:</p>
+
+    <p><strong>1. Establish the emotional root</strong> — the player should understand what state this Phasix embodies before they choose their first response. Not in explicit terms, but through behaviour, appearance, and the environment's response.</p>
+
+    <p><strong>2. Make combat inevitable</strong> — the player should not feel they could have avoided the fight. The Phasix is not hostile because it dislikes the player; it is hostile because it is in a state that makes engagement unavoidable. The player didn't cause this. They walked into it.</p>
+
+    <p><strong>3. Create investment</strong> — before the first threshold, the player should have enough emotional context for the coping choices to mean something. If they don't understand why the Phasix is the way it is, the choices feel arbitrary. If they understand, the choices feel real.</p>
+  </div>
+
+  <!-- ─────────────────────────── BOND SYSTEM ─────────────────────────── -->
+  <div class="section" id="bond-system">
+    <div class="section-eyebrow">◈ Encounters</div>
+    <div class="section-title">The Bond System</div>
+    <div class="section-sub">A relationship, not a collection</div>
+
+    <p>A bond formed with a Phasix in its Breach stage is not a static relationship. It is an ongoing dynamic — the Phasix continues to carry the emotional root from which it crystallised, and the nature of the bond shapes how that root evolves. A Tamer who truly sees a Phasix and engages with its root is not just bonding with a creature — they are engaging in a sustained act of recognition.</p>
+
+    <div class="bond-grid">
+      <div class="bond-card">
+        <div class="bond-name" style="color:var(--phase-cyan);">Resonant Bond</div>
+        <div class="bond-pct">≥ 80% capture rate · 32% of runs</div>
+        <div class="bond-quote" style="color:var(--phase-cyan);">"You stayed. Even when it got loud."</div>
+        <div class="bond-desc">The Phasix consented to the relationship. The Tamer was present with what the Phasix actually was. The root was acknowledged — not fixed, but seen. Rare not because it is difficult mechanically but because it requires remaining present with something painful.</div>
+      </div>
+      <div class="bond-card">
+        <div class="bond-name" style="color:var(--phase-purple);">Cautious Bond</div>
+        <div class="bond-pct">50–79% capture rate · 22% of runs</div>
+        <div class="bond-quote" style="color:var(--phase-purple);">"Here we both are. That's something."</div>
+        <div class="bond-desc">The Phasix is present but undecided. There was genuine contact but it was incomplete. An honest bond — it represents the most common real outcome of genuine engagement: something was reached, something wasn't.</div>
+      </div>
+      <div class="bond-card">
+        <div class="bond-name" style="color:var(--rage-1);">Reluctant Bond</div>
+        <div class="bond-pct">Below 50% · 46% of runs</div>
+        <div class="bond-quote" style="color:var(--rage-1);">"I remember everything."</div>
+        <div class="bond-desc">The bond was taken. The Phasix did not come — it was captured. Reluctant bonds are the most common outcome by design. The Phasix knows. It will be more difficult to evolve, less responsive, and in some cases actively resistant in ways that grow subtler over time.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── DIALOGUE SYSTEM ─────────────────────────── -->
+  <div class="section" id="dialogue-system">
+    <div class="section-eyebrow">◈ Encounters · Mechanics</div>
+    <div class="section-title">The Dialogue System</div>
+    <div class="section-sub">Combat-dialogue hybrid · State machine · Five coping tiers</div>
+
+    <h2>How It Works</h2>
+    <p>At three HP thresholds (80% / 55% / 30%), combat pauses and the player is presented with four choices drawn randomly from a pool of ten — two per tier. No tier is guaranteed. The player may face all-bad options. This is intentional.</p>
+
+    <p>Each choice writes to shared <strong>Rage</strong> and <strong>Calm</strong> accumulators that persist across all three thresholds and determine the final capture rate. The formula:</p>
+
+    <div class="formula-box">
+      CaptureRate = clamp(5, 99,<br>
+      &nbsp;&nbsp;50 <span class="formula-comment">// base</span><br>
+      &nbsp;&nbsp;+ (Calm × 8) <span class="formula-comment">// sustained de-escalation</span><br>
+      &nbsp;&nbsp;+ (GoodChoices × 10) <span class="formula-comment">// flat bonus per good pick</span><br>
+      &nbsp;&nbsp;− (Rage × 8) <span class="formula-comment">// current rage at evaluation</span><br>
+      &nbsp;&nbsp;− (BadChoices × 15) <span class="formula-comment">// bad picks penalise harder than good rewards</span><br>
+      )
+    </div>
+
+    <h2>The Five Tiers</h2>
+    <table class="tier-table">
+      <thead>
+        <tr>
+          <th>Tier</th>
+          <th>Label</th>
+          <th>Rage Δ</th>
+          <th>Calm Δ</th>
+          <th>Enemy ATK</th>
+          <th>Player DEF</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--phase-cyan);">mega_good</td>
+          <td>Deep Resonance</td>
+          <td style="color:var(--phase-green);">−3</td>
+          <td style="color:var(--phase-green);">+4</td>
+          <td style="color:var(--phase-green);">−35%</td>
+          <td style="color:var(--phase-green);">+25%</td>
+        </tr>
+        <tr>
+          <td style="color:var(--phase-green);">good</td>
+          <td>Resonance</td>
+          <td style="color:var(--phase-green);">−1</td>
+          <td style="color:var(--phase-green);">+2</td>
+          <td style="color:var(--phase-green);">−15%</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-secondary);">neutral</td>
+          <td>Stillness</td>
+          <td>0</td>
+          <td>0</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="color:var(--rage-1);">bad</td>
+          <td>Backlash</td>
+          <td style="color:var(--rage-1);">+2 (+3 T2)</td>
+          <td>—</td>
+          <td style="color:var(--rage-1);">+25%</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td style="color:var(--rage-3);">mega_bad</td>
+          <td>Fracture</td>
+          <td style="color:var(--rage-3);">+3 (+4 T2)</td>
+          <td style="color:var(--rage-3);">−1</td>
+          <td style="color:var(--rage-3);">+45%</td>
+          <td style="color:var(--rage-3);">−35%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="callout-label">Key Design Detail — Additive Offsets</div>
+      <p>Combat modifiers are additive percentage deltas, not compounding multipliers. A Backlash at T1 (+25% ATK) followed by a Deep Resonance at T2 (−35% ATK) results in a <strong>net −10% enemy ATK</strong> — the buff genuinely offsets the prior damage. Players can read and reason about their net state at any time.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── VORTHEX ─────────────────────────── -->
+  <div class="section" id="vorthex">
+    <div class="section-eyebrow">◈ Reference · Phasix Lore Entry</div>
+    <div class="section-title">Vorthex</div>
+    <div class="section-sub">Canonical prototype — the first fully-implemented encounter</div>
+
+    <div class="lore-entry">
+      <div class="lore-entry-header">
+        <div class="lore-entry-name">Vorthex</div>
+        <div class="lore-entry-class">◈ Phasix · Breach Stage · Ignis-Primary · Verdant Scar</div>
+      </div>
+      <div class="lore-entry-body">
+
+        <div class="lore-field">
+          <div class="lore-field-label">Emotional Root</div>
+          <div class="lore-field-text">Accumulated communicative frustration — the specific experience of having things to say, lacking the language or the context to say them, watching the feeling build past the point where saying them would help.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">Appearance</div>
+          <div class="lore-field-text">Roughly humanoid form of Phase-light with no fixed edges. Boundaries flicker constantly — not the flickering of something unstable, but the flickering of something that keeps almost containing itself and then not quite managing it. In low-Rage states: deep frustrated orange-red. In high-Rage: the orange deepens and edges fragment into sharp shards of light. In the cracks between the rage, the colour shifts briefly toward violet — the Phase dimension itself showing through as the surface thins.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">Behaviour</div>
+          <div class="lore-field-text">Does not initiate contact with most passers-through. Responds to direct approach with escalating pressure rather than immediate attack. The pressure manifests as a kind of communicative force: the feeling of trying to speak and being unable to, made physical and directed outward. Players who approach without resistance may find Vorthex's first response is not an attack but a demand to be seen. Once combat begins, Vorthex fights with explosive, unfocused force — everything at once, unsustainable, with periodic moments of surprising stillness where something else surfaces before the pressure rebuilds.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">What Vorthex Needs</div>
+          <div class="lore-field-text">Recognition without demand. To have what it feels acknowledged as real without being asked to resolve, explain, or reduce it. The coping strategies that reach it are those that do not require it to perform recovery — grounding techniques that work on the body rather than the mind, presence without agenda, the simple fact of remaining present and unafraid through the intensity.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">What It Cannot Tolerate</div>
+          <div class="lore-field-text">Being told the feeling is disproportionate. Being compared to others who have it harder. Being instrumentalised — treated as an object to be bonded rather than a subject to be encountered. These responses do not just fail to help — they confirm the root fear that the feeling was never real enough to matter, which drives the rage deeper and harder.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">Evolution — Resonant Path</div>
+          <div class="lore-field-text">Vorthex Surge may develop the capacity to hold the original frustration as something it can communicate rather than only express — becoming a Phasix that helps others find language for states that don't have words yet.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">Evolution — Reluctant Path</div>
+          <div class="lore-field-text">Vorthex Surge risks calcifying the frustration into something colder and more deliberate. The Convergence form may be formidable and controlled, but the original warmth of wanting to be heard will have become something harder.</div>
+        </div>
+
+        <div class="lore-field">
+          <div class="lore-field-label">Ashveil Field Note — Researcher Vael</div>
+          <div class="lore-field-text" style="font-style:italic;">"The attuned Tamer who reached the grove before the bond window closed — the one who sensed the window without instruments — may be the most interesting development this season. Natural attunement is rare. The fact that Vorthex acknowledged the approach rather than deflecting it suggests some pre-bond resonance I haven't observed before. Filed under anomalous. Worth following."</div>
+        </div>
+
+      </div>
+    </div>
+
+    <h2>Prototype — Output Space</h2>
+    <p>The Vorthex encounter prototype (125 paths, 26 distinct capture rates) confirms the design intent: Reluctant Bond is the most common outcome at <strong>45.6%</strong> of all runs. Good outcomes require real engagement with the random choice pool. The all-neutral run (three Stillness picks) lands at exactly 50% — Cautious Bond, the honest middle.</p>
+
+    <div class="lore-quote">
+      Sometimes there is no right answer. Only a least-bad one. The game should honour that.
+      <div class="lore-quote-attr">— Design principle, Vorthex prototype session</div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+<script>
+// Highlight active nav link on scroll
+const sections = document.querySelectorAll('.section');
+const navLinks = document.querySelectorAll('.nav-link');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`.nav-link[href="#${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
