@@ -134,6 +134,12 @@ Flag these with `// TODO: pending GDD §XX design phase` and leave data slots em
 
 ---
 
+## After Every Feature or Bug Fix
+- **`Assets/Docs/CHANGELOG.md`** — log what was built/fixed, with date
+- **`Assets/Docs/KNOWN_ISSUES.md`** — add new bugs (with GitHub Issue #), remove closed ones
+- **`CLAUDE.md`** — update ONLY if folder structure or architecture rules changed
+- Commit all updated docs alongside the feature/fix
+
 ## Reference Files in This Project
 - `Assets/Docs/ClaudeCode_Primer.md` — full 311-line spec, read for deep detail
 - `Assets/Docs/GDD_CreatureRPG_v0.7.9.html` — master design doc
@@ -145,3 +151,4 @@ Flag these with `// TODO: pending GDD §XX design phase` and leave data slots em
 - `Assets/Docs/SpeciesRoster.md` — species design template (no species designed yet)
 - `Assets/Docs/LoreBible_Phasix.html` — world lore, factions, Five Frequencies, Phasix psychology
 - `Assets/Docs/Prototypes/README.md` — index of pre-dev encounter prototypes (revisit Phase 3)
+- `Assets/Docs/KNOWN_ISSUES.md` — active bugs/blockers (mirrors GitHub Issues)
