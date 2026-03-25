@@ -47,6 +47,17 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Date:** March 2026
 - **Revisit if:** Never — new Input System is the correct choice going forward
 
+### [Input] Input architecture for PlayerController
+- **Decided:** `InputActionAsset` (`.inputactions` file) referenced via `[SerializeField] private InputActionAsset _inputActions`. Actions resolved manually in `Awake()` via `FindActionMap("Player").FindAction("Move")`. Subscribed in `OnEnable`, unsubscribed in `OnDisable`. No `PlayerInput` component.
+- **Asset in use:** `Assets/InputSystem_Actions.inputactions` (Unity default, already had `Player` map + `Move` action)
+- **Why:** Explicit per-map enable/disable is required for battle vs overworld context switching in Phase 3. `PlayerInput` component wires via Inspector string names that break on rename.
+- **Alternatives rejected:**
+  - Inline `InputAction` fields — not rebind-compatible, not multi-scheme scalable, requires per-script duplication
+  - `InputSystem.actions` global (Unity 6) — project-wide single asset, no per-component override, no per-map enable/disable control
+  - `PlayerInput` component with Invoke Unity Events — Inspector wiring breaks on action rename, harder to control from BattleManager
+- **Date:** March 2026
+- **Revisit if:** Phase 3 battle system requires more complex input routing than per-map enable/disable covers
+
 ---
 
 ## Art & Assets
@@ -143,9 +154,23 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Note:** FMOD preferred for adaptive music; Unity Audio sufficient if scope stays simple
 
 ### [Animation] Animation tooling
-- **Status:** Deferred — Unity's built-in 2D Animation for Asset Store sprites for now
-- **Revisit:** After demo, if custom creature animations become a priority
-- **Note:** Spine purchase explicitly deferred until GDD and prototype are stable
+- **Decided:** Unity built-in Animator + AnimationClips (sprite-swap animation)
+- **Why:** Asset Store / custom pixel-art sheets work natively; no third-party dependency needed for Phase 1
+- **Alternatives rejected:** Spine (deferred — purchase pending post-demo if custom rigged animation becomes a priority)
+- **Date:** March 2026
+- **Revisit if:** Creature animations grow too complex for frame-by-frame sprite swap
+
+### [Art] Sprite import settings
+- **Decided:** Pixels Per Unit = 32, Filter Mode = Point (no filter), Compression = None on all creature sprite sheets
+- **Why:** Pixel-art must not be blurred or dithered by compression. PPU 32 is a reasonable starting value for the 320×180 Pixel Perfect Camera; adjust if sprites look too large/small in the scene.
+- **Alternatives rejected:** Default Unity import settings (bilinear filter + compressed — breaks pixel art)
+- **Date:** March 2026
+- **Revisit if:** Tileset PPU is chosen as 16 instead of 32 — all creature sprites must match to avoid scale mismatch
+
+### [Art] Dark Fluffy sprite version
+- **Status:** Undecided — v1 (pink/purple effects) and v2 (blue/cyan effects) both available; user reviewing
+- **Note:** Running sheets (white body + dark purple body) are independent of v1/v2 composite choice
+- **Revisit:** Once user decides on creature color palette / evolution visual language
 
 ### [A* grid] Cell size
 - **Status:** Undecided — depends on tile size chosen
