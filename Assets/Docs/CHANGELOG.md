@@ -18,6 +18,19 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-03-27] Phase 1 Wk 5–6 — DarkUhdrin animation pipeline (manual, end-to-end)
+- Built: `Assets/Animations/Creatures/DarkUhdrin/` — full animation set for DarkUhdrin
+  - 5 AnimationClips: uhdrin_idle, uhdrin_walk_forward, uhdrin_walk_back, uhdrin_run, uhdrin_attack (all at 8fps, Samples visible via Show Sample Rate)
+  - DarkUhdrin_AC.controller — 5 states, 4 parameters, all transitions wired
+- Decided: Switched from Dark Fluffy to Dark Uhdrin (cleaner sprite sheet, uniform grid)
+- Decided: Composite sheet sliced via Grid By Cell Count (8×4) — solid background prevents Automatic slicing
+- Decided: No uhdrin_walk generic state — replaced with directional walk_forward / walk_back
+- Decided: SpriteRenderer.flipX handles left/right mirroring at runtime — no separate left-facing clips needed
+- Decided: Run animation loops at full speed only — deceleration handled by Animator transitions in code, not clip frames
+- Fixed: DarkUhdrin_AC.controller — added Walk_Back → Idle (IsMoving=false), Run → Walk_Back (IsRunning=false + IsWalkingBack=true), Run → Walk_Forward now requires IsWalkingBack=false, Idle → Walk_Back now requires both IsMoving=true + IsWalkingBack=true
+- Deleted: uhdrin_walk.anim (unused generic walk clip)
+- Next: Write Editor script to auto-generate Animator Controllers for future creatures (standard state machine pattern now locked in)
+
 [2026-03-24] Phase 1 Wk 5–6 — Sprite sheet import pipeline + Animator Controller setup
 - Built: `Assets/Scripts/Editor/PhasixSpriteSetup.cs` — Editor utility with 5 menu steps under Phasix/Sprite Setup/
   - Step 1: Configures Point filter, Multiple mode, PPU=32, no compression on all Dark Fluffy sheets; auto grid-slices running sheets (4×2)

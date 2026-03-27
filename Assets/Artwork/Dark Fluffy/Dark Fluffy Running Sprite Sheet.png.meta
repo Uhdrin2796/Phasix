@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -51,7 +51,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 32
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -75,7 +75,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 1
+    textureCompression: 0
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -100,23 +100,177 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Dark Fluffy Running Sprite Sheet_0
+      name: dark_fluffy_running_sprite_sheet_0
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 2064
-        height: 512
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        y: 254
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
-      tessellationDetail: -1
+      tessellationDetail: 0
       bones: []
-      spriteID: ccc1dff9be49232c0800000000000000
-      internalID: -4453333341793608500
+      spriteID: de15c492a44f23347a7c21100a15ce59
+      internalID: -79458560
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_1
+      rect:
+        serializedVersion: 2
+        x: 512
+        y: 254
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 72285d9846ca8c64190d933c9d3a96e1
+      internalID: -1303666216
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_2
+      rect:
+        serializedVersion: 2
+        x: 1024
+        y: 254
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 23b9d1b8053f9a54a9ef34be7b3cfd9b
+      internalID: -373074383
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_3
+      rect:
+        serializedVersion: 2
+        x: 1536
+        y: 254
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ecfd9f56ed66bb64d9ca38ffc476fc4a
+      internalID: 934554231
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_4
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: fbbc49f515a766a47a0f3e536aeca33b
+      internalID: 1402581735
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_5
+      rect:
+        serializedVersion: 2
+        x: 512
+        y: 0
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 454c13bd4cd6a254aaaa6654c52d53a7
+      internalID: -9924147
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_6
+      rect:
+        serializedVersion: 2
+        x: 1024
+        y: 0
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3e410392f2acb4546983b3ebc6cd6238
+      internalID: 583245215
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: dark_fluffy_running_sprite_sheet_7
+      rect:
+        serializedVersion: 2
+        x: 1536
+        y: 0
+        width: 512
+        height: 254
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e86aca7314c9b13488e104cb6d3187d7
+      internalID: -904000054
       vertices: []
       indices: 
       edges: []
@@ -125,7 +279,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 48becd8d0e86f1d418fd56c0a1fe362c
     internalID: 0
     vertices: []
     indices: 
@@ -136,6 +290,14 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       Dark Fluffy Running Sprite Sheet_0: -4453333341793608500
+      dark_fluffy_running_sprite_sheet_0: -79458560
+      dark_fluffy_running_sprite_sheet_1: -1303666216
+      dark_fluffy_running_sprite_sheet_2: -373074383
+      dark_fluffy_running_sprite_sheet_3: 934554231
+      dark_fluffy_running_sprite_sheet_4: 1402581735
+      dark_fluffy_running_sprite_sheet_5: -9924147
+      dark_fluffy_running_sprite_sheet_6: 583245215
+      dark_fluffy_running_sprite_sheet_7: -904000054
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

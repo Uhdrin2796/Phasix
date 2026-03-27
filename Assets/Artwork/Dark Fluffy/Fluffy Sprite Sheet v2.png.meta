@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -51,7 +51,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 32
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -75,7 +75,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 1
+    textureCompression: 0
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -103,12 +103,12 @@ TextureImporter:
       name: Fluffy Sprite Sheet v2_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 1552
-        height: 688
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        x: 8
+        y: 523
+        width: 157
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -121,11 +121,407 @@ TextureImporter:
       indices: 
       edges: []
       weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_1
+      rect:
+        serializedVersion: 2
+        x: 180
+        y: 524
+        width: 211
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ad25bba9b247c0a4d9d3dcb63265a60a
+      internalID: -2043310149
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_2
+      rect:
+        serializedVersion: 2
+        x: 392
+        y: 524
+        width: 220
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: edea0ee8d9df12643aa573a80c7bff86
+      internalID: 1539857100
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_3
+      rect:
+        serializedVersion: 2
+        x: 613
+        y: 525
+        width: 157
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ad9c013373db01640b94c82d26bdb4a0
+      internalID: -1904253569
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_9
+      rect:
+        serializedVersion: 2
+        x: 175
+        y: 355
+        width: 212
+        height: 153
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 788938ce9df76714f90014dbd87888ae
+      internalID: -2101566132
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_10
+      rect:
+        serializedVersion: 2
+        x: 386
+        y: 355
+        width: 220
+        height: 153
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d3a9e6e16b1fd494aa666d46baca13ac
+      internalID: -1265900386
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_11
+      rect:
+        serializedVersion: 2
+        x: 607
+        y: 355
+        width: 177
+        height: 156
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 96797aac70455ff44b262f5862d1bc8a
+      internalID: 1435036576
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_12
+      rect:
+        serializedVersion: 2
+        x: 809
+        y: 355
+        width: 95
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ae341c9d1eb668641a7a1912b16b0334
+      internalID: -1631252395
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_13
+      rect:
+        serializedVersion: 2
+        x: 939
+        y: 355
+        width: 141
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 67b1a2749e52ecd488f5c024941597d3
+      internalID: -1727511794
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_14
+      rect:
+        serializedVersion: 2
+        x: 1080
+        y: 355
+        width: 180
+        height: 171
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3b5bf47e38c5f3e46bd71dc2f2f7971c
+      internalID: 1100435237
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_15
+      rect:
+        serializedVersion: 2
+        x: 1260
+        y: 355
+        width: 119
+        height: 167
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 2c7c7ad3de446004f9cf3e0bd3388a6c
+      internalID: 2021739513
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_16
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 182
+        width: 168
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b00cbc3f026dd9043b020d5bd52b3086
+      internalID: 2136117581
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_17
+      rect:
+        serializedVersion: 2
+        x: 185
+        y: 182
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 3261669f4e9b44f438331a2ccaf60eb7
+      internalID: 1250674904
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_18
+      rect:
+        serializedVersion: 2
+        x: 408
+        y: 182
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 78596cad8016e414c9f9bbc4f4db3615
+      internalID: 1358407648
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_19
+      rect:
+        serializedVersion: 2
+        x: 603
+        y: 181
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8b0eeefb2158e6942a48867a2b87b2a9
+      internalID: 137802322
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_20
+      rect:
+        serializedVersion: 2
+        x: 768
+        y: 181
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c9c26cb65aeb28a44a0b395ba6301019
+      internalID: 716757943
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_21
+      rect:
+        serializedVersion: 2
+        x: 915
+        y: 178
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9e814c63a54417e438cdd1d0a34648f9
+      internalID: 576838138
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_22
+      rect:
+        serializedVersion: 2
+        x: 1080
+        y: 177
+        width: 180
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 496693ded0e1ddf419d3e92178ac8d57
+      internalID: -287380717
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fluffy Sprite Sheet v2_23
+      rect:
+        serializedVersion: 2
+        x: 1277
+        y: 176
+        width: 82
+        height: 160
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7bfba88e6b5892e409c85c78f7493d7b
+      internalID: -89634486
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: baa7290f3c515b949a35bdd47c63ba98
     internalID: 0
     vertices: []
     indices: 
@@ -133,9 +529,34 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":180.0,"y":180.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.0},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":7,"pivotUnitMode":1,"slicingType":1,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
       Fluffy Sprite Sheet v2_0: 4579510332315485163
+      Fluffy Sprite Sheet v2_1: -2043310149
+      Fluffy Sprite Sheet v2_10: -1265900386
+      Fluffy Sprite Sheet v2_11: 1435036576
+      Fluffy Sprite Sheet v2_12: -1631252395
+      Fluffy Sprite Sheet v2_13: -1727511794
+      Fluffy Sprite Sheet v2_14: 1100435237
+      Fluffy Sprite Sheet v2_15: 2021739513
+      Fluffy Sprite Sheet v2_16: 2136117581
+      Fluffy Sprite Sheet v2_17: 1250674904
+      Fluffy Sprite Sheet v2_18: 1358407648
+      Fluffy Sprite Sheet v2_19: 137802322
+      Fluffy Sprite Sheet v2_2: 1539857100
+      Fluffy Sprite Sheet v2_20: 716757943
+      Fluffy Sprite Sheet v2_21: 576838138
+      Fluffy Sprite Sheet v2_22: -287380717
+      Fluffy Sprite Sheet v2_23: -89634486
+      Fluffy Sprite Sheet v2_3: -1904253569
+      Fluffy Sprite Sheet v2_4: -2000895412
+      Fluffy Sprite Sheet v2_5: 1673322973
+      Fluffy Sprite Sheet v2_6: -1363007573
+      Fluffy Sprite Sheet v2_7: -1649382085
+      Fluffy Sprite Sheet v2_8: 911425722
+      Fluffy Sprite Sheet v2_9: -2101566132
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

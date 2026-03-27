@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 1
+    filterMode: 0
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -51,7 +51,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 32
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -104,11 +104,11 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 0
-        y: 0
-        width: 1552
-        height: 688
-      alignment: 0
-      pivot: {x: 0, y: 0}
+        y: 516
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -121,11 +121,627 @@ TextureImporter:
       indices: 
       edges: []
       weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_1
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 516
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c523344fa0ecd11408dc5cbea6ddf0f3
+      internalID: -1191868804
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_2
+      rect:
+        serializedVersion: 2
+        x: 310
+        y: 516
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: be797a7738a69d545807de8cb0bb0ec1
+      internalID: -338214226
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_3
+      rect:
+        serializedVersion: 2
+        x: 465
+        y: 516
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 699ba2b8c89f37f4ab1a00000747eafe
+      internalID: -420514208
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_10
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7f74ccc713dc52b4ba6849500ba7e78f
+      internalID: 811343541
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_11
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8ade947c3e7e8c249a304ac1e8a3ee2c
+      internalID: -1117349376
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_12
+      rect:
+        serializedVersion: 2
+        x: 310
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 64a51c688a1b3de40b3ff91f052b9280
+      internalID: -474073706
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_13
+      rect:
+        serializedVersion: 2
+        x: 465
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 65b3241df0b844946ae5ef09def99b93
+      internalID: 1471512210
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_15
+      rect:
+        serializedVersion: 2
+        x: 775
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 373d51cd67da6b14c9ffa51820cf8de1
+      internalID: -2051901825
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_16
+      rect:
+        serializedVersion: 2
+        x: 930
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: e1f8874d61d2f7641bfa9cbd2c6ae6d4
+      internalID: -2001594833
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_17
+      rect:
+        serializedVersion: 2
+        x: 1085
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8ce5e20bb0ce5af4cbb46e66182126bf
+      internalID: 200211646
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_18
+      rect:
+        serializedVersion: 2
+        x: 1240
+        y: 344
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 430dae2d638c8ec4f8081a43a42c0bf3
+      internalID: 831784811
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_20
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 95323239fda15a94882c08d9f9b41c35
+      internalID: 1850064461
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_21
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 69cd403170f5f4b4bb6d2f01140cffc1
+      internalID: -849368153
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_22
+      rect:
+        serializedVersion: 2
+        x: 310
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: f0a020b57ac9cc341b354ac8b8ef6c4c
+      internalID: 1277397226
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_23
+      rect:
+        serializedVersion: 2
+        x: 465
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 135c017aa5c8cda46be1f96732e86846
+      internalID: -1833980598
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_25
+      rect:
+        serializedVersion: 2
+        x: 775
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 81c6844dd2ddacc44a8938cf8a60929a
+      internalID: 54374553
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_26
+      rect:
+        serializedVersion: 2
+        x: 930
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 83b08cb7ad495b24a8cd6be99f5e5429
+      internalID: 702721705
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_27
+      rect:
+        serializedVersion: 2
+        x: 1085
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a4a853e35cfb4784989331481fe34006
+      internalID: 250733019
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_28
+      rect:
+        serializedVersion: 2
+        x: 1240
+        y: 172
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 74ec87f140e63374e9e4c93c4c3d2b3f
+      internalID: 487454061
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_30
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b10aa508db4748641bbe93ebf38e21db
+      internalID: -830276752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_31
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 353506138798bd949ae459b2bec4af52
+      internalID: -1487318967
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_32
+      rect:
+        serializedVersion: 2
+        x: 310
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: aab87e4791641744882d4aeb0c3d5708
+      internalID: 1739254859
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_33
+      rect:
+        serializedVersion: 2
+        x: 465
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a3ab8f4b7df7df54da9b329c7915d5af
+      internalID: -407076405
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_35
+      rect:
+        serializedVersion: 2
+        x: 775
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 8337c3fcfe9f51a40a9f835c4edbacf2
+      internalID: -993922677
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_36
+      rect:
+        serializedVersion: 2
+        x: 930
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: ea7d3275ec1ee4648bfc958d0812d93e
+      internalID: -657684992
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_37
+      rect:
+        serializedVersion: 2
+        x: 1085
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 13b5bd70c3b460f458b6f2b7ca50f140
+      internalID: 1240090756
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_38
+      rect:
+        serializedVersion: 2
+        x: 1240
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 9b481c4ffaa78fe40a12ba4c1ecee9c0
+      internalID: -1271145957
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Dark Uhdrin Sprite Sheet v4_39
+      rect:
+        serializedVersion: 2
+        x: 1395
+        y: 0
+        width: 155
+        height: 172
+      alignment: 7
+      pivot: {x: 0.5, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: c893d3665bc03a44093984557cb12ea5
+      internalID: 1982754438
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: f9691c6f8eac7c744a0652e69511b4c0
     internalID: 0
     vertices: []
     indices: 
@@ -133,9 +749,50 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":10.0,"y":4.0},"gridSpriteSize":{"x":155.0,"y":172.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.0},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":7,"pivotUnitMode":1,"slicingType":2,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
       Dark Uhdrin Sprite Sheet v4_0: 7327174260636675615
+      Dark Uhdrin Sprite Sheet v4_1: -1191868804
+      Dark Uhdrin Sprite Sheet v4_10: 811343541
+      Dark Uhdrin Sprite Sheet v4_11: -1117349376
+      Dark Uhdrin Sprite Sheet v4_12: -474073706
+      Dark Uhdrin Sprite Sheet v4_13: 1471512210
+      Dark Uhdrin Sprite Sheet v4_14: 324685965
+      Dark Uhdrin Sprite Sheet v4_15: -2051901825
+      Dark Uhdrin Sprite Sheet v4_16: -2001594833
+      Dark Uhdrin Sprite Sheet v4_17: 200211646
+      Dark Uhdrin Sprite Sheet v4_18: 831784811
+      Dark Uhdrin Sprite Sheet v4_19: -1260091631
+      Dark Uhdrin Sprite Sheet v4_2: -338214226
+      Dark Uhdrin Sprite Sheet v4_20: 1850064461
+      Dark Uhdrin Sprite Sheet v4_21: -849368153
+      Dark Uhdrin Sprite Sheet v4_22: 1277397226
+      Dark Uhdrin Sprite Sheet v4_23: -1833980598
+      Dark Uhdrin Sprite Sheet v4_24: -2088246036
+      Dark Uhdrin Sprite Sheet v4_25: 54374553
+      Dark Uhdrin Sprite Sheet v4_26: 702721705
+      Dark Uhdrin Sprite Sheet v4_27: 250733019
+      Dark Uhdrin Sprite Sheet v4_28: 487454061
+      Dark Uhdrin Sprite Sheet v4_29: -55984320
+      Dark Uhdrin Sprite Sheet v4_3: -420514208
+      Dark Uhdrin Sprite Sheet v4_30: -830276752
+      Dark Uhdrin Sprite Sheet v4_31: -1487318967
+      Dark Uhdrin Sprite Sheet v4_32: 1739254859
+      Dark Uhdrin Sprite Sheet v4_33: -407076405
+      Dark Uhdrin Sprite Sheet v4_34: -1248058391
+      Dark Uhdrin Sprite Sheet v4_35: -993922677
+      Dark Uhdrin Sprite Sheet v4_36: -657684992
+      Dark Uhdrin Sprite Sheet v4_37: 1240090756
+      Dark Uhdrin Sprite Sheet v4_38: -1271145957
+      Dark Uhdrin Sprite Sheet v4_39: 1982754438
+      Dark Uhdrin Sprite Sheet v4_4: 1688027590
+      Dark Uhdrin Sprite Sheet v4_5: -1816560984
+      Dark Uhdrin Sprite Sheet v4_6: -1322205557
+      Dark Uhdrin Sprite Sheet v4_7: -939543996
+      Dark Uhdrin Sprite Sheet v4_8: -1980029249
+      Dark Uhdrin Sprite Sheet v4_9: 436828122
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
