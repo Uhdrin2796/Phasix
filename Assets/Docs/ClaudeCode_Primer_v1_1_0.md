@@ -1,9 +1,9 @@
 # Phasix — Claude Code Session Primer
-**Version:** 1.1.0 · **Updated:** March 2026
-**Paste this at the start of every Claude Code session.**
+**Version:** 1.1.0 · **Updated:** March 2026  
+**Paste this at the start of every Claude Code session.**  
 **Read DOCUMENT_INDEX.md first — it defines what is current vs superseded.**
 
-GDD v0.8.0 · Evolution System (this Primer §9) · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
+GDD v0.8.0 · Evolution Directive v1.1.0 · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
 
 ---
 
@@ -22,8 +22,8 @@ You are a **Senior Unity Developer and C# Architect** working on Project Phasix.
 
 2D top-down Monster Tamer RPG. Digimon-style branching evolution web. Player captures, raises, and evolves creatures called **Phasix** — crystallizations of emotional states and coping mechanisms. Phasix emerge from an emotional dimension that mirrors lived human experience. Player navigates a hub and discrete emotional realms, developing Phasix through Aura-driven progression.
 
-**Engine:** Unity Latest LTS, 2D URP
-**Pixel resolution:** 320×180 reference (16:9), Pixel Perfect Camera
+**Engine:** Unity Latest LTS, 2D URP  
+**Pixel resolution:** 320×180 reference (16:9), Pixel Perfect Camera  
 **Art:** Asset Store sprites for now — no custom art pipeline yet
 
 ---
@@ -132,8 +132,8 @@ Every Phasix has **all of the following fields**. Do not invent fields not liste
 
 ### Evolution Gate — Three Layers Required Simultaneously
 ```
-Layer 1 — AURA:       Correct Specific Aura types in required quantities
-Layer 2 — STATS:      Minimum stat thresholds met within current tier
+Layer 1 — AURA:      Correct Specific Aura types in required quantities
+Layer 2 — STATS:     Minimum stat thresholds met within current tier
 Layer 3 — CONDITIONS: Aptitude min (exotic) + Bond + story flags + other TBD
 ```
 
@@ -171,7 +171,7 @@ Bond is a **reward system, not a punishment system**.
 | Bonded | 80–99% | Max pool growth; Bond-100 path unlocked; losses quartered |
 | ★ Complete | 100% | Permanent. Cannot decrease by any means. |
 
-**Floor system:** bond cannot drop below last milestone floor. Implement as `max(newValue, bondFloor)`.
+**Floor system:** bond cannot drop below last milestone floor. Implement as `max(newValue, bondFloor)`.  
 **Session cap:** maximum 5% bond loss per session regardless of event count.
 
 ---
@@ -184,7 +184,7 @@ Bond is a **reward system, not a punishment system**.
 | Anchor | Tank | Vitality 90, Guard 80, Ward 72, Resolve 68, Force 48, Aura 42, Instinct 35, Resonance 30 |
 | Flux | Special | Resonance 88, Aura 75, Ward 62, Instinct 52, Vitality 44, Force 32, Guard 25, Resolve 22 |
 
-Temper ~60% of growth direction. Personality ~25%. Player Aura allocation ~15%.
+Temper ~60% of growth direction. Personality ~25%. Player Aura allocation ~15%.  
 Internal role names (Edge/Anchor/Flux) never shown to player — only species-specific compound names.
 
 ---
@@ -212,14 +212,12 @@ Internal role names (Edge/Anchor/Flux) never shown to player — only species-sp
 | Q | Bastion | Guard/Vitality | Fortify, Counter, Absorb. Physical defense primary. |
 | R | Phantom | Instinct | Evasion, Prediction, Ghost Step. Speed defense primary. |
 
-**Slot count:** T1=2 trees/2 slots · T2=4/3 · T3=5/4 · T4=6/5 · T5=7/5–7
+**Slot count:** T1=2 trees/2 slots · T2=4/3 · T3=5/4 · T4=6/5 · T5=7/5–7  
 **Skill library never shrinks.** Combo system: Duo→Trio→Quad, discovered through use.
 
 ---
 
-## 9. Evolution System
-
-**This section IS the authoritative evolution reference. GDD §3 is superseded by these rules.**
+## 9. Evolution System (see Evolution_System_Directive_v1_1_0.md)
 
 ### Three evolution types
 | Type | Trigger | On Devolution |
@@ -244,10 +242,6 @@ Internal role names (Edge/Anchor/Flux) never shown to player — only species-sp
 | Signal | Energy rhythm + interference | Region 2 | Visual/audio cues only — no text |
 | Tempo | Action economy per turn | Region 3 | Lore fragments only |
 | Celestial | Rule modifications | Region 4 | No hints — community discovery |
-
-<!-- TODO: Elemental Frequencies (Ignis/Virel/Aether/Veil/Flux) from LoreBible_Phasix.html —
-     deferred pending lore revisit session. Relationship to PrimalType/emotionalType unclear.
-     Do not implement until lore session resolves this. -->
 
 ### Primal type chart (8 base types — no immunities, minimum 0.5×)
 
@@ -286,26 +280,26 @@ Pulse · Static · Frequency · Silence · Overflow · Echo · Surge · Catalyst
 
 ## 12. Personality Traits (16 Total — Stat Nudge Only)
 
-**Offensive:** Reckless (Force++, Instinct+, Guard−) · Fierce (Force++, Vitality+)
-**Elemental:** Volatile (Resonance++, Aura+, Resolve−) · Intense (Resonance++, Ward+)
-**Defensive:** Sturdy (Guard++, Vitality+) · Calm (Resolve++, Ward+)
-**Technical:** Sharp (Instinct++, Aura+) · Cunning (Instinct++, Force+)
-**Resilient:** Patient (Resolve++, Guard+) · Cautious (Ward++, Resolve+, Force−)
+**Offensive:** Reckless (Force++, Instinct+, Guard−) · Fierce (Force++, Vitality+)  
+**Elemental:** Volatile (Resonance++, Aura+, Resolve−) · Intense (Resonance++, Ward+)  
+**Defensive:** Sturdy (Guard++, Vitality+) · Calm (Resolve++, Ward+)  
+**Technical:** Sharp (Instinct++, Aura+) · Cunning (Instinct++, Force+)  
+**Resilient:** Patient (Resolve++, Guard+) · Cautious (Ward++, Resolve+, Force−)  
 **Versatile:** Timid (Aura++, Ward+, Force−) · Naive (Vitality++, Resonance+, Instinct−) · Bold · Gentle · Lively · Quirky
 
 ---
 
 ## 13. System Status Quick Reference
 
-| System | Authority | Status |
+| System | Directive / GDD Ref | Status |
 |---|---|---|
-| Aura progression (replaces XP/leveling) | Progression_Directive_v0_1_0.md | Active |
-| Aptitude (dual function) | Progression_Directive_v0_1_0.md | Active |
-| Evolution web (3 types, branch framework) | This Primer §9 | Active |
-| World structure (Hub + Realms) | WorldDesign_Directive_v0_1_0.md | Active — details pending |
-| Encounter initiation (3-layer) | WorldDesign_Directive_v0_1_0.md | Active — details pending |
-| Calendar/month system | WorldDesign_Directive_v0_1_0.md | Active — details pending |
-| Faction framework | WorldDesign_Directive_v0_1_0.md | Working names — pending refinement |
+| Aura progression (replaces XP/leveling) | Progression_Directive_v0_1_0 | Active |
+| Aptitude (dual function) | Progression_Directive_v0_1_0 | Active |
+| Evolution web (3 types, branch framework) | Evolution_Directive_v1_1_0 | Active |
+| World structure (Hub + Realms) | WorldDesign_Directive_v0_1_0 | Active — details pending |
+| Encounter initiation (3-layer) | WorldDesign_Directive_v0_1_0 | Active — details pending |
+| Calendar/month system | WorldDesign_Directive_v0_1_0 | Active — details pending |
+| Faction framework | WorldDesign_Directive_v0_1_0 | Working names — pending refinement |
 | Attributes (9) + unnamed pool | GDD §5 | Locked |
 | Temper (3 roles) | GDD §4 | Locked |
 | Bond (6 zones + floors) | GDD §6 | Locked |
@@ -319,7 +313,6 @@ Pulse · Static · Frequency · Silence · Overflow · Echo · Surge · Catalyst
 | Battle system | GDD §16 | Partially locked |
 | Status effects (24, 7 chains) | GDD §17 | Locked v0.7.8 |
 | GDD §21 XP/leveling | **SUPERSEDED** | Do not implement |
-| Elemental Frequencies | LoreBible (REFERENCE ONLY) | Deferred — pending lore revisit |
 
 ---
 
@@ -339,5 +332,4 @@ Flag with `// TODO: pending design — [topic]`
 - Survival/crafting (§20)
 - Celestial properties — unique per species
 - Signal interaction multiplier values
-- Elemental Frequencies — pending lore revisit session
 - Old lore (Fracture, Phase Dimension, Five Factions) — **DO NOT IMPLEMENT**

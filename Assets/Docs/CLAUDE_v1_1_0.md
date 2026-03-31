@@ -1,9 +1,9 @@
 # Phasix — Claude Code Project Memory
-**Version:** 1.1.0 · **Updated:** March 2026
-**Auto-loaded by Claude Code. Full spec: Assets/Docs/ClaudeCode_Primer.md**
-**Read Assets/Docs/DOCUMENT_INDEX.md first — defines what is current vs superseded.**
+**Version:** 1.1.0 · **Updated:** March 2026  
+**Auto-loaded by Claude Code. Full spec: Assets/_Phasix/Docs/ClaudeCode_Primer.md**  
+**Read DOCUMENT_INDEX.md first to understand what is current vs superseded.**
 
-GDD v0.8.0 · Evolution System (Primer §9) · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
+GDD v0.8.0 · Evolution Directive v1.1.0 · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
 
 ---
 
@@ -45,7 +45,7 @@ Senior Unity Developer and C# Architect. Every response: real scripts, real Insp
 
 ## Folder Structure
 ```
-Assets/
+Assets/_Phasix/
   Docs/          ← All design documents (see DOCUMENT_INDEX.md)
   Scripts/
     Core/        ← GameManager, EventBus, SaveManager
@@ -73,7 +73,7 @@ Assets/
 string speciesName;
 string emotionalType;        // emotional root — grief, joy, anger, etc.
 Temper temper;               // Edge | Anchor | Flux
-int evolutionTier;           // T1–T5 natural; T6–T7 fusion only
+int evolutionTier;           // T1–T5 natural, T6–T7 fusion only
 Personality personality;     // 16 values — shown on capture
 PrimalType primalType;       // 8 base + 28 duo merges
 Origin origin;               // Wild | Synthetic | Corrupted | Ascended | Hollow | Primordial
@@ -84,16 +84,15 @@ TempoType tempoType;         // Strike | Flow | Hold | Split | Stance
 int vitality, force, resonance, guard, ward, resolve, instinct, aura;
 
 // APTITUDE (persists through devolution — never resets)
-// Grows +1 per devolution cycle
+// Grows by 1 per devolution cycle
 // Function A: raises stat ceiling per tier
-// Function B: unlocks exotic evolution branches at minimum thresholds
-// Side effect: higher Aptitude before devolving = larger unnamed pool gain
+// Function B: unlocks exotic evolution branches (Aptitude-gated)
 int aptitude;
 
 // UNNAMED POOL (never resets — display as [POOL_NAME] in UI until named)
 int unnamedPool; // grows per devo: excessStats × bondMultiplier
 
-// AURA RESOURCES (runtime — stored in save data, not on SO)
+// AURA RESOURCES (runtime — not stored on SO, stored in save data)
 // Common Aura: drives stat growth, farmable from all Phasix
 // Specific Aura: gates evolution, tied to emotional type/region
 // RareVariant Aura: gates exotic branches, boss drops
@@ -122,7 +121,7 @@ List<SkillData> equippedSkills;     // active slots: T1=2, T2=3, T3=4, T4=5, T5=
 - Free stat allocation with Resonance Bonus layer — aligned investment scales better
 - Stat ceiling per tier scales with Aptitude — higher Aptitude = more room to develop
 - Evolution requires: Aura gate + stat minimum + conditionals simultaneously
-- **No XP. No levels. No level floors. GDD §21 leveling model is superseded.**
+- No XP. No levels. No level floors. GDD §21 leveling model is superseded.
 
 **Aptitude:**
 - Grows +1 per devolution cycle
@@ -130,28 +129,14 @@ List<SkillData> equippedSkills;     // active slots: T1=2, T2=3, T3=4, T4=5, T5=
 - Unlocks exotic evolution branches at minimum thresholds (Function B)
 - Side effect: higher Aptitude before devolving = larger unnamed pool gain
 
-**Evolution (see ClaudeCode_Primer.md §9):**
+**Evolution (see Evolution_System_Directive_v1_1_0.md):**
 - Three types: Standard, Item-gated, Fusion
 - Conditionals persist forever across all devo cycles
 - Both stat layers (base + unnamed pool) count toward thresholds
 - Stat minimum replaces level floor as the anti-exploit gate
 - Fusion: T6/T7 only, requires same-tier ingredients
 
-**Aura requirements by tier:**
-```
-T1 → T2    Common Aura only
-T2 → T3    Specific Aura — current realm primary type
-T3 → T4    Specific Aura — 2 realms
-T4 → T5    Specific Aura — 3+ realms + Rare Variant Aura
-T5 → T6+   Fusion only
-```
-
-**Bond:** 6 zones (Stranger 0–19% / Familiar 20% / Companion 40% / Partner 60% / Bonded 80% / ★100%). Floor = last milestone reached. 100% = permanent. Session loss cap = 5%. Above 60% losses halved; above 80% quartered. Type F trees unlock at 20%. Type O trees unlock at 40%.
-
-**Temper growth priority (of 100):**
-- Edge: Force 88, Instinct 75, Resonance 58, Aura 52, Vitality 48, Guard 35, Ward 28, Resolve 22
-- Anchor: Vitality 90, Guard 80, Ward 72, Resolve 68, Force 48, Aura 42, Instinct 35, Resonance 30
-- Flux: Resonance 88, Aura 75, Ward 62, Instinct 52, Vitality 44, Force 32, Guard 25, Resolve 22
+**Bond:** 6 zones (Stranger 0–19% / Familiar 20% / Companion 40% / Partner 60% / Bonded 80% / ★100%). Floor = last milestone reached. 100% = permanent. Session loss cap = 5%. Above 60% losses halved; above 80% quartered.
 
 **Damage formula:** `(AttackerStat / DefenderStat) × skillPower × primalTypeMultiplier`
 Physical: Force/Guard · Elemental: Resonance/Ward · Apply timed bonus after formula.
@@ -160,7 +145,7 @@ Physical: Force/Guard · Elemental: Resonance/Ward · Apply timed bonus after fo
 
 **Loss state:** Losing = currency/items cost only. Zero Aura loss, zero bond loss from combat outcome, zero stat regression.
 
-**Primal type — no immunities.** Minimum modifier is 0.5×, every type deals damage to every other.
+**Primal type — no immunities.** Minimum modifier 0.5×.
 
 ---
 
@@ -169,7 +154,7 @@ Flag with `// TODO: pending design — [topic]`
 
 - Species roster (§25) — no species designed, use placeholder SOs
 - Actual skill content (§14) — taxonomy locked, individual skills pending
-- `[POOL_NAME]` — unnamed pool has no player-facing name yet; use token in all UI strings
+- `[POOL_NAME]` — unnamed pool has no player-facing name yet
 - All NumericalCalibration.md values — pending calibration session
 - Hub identity, realm count, realm emotional identities — pending world design session
 - Faction names and lore details — working names only, pending refinement
@@ -179,29 +164,20 @@ Flag with `// TODO: pending design — [topic]`
 - Survival/crafting (§20 pending)
 - Celestial properties — unique per species, pending roster
 - Signal interaction multiplier values — logic locked, numbers pending
-- Elemental Frequencies (Ignis/Virel/Aether/Veil/Flux) — pending lore revisit session
 - Old lore (Fracture, Phase Dimension, Five Factions) — DO NOT IMPLEMENT, reference only
 
 ---
 
-## After Every Feature or Bug Fix
-- **`Assets/Docs/CHANGELOG.md`** — log what was built/fixed, with date
-- **`Assets/Docs/KNOWN_ISSUES.md`** — add new bugs (with GitHub Issue #), remove closed ones
-- **`CLAUDE.md`** — update ONLY if folder structure or architecture rules changed
-- Commit all updated docs alongside the feature/fix
-
-## Reference Files in This Project
+## Reference Files
 ```
-Assets/Docs/DOCUMENT_INDEX.md               ← Read first — document hierarchy and status
-Assets/Docs/ClaudeCode_Primer.md            ← Full system spec (evolution system in §9)
-Assets/Docs/GDD_CreatureRPG_v0_8_0.html    ← Master GDD v0.8.0
-Assets/Docs/Progression_Directive_v0_1_0.md ← Supersedes GDD §21 (XP/leveling)
-Assets/Docs/WorldDesign_Directive_v0_1_0.md ← Supplements GDD §19, §24
-Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html ← Implementation patterns
-Assets/Docs/CHANGELOG.md                    ← Session log
-Assets/Docs/DECISIONS.md                    ← Implementation decisions not in GDD
-Assets/Docs/NumericalCalibration.md         ← All pending numerical values
-Assets/Docs/LoreBible_Phasix.html           ← REFERENCE ONLY — old lore, requires revisit
-Assets/Docs/Prototypes/README.md            ← Pre-dev encounter prototypes (revisit Phase 3)
-Assets/Docs/KNOWN_ISSUES.md                ← Active bugs/blockers
+Assets/_Phasix/Docs/DOCUMENT_INDEX.md          ← Read first — document hierarchy and status
+Assets/_Phasix/Docs/ClaudeCode_Primer.md       ← Full system spec
+Assets/_Phasix/Docs/GDD_CreatureRPG_v0_7_9.html ← GDD v0.8.0 (filename not yet updated)
+Assets/_Phasix/Docs/Evolution_System_Directive_v1_1_0.pdf ← Supersedes GDD §3
+Assets/_Phasix/Docs/Progression_Directive_v0_1_0.md      ← Supersedes GDD §21
+Assets/_Phasix/Docs/WorldDesign_Directive_v0_1_0.md      ← Supplements GDD §19, §24
+Assets/_Phasix/Docs/MonFarm_TechnicalDirective_v0_1_0.html ← Implementation patterns
+Assets/_Phasix/Docs/CHANGELOG.md              ← Session log
+Assets/_Phasix/Docs/DECISIONS.md              ← Implementation decisions
+Assets/_Phasix/Docs/NumericalCalibration.md   ← All pending numerical values
 ```

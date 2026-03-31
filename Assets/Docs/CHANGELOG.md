@@ -18,6 +18,33 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-03-30] Design Session — Encounter, Progression, World Structure
+- Built: Progression_Directive_v0_1_0.md, WorldDesign_Directive_v0_1_0.md, DECISIONS new entries
+- Decided: Aura-driven progression replaces XP/leveling entirely
+- Decided: Common Aura = stat growth fuel; Specific Aura = evolution gate; Rare Variant = exotic branch gate
+- Decided: Free stat allocation + Resonance Bonus layer for emotionally aligned investment
+- Decided: Aptitude dual function — (A) raises stat ceiling per tier, (B) unlocks exotic evolution branches
+- Decided: Evolution requires three simultaneous gates: Aura + stat minimums + conditionals
+- Decided: Hub + Realms world structure with light conditional Hub evolution
+- Decided: Phasix visibility = sensitivity/allergy framing (not chosen-one superpower)
+- Decided: Three-layer encounter system replaces random encounters entirely
+- Decided: Calendar system — story-beat-driven soft time currency, emotional seasonal context
+- Decided: Four-faction working framework (Suppressors/Amplifiers/Avoiders/Integrators)
+- Decided: Old lore (Fracture, Five Factions) = reference only, requires full revisit
+- Next: Doc sync + commit all v1_1_0 working files
+
+[2026-03-27] Phase 1 Wk 5–6 — PhasixAnimatorGenerator (auto-generate Animator Controllers)
+- Built: `Assets/Scripts/Editor/PhasixAnimatorGenerator.cs` — EditorWindow under Phasix/Animator Generator…
+  - Auto-discovers .anim clips in a target folder by keyword (idle, walk, walk_back, run, attack)
+  - Optional clip prefix filter (e.g. "uhdrin") to exclude unrelated clips in shared folders
+  - Auto-selects state machine type: 4-state (Idle/Walk/Run/Attack) or 5-state (adds WalkBack) based on clip presence
+  - 4-state params: IsMoving (bool), IsRunning (bool), Attack (trigger)
+  - 5-state params: IsMoving (bool), IsRunning (bool), IsWalkingBack (bool), IsAttacking (trigger)
+  - Idempotent: skips existing controllers rather than overwriting; reports missing clips in status bar
+  - Outputs `{CreatureName}_AC.controller` into the chosen animation folder
+- Decided: Helpers (EnsureFolder, EnsureParameter, EnsureState, AddBoolTransition) duplicated from PhasixSpriteSetup.cs — both scripts kept self-contained; no shared utility class introduced
+- Next: Phase 1 Wk 7–8 — Tilemap world + Cinemachine camera follow (Roadmap)
+
 [2026-03-27] Phase 1 Wk 5–6 — DarkUhdrin animation pipeline (manual, end-to-end)
 - Built: `Assets/Animations/Creatures/DarkUhdrin/` — full animation set for DarkUhdrin
   - 5 AnimationClips: uhdrin_idle, uhdrin_walk_forward, uhdrin_walk_back, uhdrin_run, uhdrin_attack (all at 8fps, Samples visible via Show Sample Rate)

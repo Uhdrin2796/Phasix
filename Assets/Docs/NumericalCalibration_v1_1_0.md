@@ -1,6 +1,6 @@
 # Phasix — Numerical Calibration Register
-**Version:** 1.1.0 · **Updated:** March 2026
-**Status: PENDING — Phase 2 calibration design task**
+**Version:** 1.1.0 · **Updated:** March 2026  
+**Status: PENDING — Phase 2 calibration design task**  
 All values here are PENDING. Do not hardcode any of these in scripts — use named constants or ScriptableObject fields with placeholder values and a `// TODO` comment.
 
 ---
@@ -24,20 +24,20 @@ All values here are PENDING. Do not hardcode any of these in scripts — use nam
 | T4 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | T5 | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 
-Note: Aptitude is NOT a base stat — it is a devolution counter stored as its own field. See Aptitude section below.
+Note: Aptitude removed from this table — Aptitude is now a devolution counter, not a base stat floor value.
 
 ### Temper growth direction weights
 - Edge: Force 88, Instinct 75, Resonance 58, Aura 52, Vitality 48, Guard 35, Ward 28, Resolve 22
 - Anchor: Vitality 90, Guard 80, Ward 72, Resolve 68, Force 48, Aura 42, Instinct 35, Resonance 30
 - Flux: Resonance 88, Aura 75, Ward 62, Instinct 52, Vitality 44, Force 32, Guard 25, Resolve 22
 
-Growth rate per Common Aura point by weight: PENDING
-Personality modifier range: PENDING % acceleration / PENDING % deceleration
+Growth rate per Common Aura point by weight: PENDING  
+Personality modifier range: PENDING % acceleration / PENDING % deceleration  
 Player free allocation weight: ~15% of total growth direction
 
 ---
 
-## Aura System (Progression_Directive_v0_1_0.md)
+## Aura System (NEW — Progression_Directive_v0_1_0.md)
 
 ### Common Aura
 | Value | Amount | Notes |
@@ -104,9 +104,7 @@ Specific passive types and scaling behavior: PENDING — requires skill tree con
 
 ---
 
-## Aptitude (Progression_Directive_v0_1_0.md)
-
-Aptitude grows +1 per devolution cycle. It is a devolution counter, not a base stat.
+## Aptitude (NEW — Progression_Directive_v0_1_0.md)
 
 ### Aptitude thresholds for exotic evolution branches
 These are per-branch values — designed during species roster phase. General guidance:
@@ -120,13 +118,15 @@ These are per-branch values — designed during species roster phase. General gu
 
 ## Evolution Thresholds
 
-### Stat minimums per tier transition (replaces level floors — Progression_Directive_v0_1_0.md)
+### Stat minimums per tier transition (replaces level floors — Progression_Directive_v0_1_0)
 | Tier Transition | Stat Minimum Gate | Notes |
 |---|---|---|
 | T1→T2 | PENDING | Low — anti-exploit, natural play hits quickly |
 | T2→T3 | PENDING | |
 | T3→T4 | PENDING | |
 | T4→T5 | PENDING | |
+
+Note: Old level floor table retained below for reference — superseded by stat minimums above.
 
 ### Evolution pacing targets (Aura model)
 | Transition | Target Sessions | Design Intent |
@@ -135,6 +135,14 @@ These are per-branch values — designed during species roster phase. General gu
 | T2→T3 | Few sessions | Moderate — first realm exploration required |
 | T3→T4 | Notable investment | Multi-realm Aura required |
 | T4→T5 | Significant investment | Deep cross-realm + rare variant required |
+
+### Old level floor values (SUPERSEDED — reference only)
+| Tier Transition | Level Floor |
+|---|---|
+| T1→T2 | PENDING (superseded) |
+| T2→T3 | PENDING (superseded) |
+| T3→T4 | PENDING (superseded) |
+| T4→T5 | PENDING (superseded) |
 
 ---
 
@@ -227,12 +235,12 @@ All 24 statuses: PENDING
 | Catalyst attacks Static | AMP | PENDING |
 | Current attacks Pulse | SUP | PENDING |
 
-AMP = attacker's rhythm exploits defender's for bonus effect
+AMP = attacker's rhythm exploits defender's for bonus effect  
 SUP = attacker counters and reduces defender's rhythm effectiveness
 
 ---
 
-## Calendar System (WorldDesign_Directive_v0_1_0.md)
+## Calendar System (NEW — WorldDesign_Directive_v0_1_0.md)
 
 ### Month progression pacing
 | Value | Amount | Notes |
@@ -267,19 +275,9 @@ SUP = attacker counters and reduces defender's rhythm effectiveness
 
 ---
 
-## SUPERSEDED — Reference Only
-
-### Old XP & Levelling (superseded by Aura system)
-These values are superseded by the Aura system. Retained for historical reference only.
-- XP required per level: SUPERSEDED
-- XP from winning a battle: SUPERSEDED
+## Old XP & Levelling (SUPERSEDED — reference only)
+These values are superseded by the Aura system. Retained for historical reference.
+- XP required per level: PENDING (superseded)
+- XP from winning a battle: PENDING (superseded)
 - XP from losing: 0 (intent retained — no Aura from losses either)
 - Loss costs (currency/items): PENDING (still relevant — loss costs resources, not progression)
-
-### Old level floor values (superseded by stat minimums)
-| Tier Transition | Level Floor |
-|---|---|
-| T1→T2 | SUPERSEDED |
-| T2→T3 | SUPERSEDED |
-| T3→T4 | SUPERSEDED |
-| T4→T5 | SUPERSEDED |

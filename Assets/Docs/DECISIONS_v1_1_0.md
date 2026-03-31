@@ -47,17 +47,6 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Date:** March 2026
 - **Revisit if:** Never — new Input System is the correct choice going forward
 
-### [Input] Input architecture for PlayerController
-- **Decided:** `InputActionAsset` (`.inputactions` file) referenced via `[SerializeField] private InputActionAsset _inputActions`. Actions resolved manually in `Awake()` via `FindActionMap("Player").FindAction("Move")`. Subscribed in `OnEnable`, unsubscribed in `OnDisable`. No `PlayerInput` component.
-- **Asset in use:** `Assets/InputSystem_Actions.inputactions` (Unity default, already had `Player` map + `Move` action)
-- **Why:** Explicit per-map enable/disable is required for battle vs overworld context switching in Phase 3. `PlayerInput` component wires via Inspector string names that break on rename.
-- **Alternatives rejected:**
-  - Inline `InputAction` fields — not rebind-compatible, not multi-scheme scalable, requires per-script duplication
-  - `InputSystem.actions` global (Unity 6) — project-wide single asset, no per-component override, no per-map enable/disable control
-  - `PlayerInput` component with Invoke Unity Events — Inspector wiring breaks on action rename, harder to control from BattleManager
-- **Date:** March 2026
-- **Revisit if:** Phase 3 battle system requires more complex input routing than per-map enable/disable covers
-
 ---
 
 ## Art & Assets
@@ -154,23 +143,9 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Note:** FMOD preferred for adaptive music; Unity Audio sufficient if scope stays simple
 
 ### [Animation] Animation tooling
-- **Decided:** Unity built-in Animator + AnimationClips (sprite-swap animation)
-- **Why:** Asset Store / custom pixel-art sheets work natively; no third-party dependency needed for Phase 1
-- **Alternatives rejected:** Spine (deferred — purchase pending post-demo if custom rigged animation becomes a priority)
-- **Date:** March 2026
-- **Revisit if:** Creature animations grow too complex for frame-by-frame sprite swap
-
-### [Art] Sprite import settings
-- **Decided:** Pixels Per Unit = 32, Filter Mode = Point (no filter), Compression = None on all creature sprite sheets
-- **Why:** Pixel-art must not be blurred or dithered by compression. PPU 32 is a reasonable starting value for the 320×180 Pixel Perfect Camera; adjust if sprites look too large/small in the scene.
-- **Alternatives rejected:** Default Unity import settings (bilinear filter + compressed — breaks pixel art)
-- **Date:** March 2026
-- **Revisit if:** Tileset PPU is chosen as 16 instead of 32 — all creature sprites must match to avoid scale mismatch
-
-### [Art] Dark Fluffy sprite version
-- **Status:** Undecided — v1 (pink/purple effects) and v2 (blue/cyan effects) both available; user reviewing
-- **Note:** Running sheets (white body + dark purple body) are independent of v1/v2 composite choice
-- **Revisit:** Once user decides on creature color palette / evolution visual language
+- **Status:** Deferred — Unity's built-in 2D Animation for Asset Store sprites for now
+- **Revisit:** After demo, if custom creature animations become a priority
+- **Note:** Spine purchase explicitly deferred until GDD and prototype are stable
 
 ### [A* grid] Cell size
 - **Status:** Undecided — depends on tile size chosen
@@ -181,9 +156,7 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Status:** Undecided — 16×16 or 32×32
 - **Revisit:** Phase 1, when first Asset Store tileset is purchased
 - **Note:** Technical Directive references 16×16 or 32×32 as valid; choice locks pixel-per-unit settings
-
 ---
-
 ## New Entries — March 2026 Design Session
 
 ### [Progression] XP/leveling replaced by Aura system
@@ -210,7 +183,7 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Revisit if:** Stat minimums create frustrating bottlenecks in playtesting
 
 ### [World] World structure confirmed
-- **Decided:** Hub + discrete Realms with light conditional Hub evolution
+- **Decided:** Hub + discrete Realms (Model 1) with light conditional Hub evolution (Model 5 elements)
 - **Why:** Most implementable structure. Hub provides quest/story anchor. Realms provide discrete emotional zones. Conditional hub evolution adds soul without system complexity.
 - **Alternatives rejected:** Seamless geography (hard to pace), Wanderer model (too directionless)
 - **Date:** March 2026
@@ -218,7 +191,7 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 
 ### [World] Phasix visibility model
 - **Decided:** Allergy framing — perceiving Phasix is a sensitivity, spectrum-based, not a superpower. Only sensitivity-havers can perceive Phasix and engage with the emotional dimension.
-- **Why:** Removes chosen-one framing. Makes sensitivity feel human and unremarkable.
+- **Why:** Removes chosen-one framing. Makes sensitivity feel human and unremarkable. JoJo-adjacent visibility logic without the Stand power framing.
 - **Alternatives rejected:** Everyone can see Phasix (full world-building complexity), only player can see (too isolating)
 - **Date:** March 2026
 - **Ref:** WorldDesign_Directive_v0_1_0.md
@@ -239,18 +212,18 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 
 ### [Design] Positive emotion principle
 - **Decided:** No emotion is inherently good or bad. Every emotion is powerful. Every emotion has shadow. Mixed Aura evolutions (requiring both positive and negative Aura) gate the most complex emotional states.
-- **Why:** Prevents the game from drifting toward shadow and struggle as the only emotionally interesting design space.
+- **Why:** Prevents the game from drifting toward shadow and struggle as the only emotionally interesting design space. Positive emotions are mechanically interesting through their fragility, risk, and complexity — not their cheerfulness.
 - **Date:** March 2026
 - **Ref:** Progression_Directive_v0_1_0.md
 
 ### [Story] Faction framework — working names
-- **Decided:** Four working faction philosophies — Suppressors, Amplifiers, Avoiders, Integrators. Names and details are exploratory, flagged for refinement.
-- **Why:** Factions as emotional worldviews rather than good/evil alignment. Every faction philosophy is an understandable coping response.
+- **Decided:** Four working faction philosophies established — Suppressors, Amplifiers, Avoiders, Integrators. Names and details are exploratory, flagged for refinement.
+- **Why:** Factions as emotional worldviews rather than good/evil alignment. Every faction philosophy is an understandable coping response to the same underlying sensitivity condition.
 - **Alternatives rejected:** Traditional good/evil factions, no factions (loses conflict source)
 - **Date:** March 2026
 - **Revisit:** Names and lore details require full design session before GDD entry
 - **Ref:** WorldDesign_Directive_v0_1_0.md
 
 ### [Lore] Old lore status
-- **Decided:** The Fracture event, Phase Dimension details, and original Five Factions lore are retained in LoreBible_Phasix.html as REFERENCE ONLY. These were auto-filled without approval in a prior session and have shifted significantly. Do not implement. Require full revisit.
+- **Decided:** The Fracture event, Phase Dimension details, and original Five Factions lore are retained as reference only. These were auto-filled without approval in a prior session and have shifted significantly. Do not implement. Require full revisit.
 - **Date:** March 2026
