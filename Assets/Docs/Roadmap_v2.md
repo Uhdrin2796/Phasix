@@ -1,10 +1,10 @@
 # Phasix — Development Roadmap
-**Version:** 2.0  
-**Date:** March 2026  
-**Engine:** Unity Latest LTS · 2D URP  
-**Path:** Asset Store sprites · Claude Code scripting  
-**Scope:** Complete beginner · 5–10 hrs/week  
-**GDD ref:** v0.7.9 · Technical Directive v0.1.0
+**Version:** 2.1
+**Date:** March 2026 (v2.1 reconciled March 2026)
+**Engine:** Unity Latest LTS · 2D URP
+**Path:** Asset Store sprites · Claude Code scripting
+**Scope:** Complete beginner · 5–10 hrs/week
+**GDD ref:** v0.8.0 · Progression_Directive v0.1.0 · WorldDesign_Directive v0.1.0 · Technical Directive v0.1.0
 
 ---
 
@@ -71,22 +71,25 @@
 ---
 
 ## Phase 2 — Creature Data & Companion AI
-**Timeline:** Months 3–4  
-**Goal:** Full creature data schema live, companion follows player  
-**GDD sections:** §3 (Evolution — Locked), §5 (Attributes — Locked), §6 (Bond — Locked), §7 (Personality — Locked), §8 (Typing — Locked)
+**Timeline:** Months 3–4
+**Goal:** Full creature data schema live, companion follows player
+**GDD sections:** §5 (Attributes — Locked), §6 (Bond — Locked), §7 (Personality — Locked), §8 (Typing — Locked)
+**Directives:** Progression_Directive v0.1.0 (Aura system — supersedes GDD §21) · Primer §9 (evolution rules — supersedes GDD §3)
 
-> All systems in this phase map to fully locked GDD sections. Build exactly what the GDD specifies — no invention.
+> All systems in this phase map to fully locked sections. Build exactly what the GDD and Directives specify — no invention.
 
 ### Milestones
 
-#### Wk 9 — MonsterData ScriptableObject — full schema
-- Implement all 9 attributes: Vitality, Force, Resonance, Guard, Ward, Resolve, Instinct, Aura, Aptitude
+#### Wk 9 — PhasixData ScriptableObject — full schema
+- Implement all 8 base stats: Vitality, Force, Resonance, Guard, Ward, Resolve, Instinct, Aura
 - Temper enum (Edge / Anchor / Flux)
 - Personality enum (16 traits)
 - Two-layer stat system: base stats layer + unnamed pool layer — both always visible in UI
 - Use `[POOL_NAME]` token for unnamed pool in all UI strings until GDD names it
 - Bond float (0–100), bondFloor float, phaseSaturation float
-- **Tags:** ScriptableObject · 9 attributes · Unnamed pool · GDD §5 Locked
+- **Aptitude** — separate persistent int field (devolution counter, never resets). Grows +1 per devo cycle. Not a base stat — do not put in the 8-stat group.
+- **Aura resources** — NOT on the ScriptableObject. Runtime state in save data only: commonAura, specificAuraDict (by emotional type), rareVariantAura. Scaffold the save-data struct here; implementation in Phase 4 save system.
+- **Tags:** ScriptableObject · 8 base stats · Aptitude persistent · Unnamed pool · GDD §5 Locked
 
 #### Wk 10 — Bond system — 6 milestones + floor logic
 - 6 zones: Stranger (0–19%) / Familiar (20%) / Companion (40%) / Partner (60%) / Bonded (80%) / ★Complete (100%)
@@ -99,7 +102,7 @@
 #### Wk 11 — Personality system — 16 traits
 - All 16 traits as attribute growth rate modifiers — stat nudge only, no skill effects
 - Shown on capture, fixed until changed by item
-- Store as enum on MonsterData
+- Store as enum on PhasixData
 - **Tags:** 16 traits · Growth modifier · GDD §7 Locked
 
 #### Wk 12–13 — Companion following AI
@@ -110,15 +113,16 @@
 - **Tags:** A* Pathfinding · Animator · Party system
 
 #### Wk 14–16 — Wild encounter trigger + Primal type reveal
-- Zone collider triggers wild encounter
-- Spawn wild Phasix with MonsterData populated
-- Primal type (Region 1 axis) always fully visible — no discovery mechanic here
+- Zone collider triggers wild encounter (scaffold-level — simple Trigger2D)
+- Spawn wild Phasix with PhasixData populated
+- Primal type (first Realm reveal axis) always fully visible — no discovery mechanic here
 - Signal / Tempo / Celestial axes hidden — no UI for those yet
 - Flee or engage choice
+- **Note:** This is the scaffold trigger only. The full three-layer encounter system (Emotional Mirroring / Attunement / Failure-Triggered — WorldDesign_Directive) replaces this in Phase 3–4 once the emotional state tracking and calendar systems exist.
 - **Tags:** Primal type visible · Trigger2D · GDD §8 Locked
 
 ### Phase 2 Gate
-> Full creature data schema live. Companion follows via pathfinding. Bond zones and floors functional. Wild encounters trigger. All data in ScriptableObjects, matching GDD §3–§7 exactly.
+> Full PhasixData ScriptableObject live (8 base stats, Aptitude field, unnamed pool, bond, Aura resource struct). Companion follows via pathfinding. Bond zones and floors functional. Wild encounters trigger via scaffold collider. All data matches GDD §5–§7 + Primer §9 schema exactly.
 
 ---
 
@@ -210,23 +214,25 @@
 - On fail: battle continues
 - **Tags:** Probability formula · Storage box · Personality on capture
 
-#### Mo 8 Wk 4 — XP + levelling + stat growth
-- XP awarded on battle win (zero on loss — no progress reversal)
-- Level threshold table (ScriptableObject — values pending NumericalCalibration.md)
-- On level-up: stat recalculation per Temper growth weights + personality modifier + player free points (15%)
-- New move unlock check
-- Bond small increment on win
-- Level-up UI popup
-- **Tags:** GDD §5 + §21 Locked · No XP on loss · Temper-weighted growth
+#### Mo 8 Wk 4 — Aura system + stat allocation
+**GDD §21 XP/leveling is superseded. Implement the Aura system from Progression_Directive v0.1.0.**
+- Common Aura drops on battle win (zero on loss — no progression reversal)
+- AuraManager (runtime, save data) tracks Common / Specific / RareVariant Aura per Phasix
+- Stat allocation UI: player spends Common Aura to assign stat points freely across all 8 attributes
+- Resonance Bonus layer: stat points allocated to attributes matching `emotionalType` generate passive bonuses — scaffold the system, exact bonuses pending NumericalCalibration.md
+- Stat ceiling enforced per tier: Aptitude 0 baseline + Aptitude bonus ceiling (all values pending NumericalCalibration.md — use placeholder constants with `// TODO`)
+- Hitting the stat ceiling is the natural signal to evolve — no level-up popup, no unlock check separate from ceiling
+- Bond small increment on win (unchanged)
+- **Tags:** Progression_Directive v0.1.0 · No Aura on loss · Free allocation · Resonance Bonus scaffold
 
 #### Mo 9 — Battle VFX + audio hooks + loss state
 - Attack animations: sprite shake, flash on hit
 - Particle system for hit effects (Asset Store VFX pack)
 - HP bar tween on damage (DOTween)
 - Screen shake on critical hit
-- Loss state: currency/item cost only — zero XP loss, zero bond loss from combat outcome, no stat regression
+- Loss state: currency/item cost only — zero Aura loss, zero bond loss from combat outcome, no stat regression
 - Audio placeholder hooks for Phase 5
-- **Tags:** DOTween · Particle System · Asset Store VFX · GDD §21 loss state Locked
+- **Tags:** DOTween · Particle System · Asset Store VFX · Progression_Directive loss state
 
 ### Phase 3 Gate — First Playable
 > Full encounter → battle → skill trees → status chains → capture/win loop works end-to-end. Skill tree framework live with placeholder content. Timed inputs functional. Bond gates Type F and O. Combo engine fires. This is your vertical slice demo. If this loop isn't fun, find out now — not at month 16.
@@ -236,27 +242,31 @@
 ## Phase 4 — Evolution Web + World Depth
 **Timeline:** Months 10–15  
 **Goal:** Full evolution system, two explorable zones, save system, alpha build  
-**GDD sections:** §3 (Evolution — Locked) · §5 (Unnamed pool — Locked) · §19 (World — Partial) · §21 (Progression — Locked v0.7.9)
+**GDD sections:** §3 (Evolution — Locked) · §5 (Unnamed pool — Locked) · §19 (World — Partial)
+**Directives:** Progression_Directive v0.1.0 (Aura system — supersedes GDD §21) · WorldDesign_Directive v0.1.0 (Hub + Realms structure — supplements GDD §19) · Primer §9 (evolution rules)
 
-> Evolution system is fully locked (GDD §3). Three evolution types, branch requirement framework, devolution with unnamed pool growth, and the met-conditionals-persist rule are all specified and ready to implement.
+> Evolution system is fully locked (GDD §3 + Primer §9). Three evolution types, branch requirement framework, devolution with unnamed pool growth, and the met-conditionals-persist rule are all specified and ready to implement. GDD §21 XP/leveling is superseded — use Progression_Directive.
 
 ### Evolution System
 
 #### Mo 10 — Standard evolution — branch requirement engine
-- Level floor check (anti-exploit only — low threshold, natural play hits it quickly)
+- Stat minimum check (replaces level floor — Progression_Directive): low threshold, anti-exploit only, natural play hits it quickly
 - Stat threshold checks: up to 3 stats, both base stats AND unnamed pool count toward thresholds
+- Aura gate: Specific Aura required for T2+; type and quantity pending NumericalCalibration.md — scaffold with `// TODO` constants
 - Conditional checks: up to 2 per branch, one-time checks that persist forever across all devolution cycles
-- Present evolution choice UI when all thresholds met
-- **Tags:** GDD §3 Locked · Two-layer stat check · Conditionals persist forever
+- All three gates must be met simultaneously before evolution choice is presented
+- **Tags:** Progression_Directive · Primer §9 · Stat minimum replaces level floor · Two-layer stat check · Conditionals persist forever
 
 #### Mo 10–11 — Devolution + unnamed pool growth
 - On devolve: base stats reset to tier floor, unnamed pool grows by `excessStats × bondMultiplier`
+- Devolution costs Specific Aura (portion of what was spent to evolve — exact values pending NumericalCalibration.md, scaffold with `// TODO` constant)
 - Bond fully preserved on devolve
-- Aptitude grows on devolve
+- Aptitude grows +1 on devolve (raises stat ceiling for next cycle — see Progression_Directive Function A)
+- Higher Aptitude before devolving = larger unnamed pool gain (side effect of higher stat ceiling = more excess stats)
 - All evolution branches reopen
 - Skill library preserved — all previously learned skills remain accessible
 - High bond gain on devolve/re-evolve cycle (highest single bond gain action)
-- **Tags:** GDD §3 + §5 Locked · Pool growth formula · Skill library preserved
+- **Tags:** Progression_Directive · GDD §3 + §5 Locked · Devo costs Specific Aura · Pool growth formula · Aptitude +1 · Skill library preserved
 
 #### Mo 11 — Item-gated evolution + Fusion scaffold
 - Item-gated: standard threshold met + specific key item consumed on top; item returned on devolve
@@ -273,19 +283,21 @@
 
 ### World & Progression
 
-#### Mo 12–13 — World chunk streaming — 2 zones
+#### Mo 12–13 — World chunk streaming — Hub + 2 Realms
 - WorldChunkManager from Technical Directive
-- Build Region 1 (Living World): Primal type always fully visible, full encounter population
-- Scaffold Region 2 (Constructed World): Signal type revealed via visual/audio cues only — no text tooltips
+- Hub scaffold: central space for NPCs, evolution moments, social systems — physical and tonal identity pending world design session; build as placeholder geometry now
+- Build first Realm (emotional identity pending world design session): Primal type always fully visible, full encounter population. In type-reveal order this is "Region 1."
+- Scaffold second Realm (emotional identity pending world design session): Signal type revealed via visual/audio cues only — no text tooltips. In type-reveal order this is "Region 2."
 - Zone-specific encounter tables, music swap, ambient VFX
-- **Tags:** GDD §8 + §19 Locked · Region 1 full reveal · Region 2 cue-only
+- **Note:** Realm count, emotional identities, and Hub character are all pending the world design session — build geometry and systems, leave identity slots empty with `// TODO: pending world design session`
+- **Tags:** WorldDesign_Directive · GDD §8 + §19 · Hub scaffold · Realm 1 full reveal · Realm 2 cue-only · Identities pending
 
 #### Mo 13 — Progression loop pacing
 - Evolution pacing: T1→T2 fast (1–2 sessions), T2→T3 moderate, T3→T4 longer, T4→T5 significant investment
 - Session flexibility: 20-min session yields meaningful bond and stat progress; 3-hr session can push an evolution cycle
 - No session length punishment
-- Loss framework enforced: losing costs currency/items only, no XP or bond loss from combat outcome
-- **Tags:** GDD §21 Locked · No progress loss on defeat · Emergent reward
+- Loss framework enforced: losing costs currency/items only, no Aura or bond loss from combat outcome
+- **Tags:** Progression_Directive · No Aura loss on defeat · No progress loss on defeat · Emergent reward
 
 #### Mo 14–15 — NPC system + dialogue + save system
 - Interactable NPCs with Yarn Spinner dialogue trees
@@ -296,7 +308,7 @@
 - **Tags:** Yarn Spinner · JSON save · SaveManager
 
 ### Phase 4 Gate — Alpha Build
-> Full evolution web works (standard + item-gated + fusion scaffold). Devolution with pool growth functional. Two zones explorable with correct type reveal logic. Save/load solid. Hand to a friend — first external playtest. Gather feedback before Phase 5.
+> Full evolution web works (standard + item-gated + fusion scaffold). Devolution with Aura cost and pool growth functional. Aptitude cycling produces measurable stat ceiling increase. Hub + two Realms explorable with correct type reveal logic. Aura drops and Specific Aura evolution gating working end-to-end. Save/load solid. Hand to a friend — first external playtest. Gather feedback before Phase 5.
 
 ---
 
@@ -311,7 +323,7 @@
 #### Mo 16 — Species roster design phase (design work, not code)
 - Design first 6–10 base species with Tempers, Primal types, Signal pools, evolution branches, skill tree assignments
 - Output: completed entries in SpeciesRoster.md
-- Output: MonsterData ScriptableObject assets and SkillData assets with real content
+- Output: PhasixData ScriptableObject assets and SkillData assets with real content
 - This is a design task — no Unity work until roster entries are approved
 - **Tags:** GDD §25 Pending · Design before code · 6–10 species minimum · SpeciesRoster.md
 
@@ -348,7 +360,7 @@
 - Target: 60fps on mid-tier hardware
 
 **Demo scope (locked before build):**
-- 1 zone (Region 1 complete)
+- 1 Realm (first Realm complete — emotional identity pending world design session)
 - 6–8 catchable Phasix from real roster
 - 2 full evolution chains (1 Standard + 1 item-gated)
 - All 18 skill tree types populated with real content
@@ -375,9 +387,13 @@ These GDD systems are pending design and have no implementation phase assigned y
 | NPC / story system | §24 | Pending | Quest content, story beats — scaffold in Phase 4, content post-demo |
 | Audio design detail | §27 | Pending | Music and SFX design — technical hooks in Phase 5, full design post-demo |
 | Multiplayer | §28 | Pending | No phase assigned |
-| Region 3 + Region 4 | §19 | Partial | Ancient World and Broken World — post-demo |
+| Realms 3+ | §19 | Partial | Additional Realms beyond the two in Phase 4 — emotional identities and count pending world design session |
+| Hub identity and content | §19 · §24 | Pending | Physical layout, tonal identity, NPC roster — pending world design session |
+| Hub + Realm emotional identities | §19 | Pending | All Realm and Hub identities deferred — WorldDesign_Directive |
 | Enemy design system | §18 | Pending | Boss archetypes, stat scaling — basic AI in Phase 5, full design post-demo |
-| All numerical calibration | §29 | Pending | XP curves, bond gain %, pool growth formula — tracked in NumericalCalibration.md |
+| All numerical calibration | §29 | Pending | Aura system values, bond gain %, pool growth formula, stat ceilings — tracked in NumericalCalibration.md |
+| Calendar system | WorldDesign_Directive | Pending | Story-beat-driven month progression, seasonal Aura availability — no phase assigned; integrates in Phase 4 once system exists |
+| Three-layer encounter system | WorldDesign_Directive | Pending | Emotional Mirroring / Attunement / Failure-Triggered layers scaffold in Phase 3–4 once calendar and emotional state tracking exist |
 | Celestial evolution content | §13 | Pending | T4–T5 branches designed per species during roster phase |
 
 ---
@@ -403,3 +419,4 @@ These are implementation choices that cannot be made until development reaches t
 |---------|------|---------|
 | v1.0 | March 2026 | Initial roadmap — 18 months, 5 phases, generic structure |
 | v2.0 | March 2026 | GDD-aligned revision — skill tree system integrated, 9-attribute schema, full bond floor logic, status engine detail, 20-month timeline, all pending items flagged |
+| v2.1 | March 2026 | Design session sync — Aura system replaces XP/leveling throughout (Progression_Directive), stat minimum replaces level floor, devolution costs Specific Aura, Aptitude mechanics clarified, Hub + Realms replaces Region 1/2/3/4 identity refs (WorldDesign_Directive), 8 base stats (Aptitude removed from stat group), PhasixData replaces MonsterData, loss state refs updated (no Aura loss), pending table updated with Calendar/3-layer encounter/Hub+Realm identity gaps |
