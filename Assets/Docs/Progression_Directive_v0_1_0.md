@@ -130,7 +130,10 @@ All three layers are player-observable. Aura quantities are trackable. Stats are
 
 ## Devolution — Aura Cost Model
 
-Devolution costs Aura. It is a meaningful sacrifice, not a free reset.
+> ⚠️ **SUPERSEDED:** Evolution_System_Directive_v1_1_0.pdf overrides this section.
+> Devolution is **free** — no conditions, no cost, no time limit. The Aura cost model below is retained for reference only.
+
+~~Devolution costs Aura. It is a meaningful sacrifice, not a free reset.~~
 
 - Devolving spends a portion of the Specific Aura used to achieve the current tier
 - The player retains stat growth banked in the unnamed pool (GDD §5)

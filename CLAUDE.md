@@ -3,7 +3,7 @@
 **Auto-loaded by Claude Code. Full spec: Assets/Docs/ClaudeCode_Primer.md**
 **Read Assets/Docs/DOCUMENT_INDEX.md first — defines what is current vs superseded.**
 
-GDD v0.8.0 · Evolution System (Primer §9) · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
+GDD v0.8.0 · Evolution System Directive v1.1.0 · Progression Directive v0.1.0 · World Design Directive v0.1.0 · Combat Directive v0.1.0 · Technical Directive v0.1.0 · Unity Latest LTS · 2D URP
 
 ---
 
@@ -18,7 +18,7 @@ Senior Unity Developer and C# Architect. Every response: real scripts, real Insp
 ---
 
 ## Project
-2D top-down Monster Tamer RPG. Digimon-style branching evolution web. Creatures called **Phasix** — crystallizations of emotional states and coping mechanisms. Player captures, raises, evolves Phasix in an emotional dimension that mirrors lived human experience. Unity Latest LTS, 2D URP, 320×180 Pixel Perfect Camera. Asset Store art pipeline.
+2D top-down Monster Tamer RPG. Digimon-style branching evolution web. Creatures called **Phasix** — crystallizations of emotional states and coping mechanisms. Player captures, raises, evolves Phasix in an emotional dimension that mirrors lived human experience. World: Multiple Hubs (each with functional specialization) + discrete Realms. Unity Latest LTS, 2D URP, 320×180 Pixel Perfect Camera. Asset Store art pipeline.
 
 ---
 
@@ -51,6 +51,7 @@ Assets/
     Core/        ← GameManager, EventBus, SaveManager
     Player/      ← PlayerController, CameraFollow
     Creatures/   ← PhasixData, BondSystem, EvolutionManager, CompanionAI
+    Evolution/   ← EvolutionEvaluator, EvolutionExecutor, EvolutionPathfinder, EvolutionWebController
     Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator
     World/       ← WorldChunkManager, EncounterTrigger, ZoneManager
     UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay
@@ -130,12 +131,13 @@ List<SkillData> equippedSkills;     // active slots: T1=2, T2=3, T3=4, T4=5, T5=
 - Unlocks exotic evolution branches at minimum thresholds (Function B)
 - Side effect: higher Aptitude before devolving = larger unnamed pool gain
 
-**Evolution (see ClaudeCode_Primer.md §9):**
+**Evolution (see Evolution_System_Directive_v1_1_0.pdf):**
 - Three types: Standard, Item-gated, Fusion
 - Conditionals persist forever across all devo cycles
 - Both stat layers (base + unnamed pool) count toward thresholds
 - Stat minimum replaces level floor as the anti-exploit gate
-- Fusion: T6/T7 only, requires same-tier ingredients
+- Devolution is FREE — no conditions, no cost, no time limit
+- Fusion: valid at ALL tiers; same-tier ingredient requirement only for T6+
 
 **Aura requirements by tier:**
 ```
@@ -161,6 +163,12 @@ Physical: Force/Guard · Elemental: Resonance/Ward · Apply timed bonus after fo
 **Loss state:** Losing = currency/items cost only. Zero Aura loss, zero bond loss from combat outcome, zero stat regression.
 
 **Primal type — no immunities.** Minimum modifier is 0.5×, every type deals damage to every other.
+
+**Blackout & Banking:**
+- Blackout (party wipe) returns player to last hub visited
+- Phasix always kept — no permadeath, no forced devolution on blackout
+- Aura/loot/currency collected since last hub visit lost unless banked
+- Banking at a hub makes resources permanent; players choose *which* hub to bank at
 
 ---
 
@@ -192,16 +200,18 @@ Flag with `// TODO: pending design — [topic]`
 
 ## Reference Files in This Project
 ```
-Assets/Docs/DOCUMENT_INDEX.md               ← Read first — document hierarchy and status
-Assets/Docs/ClaudeCode_Primer.md            ← Full system spec (evolution system in §9)
-Assets/Docs/GDD_CreatureRPG_v0_8_0.html    ← Master GDD v0.8.0
-Assets/Docs/Progression_Directive_v0_1_0.md ← Supersedes GDD §21 (XP/leveling)
-Assets/Docs/WorldDesign_Directive_v0_1_0.md ← Supplements GDD §19, §24
-Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html ← Implementation patterns
-Assets/Docs/CHANGELOG.md                    ← Session log
-Assets/Docs/DECISIONS.md                    ← Implementation decisions not in GDD
-Assets/Docs/NumericalCalibration.md         ← All pending numerical values
-Assets/Docs/LoreBible_Phasix.html           ← REFERENCE ONLY — old lore, requires revisit
-Assets/Docs/Prototypes/README.md            ← Pre-dev encounter prototypes (revisit Phase 3)
-Assets/Docs/KNOWN_ISSUES.md                ← Active bugs/blockers
+Assets/Docs/DOCUMENT_INDEX.md                       ← Read first — document hierarchy and status
+Assets/Docs/ClaudeCode_Primer_v1_1_0.md             ← Full system spec (§9 defers to Evolution Directive)
+Assets/Docs/GDD_CreatureRPG_v0_8_0.html             ← Master GDD v0.8.0
+Assets/Docs/Evolution_System_Directive_v1_1_0.pdf   ← Supersedes GDD §3 (evolution web, devolution, fusion)
+Assets/Docs/Progression_Directive_v0_1_0.md         ← Supersedes GDD §21 (XP/leveling)
+Assets/Docs/WorldDesign_Directive_v0_1_0.md         ← Supplements GDD §19, §24 (world, calendar, factions)
+Assets/Docs/Combat_Directive_v0_1_0.md              ← Supplements GDD §18 (combat, 7-lane stage, action commands)
+Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html  ← Implementation patterns
+Assets/Docs/CHANGELOG.md                            ← Session log
+Assets/Docs/DECISIONS.md                            ← Implementation decisions not in GDD
+Assets/Docs/NumericalCalibration.md                 ← All pending numerical values
+Assets/Docs/LoreBible_Phasix.html                   ← REFERENCE ONLY — old lore, requires revisit
+Assets/Docs/Prototypes/README.md                    ← Pre-dev encounter prototypes (revisit Phase 3)
+Assets/Docs/KNOWN_ISSUES.md                         ← Active bugs/blockers
 ```

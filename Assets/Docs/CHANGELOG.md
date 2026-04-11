@@ -18,6 +18,24 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-04-11] Doc Sync — Evolution Directive, Combat Directive, World Design update
+- Built: Evolution_System_Directive_v1_1_0.pdf → Assets/Docs/ (new — supersedes GDD §3, primary evolution authority)
+- Built: Combat_Directive_v0_1_0.md → Assets/Docs/ (new — 7-lane combat stage, action commands, turn structure)
+- Changed: WorldDesign_Directive_v0_1_0.md — added Parts 7–9 (Blackout/Banking, Perspective/Rig, Narrative Arc)
+- Changed: DECISIONS.md — updated World structure entry (single Hub → Multiple Hubs); appended 3 new April 2026 entries (Blackout/Banking, Perspective model, Bone rig)
+- Changed: DOCUMENT_INDEX.md — updated to v1.1.0; added Evolution and Combat Directives; updated hierarchy; updated Superseded section
+- Changed: CLAUDE.md — updated evolution authority reference (Primer §9 → Evolution Directive); fixed fusion scope (T6/T7 only → all tiers, same-tier required only for T6+); added Multiple Hubs to world description; added Blackout/Banking rules; added Scripts/Evolution/ folder; updated Reference Files block
+- Changed: ClaudeCode_Primer_v1_1_0.md §5 — devolution cost line updated (free, not Specific Aura cost); §9 — fusion scope corrected
+- Changed: Progression_Directive_v0_1_0.md — added supersession note to Devolution Aura Cost section (Evolution Directive wins: devolution is free)
+- Changed: NumericalCalibration.md — added Combat System Values section (lane depth scales, action command timing, damage modifiers)
+- Decided: Devolution is FREE per Evolution_System_Directive — supersedes Progression_Directive devolution cost rule
+- Decided: Multiple Hubs (not single Hub) — each with functional specialization
+- Decided: Blackout/Banking system — unbanked resources lost on party wipe, Phasix always kept
+- Decided: 3/4 oblique overworld + side-profile diorama combat perspective
+- Decided: Two bone rigs per Phasix (3/4 oblique + side-profile); three overworld directions for Phase 1
+- Decided: Narrative arc: Innocent → Lost → Home (working, not locked)
+- Next: Phase 4 implementation — Evolution system Unity scripts per Evolution_System_Directive_v1_1_0.pdf §9
+
 [2026-03-30] Design Session — Encounter, Progression, World Structure
 - Built: Progression_Directive_v0_1_0.md, WorldDesign_Directive_v0_1_0.md, DECISIONS new entries
 - Decided: Aura-driven progression replaces XP/leveling entirely

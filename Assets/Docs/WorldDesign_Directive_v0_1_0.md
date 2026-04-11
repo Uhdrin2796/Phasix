@@ -16,17 +16,19 @@ All faction names, lore details, and world specifics in this document are **work
 
 ## Part 1 — World Structure
 
-### Model: Hub + Realms With Evolving Hub Elements
+### Model: Multiple Hubs + Realms
 
-The world uses a Hub and discrete Realms structure.
+The world uses multiple Hubs and discrete Realms.
 
-**The Hub**
-- A persistent liminal space — between the physical world and the emotional dimension
-- Not a fantasy town. Tonally ambiguous — familiar but slightly off
-- Functions: quest triggers, story beat delivery, Aura management, realm access points, recurring NPC space
-- The hub evolves conditionally as the player's arc develops — NPC states, visual details, and accessible spaces shift in response to completed story beats
+**The Hub Network**
+- Multiple hubs exist across the world — no single designated main hub
+- Each hub has a **functional specialization** that creates player routing decisions. Players travel to specific hubs depending on what they need or where they are in progression
+- Hubs unlock progressively as the player advances — fast travel to unreached hubs is not available
+- Hubs evolve conditionally as the player's arc develops — NPC states, visual details, and accessible spaces shift in response to completed story beats
 - Does not use a full dynamic world state system — changes are conditional flags, not procedural
-- Specific hub identity (visual, tonal, physical layout) is **pending design**
+- **Tonal direction (candidate, not locked):** Early hubs feel closer to the familiar physical world. Later hubs feel increasingly strange and liminal as the player goes deeper into the emotional dimension. The spectrum from grounded → liminal tracks the emotional arc
+- Specific hub identities (visual, tonal, physical layout, specializations) are **pending narrative development** — hub design is deeply tied to story shape and cannot be finalized until the narrative has more form
+- Hub specialization candidates (illustrative, not locked): Aura banking/evolution, Creature Trace gear work, faction interactions, fusion facilitation
 
 **The Realms**
 - Each realm is a discrete emotional region
@@ -220,11 +222,89 @@ Optional depth. Companion arcs, rare Phasix hunts, specific Aura collection goal
 
 ---
 
+## Part 7 — Blackout & Banking System
+
+### Design Intent
+Pushing deeper into a Realm carries real stakes without punishing Phasix loss. The risk/reward is about resources, not roster.
+
+### Rules
+- **Blackout** = losing all Phasix HP (party wipe)
+- On blackout: player returns to the last hub they visited
+- **Kept on blackout:** all Phasix (no permadeath, no forced devolution)
+- **Lost on blackout:** all Aura, loot, and currency collected since the last hub visit that has not been banked
+- **Banking** = depositing Aura/resources at a hub. Banked resources are permanent and survive blackout
+- This makes the decision to push for one more encounter vs. return to bank a meaningful moment of risk assessment
+
+### Design Notes
+- The banking trip creates natural pacing — players return to hubs not just for progression but for safety
+- Hub specialization interacts with banking: the player must decide *which* hub to bank at, not just *whether* to bank
+- Unbanked Aura loss on blackout is emotionally congruent — the things you were reaching for slip away when you fall
+
+---
+
+## Part 8 — Perspective & Rig System
+
+### Visual Perspective Model
+```
+Overworld (Exploration)   3/4 oblique top-down view
+Combat                    Side-profile diorama view (Paper Mario style)
+```
+
+### Movement Model
+Orthogonal input maps to diagonal movement in the world. Pressing Up moves the character up-right (into the screen in 3/4 perspective). Pressing Right moves them right along the ground plane. This is the standard approach for 3/4 RPGs (Stardew Valley, etc.) — hides perspective awkwardness, feels natural.
+
+### Bone Rig Requirement Per Phasix
+Two rigs per Phasix:
+```
+Rig 1 — 3/4 oblique      Used for overworld traversal
+Rig 2 — Side profile     Used for combat
+```
+
+### Overworld Rig Directions (Phase 1)
+Three directions cover all movement cases for now:
+```
+Right-facing             Left-facing covered by horizontal flip
+Up-diagonal              Moving into screen / away from camera
+Down-diagonal            Moving toward camera
+```
+Up-diagonal and down-diagonal may share one rig with minor variation for now. Additional directions (pure left/right, 8-way) deferred until Phase 1 rigs are validated in engine.
+
+### Combat Rig
+Single side-profile rig facing right. Enemy sprites face left (flip). High-detail — this is the view where individual Phasix art and animation are most visible.
+
+### Spine / Animation Tool
+Bone rigging confirmed. Specific tool (Spine vs Unity 2D Animation package) deferred until a prototype rig exists and tool fit can be evaluated. Do not purchase Spine until a prototype validates the need.
+
+---
+
+## Part 9 — Narrative Direction (Working, Not Locked)
+
+### Emotional Arc Shape
+```
+Innocent  →  Lost  →  Home
+```
+The player begins in a state of innocence — not naivety, but pre-awareness. The sensitivity to Phasix has not yet become undeniable. The arc moves through a period of being lost — geographically, emotionally, in terms of identity — toward finding home.
+
+"Lost" carries multiple simultaneous meanings: geographically without anchor, emotionally without direction, and something *lost* that might be recovered. All readings are active. The game does not define which.
+
+"Home" as an endpoint is intentionally ambiguous. It may be a place, a self, a relationship, a feeling that was inaccessible. **Do not define it prematurely.** The ambiguity is load-bearing.
+
+### Thematic Resonance With Existing Systems
+- Phasix as coping mechanisms developed while lost — the question of which ones you carry home is the team-building layer
+- Hub tonal spectrum (grounded → liminal) tracks the arc spatially
+- Devolution as valid regression maps onto "lost" — growth is not linear
+- What worked once may not work in the same way at home
+
+### Status
+Narrative direction only — not documented in GDD. Hub identities, player character, and specific story beats all pending narrative development.
+
+---
+
 ## Pending Design — Flagged Gaps
 
 The following are explicitly undecided and must not be filled speculatively:
 
-- Hub physical and tonal identity
+- Hub count, physical identities, tonal identities, and specializations (pending narrative development)
 - Total number of realms
 - Individual realm emotional identities
 - Hub NPC roster and arc designs

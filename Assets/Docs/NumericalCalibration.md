@@ -267,6 +267,41 @@ SUP = attacker counters and reduces defender's rhythm effectiveness
 
 ---
 
+## Combat System Values (Combat_Directive_v0_1_0.md)
+
+### Lane depth scale values (7-lane system)
+| Lane | Position | Scale Multiplier | Notes |
+|---|---|---|---|
+| Lane 1 | Front (closest) | PENDING | Largest sprites |
+| Lane 2 | Near-front | PENDING | |
+| Lane 3 | Near | PENDING | |
+| Lane 4 | Mid (default) | PENDING | Starting position |
+| Lane 5 | Far | PENDING | |
+| Lane 6 | Back-far | PENDING | |
+| Lane 7 | Back (furthest) | PENDING | Smallest sprites |
+Note: Scaling is smooth and continuous between lanes — not stepped.
+
+### Action command timing windows
+| Command Type | Timing Window | Notes |
+|---|---|---|
+| Offensive action command | PENDING | Success = boosted outgoing damage |
+| Defensive action command | PENDING | Success = reduced incoming damage |
+| Success threshold | PENDING | Frame window for "success" input |
+
+### Action command damage modifiers
+| Result | Damage Modifier | Notes |
+|---|---|---|
+| Offensive success | PENDING (e.g. 1.5×) | Applied after base damage formula |
+| Defensive success | PENDING (e.g. 0.5×) | Incoming damage reduction multiplier |
+| Miss / no input | 1.0× baseline | No bonus, no penalty |
+
+### Party size
+| Value | Amount | Notes |
+|---|---|---|
+| Active Phasix per side | 3–5 (range) | Exact count pending prototyping |
+
+---
+
 ## SUPERSEDED — Reference Only
 
 ### Old XP & Levelling (superseded by Aura system)

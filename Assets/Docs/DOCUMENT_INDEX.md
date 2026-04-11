@@ -1,6 +1,6 @@
 # Phasix — Document Index
-**Version:** 1.0.0  
-**Date:** March 2026  
+**Version:** 1.1.0  
+**Date:** April 2026  
 **Purpose:** Single source of truth for all project documents. Read this first in any session — Claude Code or Claude chat — to understand what is current, what is superseded, and what is pending.
 
 ---
@@ -21,16 +21,17 @@ When documents conflict — the more specific Directive always wins over the GDD
 
 | Document | Version | Location | Covers | Notes |
 |---|---|---|---|---|
-| GDD_Phasix | v0.8.0 | Docs/GDD_CreatureRPG_v0_8_0.html | Master design document — all core systems | §21 XP/leveling superseded by Progression Directive. §3 tier structure superseded by Primer §9. §19, §24 supplemented by World Design Directive. |
-| ClaudeCode_Primer §9 | v1.1.0 | Docs/ClaudeCode_Primer.md §9 | Evolution system — three types, conditionals, fusion, devolution rules | Supersedes GDD §3 tier structure. §9 IS the authoritative evolution reference. |
-| Progression_Directive | v0.1.0 | Docs/Progression_Directive_v0_1_0.md | Aura system, stat growth, Aptitude, evolution gating | Supersedes GDD §21 XP/leveling model |
-| WorldDesign_Directive | v0.1.0 | Docs/WorldDesign_Directive_v0_1_0.md | World structure, encounter initiation, calendar, factions, visibility model | Supplements GDD §19, §24 |
+| GDD_Phasix | v0.8.0 | Docs/GDD_CreatureRPG_v0_8_0.html | Master design document — all core systems | §21 XP/leveling superseded by Progression Directive. §3 tier structure superseded by Evolution Directive. §19, §24 supplemented by World Design Directive. §18 supplemented by Combat Directive. |
+| Evolution_System_Directive | v1.1.0 | Docs/Evolution_System_Directive_v1_1_0.pdf | Evolution web, devolution (free), fusion, tier structure, Unity implementation | Supersedes GDD §3 tier structure. Supersedes Progression_Directive devolution cost section. Primary evolution authority. |
+| Progression_Directive | v0.1.0 | Docs/Progression_Directive_v0_1_0.md | Aura system, stat growth, Aptitude, evolution gating | Supersedes GDD §21 XP/leveling model. Note: devolution cost section superseded by Evolution_System_Directive (devolution is now free). |
+| WorldDesign_Directive | v0.1.0 | Docs/WorldDesign_Directive_v0_1_0.md | World structure (Multiple Hubs + Realms), encounter initiation, calendar, factions, visibility model, blackout/banking, perspective model, bone rigs, narrative arc | Supplements GDD §19, §24 |
+| Combat_Directive | v0.1.0 | Docs/Combat_Directive_v0_1_0.md | Combat perspective, 7-lane stage, action commands, turn structure | Supplements GDD §18 |
 | Technical_Directive | v0.1.0 | Docs/Phasix_TechnicalDirective_v0.1.0.html | Unity implementation patterns, existing scripts | — |
-| CLAUDE.md | v1.1.0 | Project root | Auto-loaded by Claude Code — quick reference summary | Updated March 2026 |
-| ClaudeCode_Primer.md | v1.1.0 | Docs/ClaudeCode_Primer.md | Full system spec for Claude Code sessions | Updated March 2026 |
-| DECISIONS.md | current | Docs/DECISIONS.md | Implementation decisions not in GDD | Updated March 2026 |
-| CHANGELOG.md | current | Docs/CHANGELOG.md | Session log | Updated March 2026 |
-| NumericalCalibration.md | current | Docs/NumericalCalibration.md | All pending numerical values | Updated March 2026 |
+| CLAUDE.md | v1.1.0 | Project root | Auto-loaded by Claude Code — quick reference summary | Updated April 2026 |
+| ClaudeCode_Primer.md | v1.1.0 | Docs/ClaudeCode_Primer_v1_1_0.md | Full system spec for Claude Code sessions | §9 defers to Evolution_System_Directive for evolution authority |
+| DECISIONS.md | current | Docs/DECISIONS.md | Implementation decisions not in GDD | Updated April 2026 |
+| CHANGELOG.md | current | Docs/CHANGELOG.md | Session log | Updated April 2026 |
+| NumericalCalibration.md | current | Docs/NumericalCalibration.md | All pending numerical values | Updated April 2026 |
 | SpeciesRoster.md | template | Docs/SpeciesRoster.md | Species design template — empty | Pending Phase 5 |
 
 ---
@@ -49,8 +50,10 @@ When documents conflict — the more specific Directive always wins over the GDD
 
 | Document | Superseded By | What Changed |
 |---|---|---|
-| GDD §3 Tier Structure | ClaudeCode_Primer §9 | Natural lines T1–T5, fusion T6–T7, three evolution types, conditional rules |
+| GDD §3 Tier Structure | Evolution_System_Directive v1.1.0 | Natural lines T1–T5, fusion T6–T7, full branch requirement framework, devolution rules |
 | GDD §21 XP/Leveling | Progression_Directive v0.1.0 | XP replaced by Aura, levels replaced by stat allocation, level floor replaced by stat minimum gate |
+| Progression_Directive §Devolution Aura Cost | Evolution_System_Directive v1.1.0 | Devolution is now free — no conditions, no cost, no time limit |
+| ClaudeCode_Primer §9 (evolution authority) | Evolution_System_Directive v1.1.0 | §9 now defers to the standalone directive; content retained for quick reference |
 
 ---
 
@@ -72,7 +75,7 @@ These gaps exist and must not be filled speculatively. Flag with TODO and scaffo
 
 | Gap | Blocking | GDD Ref |
 |---|---|---|
-| Hub physical and tonal identity | World design session | §19, §24 |
+| Hub count, physical identities, tonal identities, and specializations | Narrative development session | §19, §24 |
 | Realm count and emotional identities | World design session | §19 |
 | Hub NPC roster and arcs | World design session | §24 |
 | Faction refined names and lore | Dedicated faction design session | WorldDesign Directive |
@@ -94,7 +97,7 @@ These gaps exist and must not be filled speculatively. Flag with TODO and scaffo
 When documents contradict each other, this priority order applies:
 
 ```
-1. Specific Directives (Progression, World Design) + ClaudeCode_Primer §9 (evolution)
+1. Specific Directives (Evolution, Progression, World Design, Combat)
 2. GDD active sections
 3. DECISIONS.md entries
 4. ClaudeCode_Primer.md / CLAUDE.md

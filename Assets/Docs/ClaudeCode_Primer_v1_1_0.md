@@ -147,7 +147,7 @@ T5 → T6+   Fusion only
 ```
 
 ### Devolution
-- Costs Specific Aura (meaningful sacrifice — not free)
+- FREE — no conditions, no cost, no time limit (superseded by Evolution_System_Directive_v1_1_0.pdf)
 - Unnamed pool grows on devo: `excessStats × bondMultiplier`
 - Aptitude grows +1
 - Skills and Bond preserved
@@ -230,7 +230,7 @@ Internal role names (Edge/Anchor/Flux) never shown to player — only species-sp
 - Conditionals are **one-time checks** — persist across ALL devolution cycles forever
 - Stat minimum replaces level floor as the anti-exploit gate
 - Both stat layers (base + unnamed pool) count toward thresholds
-- Fusion: T6/T7 only, same-tier ingredient requirement
+- Fusion: valid at ALL tiers; same-tier ingredient requirement applies only to T6+
 
 ---
 

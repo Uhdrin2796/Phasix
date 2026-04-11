@@ -210,10 +210,11 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Revisit if:** Stat minimums create frustrating bottlenecks in playtesting
 
 ### [World] World structure confirmed
-- **Decided:** Hub + discrete Realms with light conditional Hub evolution
-- **Why:** Most implementable structure. Hub provides quest/story anchor. Realms provide discrete emotional zones. Conditional hub evolution adds soul without system complexity.
-- **Alternatives rejected:** Seamless geography (hard to pace), Wanderer model (too directionless)
-- **Date:** March 2026
+- **Decided:** Multiple Hubs + discrete Realms with conditional hub evolution elements. No single designated main hub. Each hub has a functional specialization creating player routing decisions. Hubs unlock progressively.
+- **Why:** Most implementable structure. Hub network provides quest/story anchors. Realms provide discrete emotional zones. Specialization creates meaningful travel decisions at the hub scale, mirroring the path-routing decision inside Realms.
+- **Alternatives rejected:** Single main hub (too centralized, limits routing decisions), seamless geography (hard to pace), Wanderer model (too directionless)
+- **Date:** April 2026
+- **Revisit if:** Hub count or specializations conflict with narrative shape once story develops
 - **Ref:** WorldDesign_Directive_v0_1_0.md
 
 ### [World] Phasix visibility model
@@ -254,3 +255,40 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 ### [Lore] Old lore status
 - **Decided:** The Fracture event, Phase Dimension details, and original Five Factions lore are retained in LoreBible_Phasix.html as REFERENCE ONLY. These were auto-filled without approval in a prior session and have shifted significantly. Do not implement. Require full revisit.
 - **Date:** March 2026
+
+---
+
+## New Entries — April 2026 Design Session
+
+### [World] World structure — Multiple Hubs confirmed
+- **Update:** The March 2026 "Hub + Realms" entry above has been superseded by the April 2026 model below.
+- **Decided:** Multiple Hubs + discrete Realms with conditional hub evolution elements. No single designated main hub. Each hub has a functional specialization creating player routing decisions. Hubs unlock progressively.
+- **Why:** Most implementable structure. Hub network provides quest/story anchors. Realms provide discrete emotional zones. Specialization creates meaningful travel decisions at the hub scale, mirroring the path-routing decision inside Realms.
+- **Alternatives rejected:** Single main hub (too centralized, limits routing decisions), seamless geography (hard to pace), Wanderer model (too directionless)
+- **Date:** April 2026
+- **Revisit if:** Hub count or specializations conflict with narrative shape once story develops
+- **Ref:** WorldDesign_Directive_v0_1_0.md
+
+### [World] Blackout and banking system
+- **Decided:** On party wipe (blackout), player returns to last visited hub. Phasix are always kept — no permadeath, no forced devolution. Aura, loot, and currency collected since the last hub visit are lost unless banked. Banking at a hub makes resources permanent.
+- **Why:** Creates meaningful risk/reward around pushing deeper into a Realm vs. returning to bank. Stakes are resource-based, not roster-based. Emotionally congruent — the things you were reaching for slip away when you fall.
+- **Alternatives rejected:** Full permadeath (too punishing for emotional design tone), no stakes on blackout (removes tension), losing Phasix on blackout (conflicts with core design that Phasix are irreplaceable emotional relationships)
+- **Date:** April 2026
+- **Revisit if:** Playtesting shows unbanked loss feels arbitrary rather than meaningful
+- **Ref:** WorldDesign_Directive_v0_1_0.md
+
+### [Art/Tech] Perspective model — overworld and combat
+- **Decided:** Overworld uses 3/4 oblique top-down view. Combat uses side-profile diorama view. Orthogonal input maps to diagonal movement in the world.
+- **Why:** 3/4 oblique is the natural RPG exploration perspective. Side-profile combat gives maximum visibility of individual Phasix art. Orthogonal-to-diagonal movement mapping is the standard solution for 3/4 perspective awkwardness.
+- **Alternatives rejected:** Pure top-down overworld (loses depth), matching perspective for both states (combat loses Phasix showcase opportunity), free 8-directional movement (creates rig complexity and visual awkwardness in 3/4 view)
+- **Date:** April 2026
+- **Ref:** WorldDesign_Directive_v0_1_0.md, Combat_Directive_v0_1_0.md
+
+### [Art/Tech] Bone rig — two rigs per Phasix, three overworld directions
+- **Decided:** Each Phasix has two bone rigs — 3/4 oblique for overworld, side-profile for combat. Overworld rig covers three directions: right-facing (left via flip), up-diagonal, down-diagonal. Additional directions deferred.
+- **Why:** Minimum viable rig set for solo dev. Two rigs per Phasix is manageable. Three directions cover all movement cases for now without committing to 8-directional before the pipeline is validated.
+- **Alternatives rejected:** 8-directional overworld rig (prohibitive solo), single shared rig for both perspectives (compromises art quality in both states)
+- **Date:** April 2026
+- **Revisit if:** Up/down-diagonal share too many frames and look wrong in motion; add directions post-prototype
+- **Note:** Specific rigging tool (Spine vs Unity 2D Animation) deferred until prototype validates the need. Do not purchase Spine before that point.
+- **Ref:** WorldDesign_Directive_v0_1_0.md
