@@ -7,7 +7,7 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-_No active issues. Project is in Phase 1 (Foundation)._
+---
 
 ---
 

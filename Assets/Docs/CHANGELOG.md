@@ -18,6 +18,24 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-04-12] Phase 1 Wk 5–6 — mr_chimken player controller + animation flip
+- Built: `Assets/Scripts/Player/PlayerController_SideScroll.cs` — new script replacing 8-directional PlayerController for mr_chimken
+  - 4-directional movement (unchanged physics — accel/decel, Rigidbody2D, new Input System)
+  - Left/right sprite flip via `transform.localScale.x` negation on root (correct for bone rigs — SpriteRenderer.flipX only flips one sprite part)
+  - `_rigFacesRight` Inspector bool — set per character based on native art orientation; no code change needed on import
+  - `_pixelsPerUnit` Inspector int — camera-level PPU (default 16, matches Pixel Perfect Camera when added)
+  - `_targetHeightPixels` Inspector float — set character height in virtual canvas pixels (320×180); auto-scales uniformly via CapsuleCollider2D native height; restores manual scale when set back to 0
+  - `OnValidate` — scale applies immediately in Edit mode without entering Play mode
+  - `LogDimensions` context menu — right-click component → logs native size, current scale, world size, and target pixel height to Console
+  - Original `PlayerController.cs` kept untouched as legacy fallback
+- Built: `Assets/Animations/Creatures/MrChimken/MrChimken.controller` — configured with IsMoving Bool param, Idle (default) and Moving states, instant transitions
+- Built: `Assets/Animations/Creatures/MrChimken/moving.anim` — converted from Legacy to Mecanim, assigned to Moving state
+- Changed: mr_chimken scene GameObject — removed Legacy Animation component, removed old PlayerController, added Animator + PlayerController_SideScroll, deleted stray Mr_chimken (1) duplicate
+- Decided: Bone-rigged characters flip via root `transform.localScale.x` negation, not `SpriteRenderer.flipX`
+- Decided: Vector/PSD bone rigs import at 100 PPU; pixel art tiles at 16 PPU (matches camera PPU)
+- Decided: Camera PPU = 16 (to be set on Pixel Perfect Camera in Wk 7–8)
+- Next: Phase 1 Wk 7–8 — Tilemap world + Cinemachine camera; update DECISIONS.md with tile base size and A* cell size
+
 [2026-04-11] Doc Sync — Evolution Directive, Combat Directive, World Design update
 - Built: Evolution_System_Directive_v1_1_0.pdf → Assets/Docs/ (new — supersedes GDD §3, primary evolution authority)
 - Built: Combat_Directive_v0_1_0.md → Assets/Docs/ (new — 7-lane combat stage, action commands, turn structure)
