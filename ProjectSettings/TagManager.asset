@@ -40,9 +40,12 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
+    locked: 1
+  - name: Ground
+    uniqueID: 2392976677
     locked: 0
   - name: Characters
-    uniqueID: 2392976677
+    uniqueID: 450377605
     locked: 0
   m_RenderingLayers:
   - Default

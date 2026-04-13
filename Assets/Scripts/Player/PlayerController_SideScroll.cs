@@ -145,6 +145,9 @@ public class PlayerController_SideScroll : MonoBehaviour
         _rb.gravityScale   = 0f;
         _rb.freezeRotation = true;
 
+        // Zero out any residual velocity from previous Play sessions
+        _rb.linearVelocity = Vector2.zero;
+
         // Continuous detection prevents tunnelling through thin TilemapCollider2D edges
         _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 

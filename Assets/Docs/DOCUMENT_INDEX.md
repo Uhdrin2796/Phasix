@@ -31,6 +31,7 @@ When documents conflict — the more specific Directive always wins over the GDD
 | ClaudeCode_Primer.md | v1.1.0 | Docs/ClaudeCode_Primer_v1_1_0.md | Full system spec for Claude Code sessions | §9 defers to Evolution_System_Directive for evolution authority |
 | DECISIONS.md | current | Docs/DECISIONS.md | Implementation decisions not in GDD | Updated April 2026 |
 | CHANGELOG.md | current | Docs/CHANGELOG.md | Session log | Updated April 2026 |
+| LESSONS_LEARNED.md | current | Docs/LESSONS_LEARNED.md | Issues investigated and resolved — how to avoid/fix next time | Updated April 2026 |
 | NumericalCalibration.md | current | Docs/NumericalCalibration.md | All pending numerical values | Updated April 2026 |
 | SpeciesRoster.md | template | Docs/SpeciesRoster.md | Species design template — empty | Pending Phase 5 |
 

@@ -292,3 +292,39 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Revisit if:** Up/down-diagonal share too many frames and look wrong in motion; add directions post-prototype
 - **Note:** Specific rigging tool (Spine vs Unity 2D Animation) deferred until prototype validates the need. Do not purchase Spine before that point.
 - **Ref:** WorldDesign_Directive_v0_1_0.md
+
+---
+
+## New Entries — April 2026 Tilemap Session
+
+### [Camera] Pixel Perfect Camera PPU locked
+- **Decided:** Pixel Perfect Camera → Asset Pixels Per Unit = 16, Reference Resolution = 320×180
+- **Why:** 16 PPU is the correct baseline for the 320×180 virtual canvas. Established in Phase 1 Wk 5–6.
+- **Alternatives rejected:** 32 PPU (doubles world unit scale, mismatches established creature sprite pipeline)
+- **Date:** April 2026
+- **Revisit if:** Never — PPU is locked to the camera resolution choice
+
+### [Tileset] Tile pixel size — PENDING
+- **Status:** Undecided — tile grid PNG not yet sourced
+- **Impact:** Determines world unit scale per tile. 16×16 px = 1 unit/tile at 16 PPU. 32×32 px = 2 units/tile at 16 PPU.
+- **Impact on A* cell size:** A* node size = tile world unit size (or half for finer navigation)
+- **Revisit:** When real tileset PNG is imported — lock this entry immediately
+
+### [Camera] Cinemachine version
+- **Decided:** Cinemachine 3.1.x (Unity 6 package). Using `CinemachineCamera` component (not legacy `CinemachineVirtualCamera`). CinemachineConfiner2D for room boundary confinement. CinemachinePixelPerfect extension for lens sync.
+- **Why:** Cinemachine 3.x is the current API for Unity 6. Legacy VirtualCamera API is deprecated.
+- **Alternatives rejected:** Legacy CinemachineVirtualCamera (deprecated in 3.x)
+- **Date:** April 2026
+
+### [Git] Large art assets excluded from git — stored externally
+- **Decided:** `Assets/Artwork/Creatures/` and `Assets/Artwork/Tilesets/` are excluded from git via `.gitignore`. Store these folders in Google Drive / OneDrive and copy them into the project locally as needed.
+- **Why:** Thousands of individual PNG frames in creature packs hit GitHub LFS rate limits immediately. Raw art packs don't need version history or PR review — they're reference assets, not code.
+- **Alternatives rejected:** Git LFS (1GB free limit fills fast with PNG packs, then $5/month); Git Submodules (unnecessary complexity for solo dev)
+- **How to restore on a new machine:** Copy `Creatures/` and `Tilesets/` folders from Google Drive into `Assets/Artwork/` before opening the project in Unity.
+- **Date:** April 2026
+
+### [Tilemap] Placeholder tiles for test room
+- **Decided:** Unity built-in white square sprite used as placeholder for ground and wall tiles. Green (`#4A7C3F`) = ground, dark grey (`#333333`) = walls.
+- **Why:** Real tileset PNG not yet sourced. Placeholder lets tilemap, WorldChunkManager, and Cinemachine camera be fully tested now. Swap in real art without script changes.
+- **Date:** April 2026
+- **Revisit if:** Real tileset is sourced — replace tile sprites in Tile assets, no code changes needed

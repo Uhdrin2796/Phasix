@@ -104,3 +104,9 @@ desktop.ini
 
 # Claude Code local overrides (personal, not team-shared)
 .claude/settings.local.json
+
+# Raw art asset packs — store externally (Google Drive etc.), drop in locally as needed
+# Too large for git LFS rate limits; Unity-imported assets in Tiles/ and Animations/ are tracked
+Assets/Artwork/Creatures/
+Assets/Artwork/Tilesets/
+Assets/_Recovery/

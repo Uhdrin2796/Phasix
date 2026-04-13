@@ -18,6 +18,31 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-04-12] Phase 1 Wk 7–8 — Asset organisation + Tilemap + Cinemachine (in progress)
+- Built: `Assets/Scripts/World/WorldChunkManager.cs` — chunk activation/deactivation by player proximity via coroutine (not Update); _activateRadius=30, _deactivateRadius=40, _checkInterval=0.5s
+- Built: `Assets/Artwork/Characters/` — player/companion rig subfolders moved here (Dark Fluffy, Dark Uhdrin, MercuryVI, mr_bot, mr_chimken_new, mr_chimken_obs)
+- Built: `Assets/Artwork/Creatures/Pack_A_2DMonsters/` — craftpix-341189; 10 monsters renamed Monster_01–10; non-Unity source files in _SourceFiles/
+- Built: `Assets/Artwork/Creatures/Pack_B_MonsterEnemies/` — craftpix-437811; same structure
+- Built: `Assets/Artwork/Creatures/Pack_C_TowerDefense/` — craftpix-168163; 10 monsters renamed Monster_01–10
+- Decided: Cinemachine 3.1.x — CinemachineCamera + CinemachineConfiner2D + CinemachinePixelPerfect extension
+- Decided: Placeholder tiles for test room — real tileset PNG not yet sourced; swap in later without script changes
+- Decided: Pixel Perfect Camera PPU = 16 locked (320×180 reference resolution)
+- Decided: craftpix-305231 tileset pack = layered background art (not tile grid); use as SpriteRenderer layers
+- Deleted: `__MACOSX` junk folder from craftpix-305231 pack
+- Built: Placeholder tiles `S_Ground_Placeholder` + `S_Wall_Placeholder` in `Assets/Tiles/` (Unity built-in square sprites, green + grey)
+- Built: `WorldPalette` Tile Palette in `Assets/Tiles/`
+- Built: `Chunk_0_0` with Grid → Ground + Walls tilemaps; Sorting Layer: Ground, Orders 0 and 1
+- Built: Walls tilemap → TilemapCollider2D + CompositeCollider2D (Composite Operation: Merge, Rigidbody2D Static)
+- Built: `RoomBounds` PolygonCollider2D (Is Trigger: true) — 28×18 unit room centered on (0,0) — for CinemachineConfiner2D
+- Built: Pixel Perfect Camera on Main Camera — PPU 16, 320×180, Pixel Snapping
+- Built: CinemachineCamera (3.1.6) with CinemachineFollow + CinemachineConfiner2D → RoomBounds; tracking Mr_chimken
+- Built: `WorldManager` GameObject with WorldChunkManager — Player: Mr_chimken, Chunk: Chunk_0_0
+- Decided: RoomBounds PolygonCollider2D must be Is Trigger = true — solid collider ejects player Rigidbody2D on spawn
+- Decided: Wall tiles block player movement via TilemapCollider2D; RoomBounds is trigger-only for camera confinement
+- Decided: Orthographic size left at 5.625 (correct baseline for 320×180 at 16 PPU)
+- Decided: Assets/Artwork/Creatures/ and Assets/Artwork/Tilesets/ excluded from git — store in Google Drive/OneDrive locally
+- Next: Source proper top-down terrain tileset PNG; repaint room with real tiles; lock tile pixel size in DECISIONS.md; derive A* cell size
+
 [2026-04-12] Phase 1 Wk 5–6 — mr_chimken player controller + animation flip
 - Built: `Assets/Scripts/Player/PlayerController_SideScroll.cs` — new script replacing 8-directional PlayerController for mr_chimken
   - 4-directional movement (unchanged physics — accel/decel, Rigidbody2D, new Input System)
