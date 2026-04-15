@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.anklebreaker.unity-mcp": {
+      "version": "https://github.com/AnkleBreaker-Studio/unity-mcp-plugin.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "b90d01b14677852c9537ae7d7f257d4debe24b57"
+    },
     "com.unity.2d.animation": {
       "version": "13.0.4",
       "depth": 0,
