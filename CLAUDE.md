@@ -220,7 +220,7 @@ Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html  ← Implementation patterns
 Assets/Docs/CHANGELOG.md                            ← Session log
 Assets/Docs/DECISIONS.md                            ← Implementation decisions not in GDD
 Assets/Docs/NumericalCalibration.md                 ← All pending numerical values
-Assets/Docs/LoreBible_Phasix.html                   ← REFERENCE ONLY — old lore, requires revisit
+Assets/Docs/LoreBible_Phasix_(obsolete).html        ← REFERENCE ONLY — old lore, requires revisit
 Assets/Docs/Prototypes/README.md                    ← Pre-dev encounter prototypes (revisit Phase 3)
 Assets/Docs/KNOWN_ISSUES.md                         ← Active bugs/blockers
 ```
