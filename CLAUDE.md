@@ -91,7 +91,7 @@ int vitality, force, resonance, guard, ward, resolve, instinct, aura;
 // Side effect: higher Aptitude before devolving = larger unnamed pool gain
 int aptitude;
 
-// UNNAMED POOL (never resets — display as [POOL_NAME] in UI until named)
+// UNNAMED POOL (never resets — display via GameStrings.PoolName in UI until named)
 int unnamedPool; // grows per devo: excessStats × bondMultiplier
 
 // AURA RESOURCES (runtime — stored in save data, not on SO)
@@ -177,7 +177,7 @@ Flag with `// TODO: pending design — [topic]`
 
 - Species roster (§25) — no species designed, use placeholder SOs
 - Actual skill content (§14) — taxonomy locked, individual skills pending
-- `[POOL_NAME]` — unnamed pool has no player-facing name yet; use token in all UI strings
+- `GameStrings.PoolName` — unnamed pool has no player-facing name yet; reference this constant in all UI strings (defined in `Assets/Scripts/Core/GameStrings.cs`)
 - All NumericalCalibration.md values — pending calibration session
 - Hub identity, realm count, realm emotional identities — pending world design session
 - Faction names and lore details — working names only, pending refinement

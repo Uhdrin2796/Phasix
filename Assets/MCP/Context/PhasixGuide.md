@@ -1,6 +1,10 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.1.0 · April 2026
-**Loaded automatically via `unity_get_project_context` at the start of every planning session.**
+**Version:** 1.2.0 · April 2026
+
+> **⚠️ KNOWN BUG: `unity_get_project_context` has an HTTP 500 bug in this MCP server version.**
+> **Do NOT call it.** Use this workaround to load this file at session start:
+> `unity_execute_code` → `return System.IO.File.ReadAllText(Application.dataPath + "/MCP/Context/PhasixGuide.md");`
+> See `Assets/Docs/KNOWN_ISSUES.md` entry MCP-001 for full details and resolution steps.
 
 ---
 
@@ -44,6 +48,9 @@
 | Sprite setup editor tool | `PhasixSpriteSetup.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | Animator generator tool | `PhasixAnimatorGenerator.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | 2D IK foundation (arms) | `IKManager2D` + 2× `LimbSolver2D` | SampleScene → Mr_chimken/IK | ✅ Done |
+| EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
+| GameManager skeleton | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
+| GameStrings constants | `GameStrings.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 
 **Active scene:** SampleScene
 **Player object:** `Mr_chimken` (placeholder character, bone rig, left-facing → `_rigFacesRight = false`)
@@ -131,13 +138,25 @@ Flag all pending work with `// TODO: pending design — [topic]`
 
 - Species roster — no Phasix designed; use placeholder SOs
 - Skill content — taxonomy locked, individual skills TBD
-- `[POOL_NAME]` — unnamed pool UI label TBD; use token in all UI strings
+- `GameStrings.PoolName` — unnamed pool UI label TBD; reference this constant in all UI strings, never hardcode
 - All NumericalCalibration.md values — pending calibration session
 - Hub count/identity, realm count/emotional identities — pending world design
 - Main quest narrative — pending story session
 - Economy/items (§22), NPC/dialogue (§24), survival/crafting (§20) — all pending
 - Celestial properties — per-species, pending roster
 - Signal interaction multiplier values — logic locked, numbers pending
+
+---
+
+## UI String Convention
+Never hardcode pending player-facing display names. Always reference `GameStrings` constants:
+
+| Constant | Value (placeholder) | Pending |
+|---|---|---|
+| `GameStrings.PoolName` | `[POOL_NAME]` | Unnamed pool player-facing label — pending naming session |
+| `GameStrings.SensitivityName` | `[SENSITIVITY_NAME]` | Sensitivity-haver player-facing term — pending naming session |
+
+**When a name is decided:** update the constant value in `Assets/Scripts/Core/GameStrings.cs` — the entire game updates automatically with no find-replace required.
 
 ---
 

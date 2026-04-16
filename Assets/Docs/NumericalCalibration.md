@@ -95,12 +95,10 @@ Player free allocation weight: ~15% of total growth direction
 Specific passive types and scaling behavior: PENDING — requires skill tree content to be designed first
 
 ### Devolution Aura Cost
-| Tier | Aura Cost On Devo | Notes |
-|---|---|---|
-| T2 devolve to T1 | PENDING | Portion of Specific Aura spent to evolve |
-| T3 devolve to T2 | PENDING | |
-| T4 devolve to T3 | PENDING | |
-| T5 devolve to T4 | PENDING | |
+> **Devolution is FREE — no Aura cost, no conditions, no time limit.**
+> Authority: Evolution_System_Directive_v1_1_0 (supersedes any prior cost language).
+> This table has been removed to prevent implementation of a cost system that contradicts the directive.
+> Do not add cost logic to devolution under any circumstances.
 
 ---
 
@@ -298,7 +296,7 @@ Note: Scaling is smooth and continuous between lanes — not stepped.
 ### Party size
 | Value | Amount | Notes |
 |---|---|---|
-| Active Phasix per side | 3–5 (range) | Exact count pending prototyping |
+| Active Phasix per side | 3 (prototype) | Stored as `BattleConfig.ActivePartySize = 3`. Revisit at Phase 3 gate before building full battle UI — confirm or revise to final value then. |
 
 ---
 
