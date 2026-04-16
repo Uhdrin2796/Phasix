@@ -131,6 +131,16 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 - Decided: Dark Fluffy v1 vs v2 not yet chosen — user is reviewing both; defer to DECISIONS.md once locked
 - Next: In Unity — run Steps 1–5 via Phasix menu; fill clip timelines with frames via Animation window; then verify smoke test
 
+[2026-04-15] Tooling — 2D IK foundation on Mr_chimken
+- Built: `IKManager2D` + 2× `LimbSolver2D` on `Mr_chimken` root (right arm + left arm chains)
+- Built: `IK_Tip_Arm_R/L` — empty tip Transforms as children of `forearm_R/L` with non-zero localPosition offset (matches upper arm bone length)
+- Built: `Mr_chimken/IK/IK_Target_Arm_R` and `IK_Target_Arm_L` — moveable target GOs; drag in Scene view to drive arms
+- Decided: No driving script yet — foundation only; targets moved manually in Play/Edit mode
+- Decided: `solveFromDefaultPose=false`, `runInEditMode=true` — required for code-created IK to function
+- Decided: Scale-flip caveat noted (PlayerController negates localScale.x on flip; targets inherit flip correctly as children of root)
+- Docs: `LESSONS_LEARNED.md` — new §2D IK (LimbSolver2D) with root causes, fix steps, pre-flight checklist
+- Docs: `PhasixGuide.md` v1.1.0 — IK hierarchy + gotcha callout added for future session context
+
 [2026-03-24] Phase 1 Wk 3–4 — PlayerController + Input System
 - Built: `Assets/Scripts/Player/PlayerController.cs` — 8-directional top-down movement, Rigidbody2D, new Input System, smooth accel/decel, Animator support, FreezeMovement/UnfreezeMovement API for Phase 3
 - Built: `.mcp.json` — Context7 MCP server configured for Unity 6000.3.x docs lookup per session

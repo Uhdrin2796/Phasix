@@ -46,6 +46,28 @@ Issues that required significant investigation to resolve. Read before debugging
 
 ---
 
+## 2D IK (LimbSolver2D)
+
+### [IK] LimbSolver2D set up via C# produces no bone movement
+- **Symptom:** `IKManager2D` + `LimbSolver2D` added programmatically. All validity checks pass (`chain.isValid=True`, `allChainsHaveTargets=True`). Moving the IK target in Scene view does nothing. Calling `UpdateIK(float)` and `DoUpdateIK(List<Vector3>)` via reflection also produces zero bone rotation change.
+- **Root cause 1 — Zero-length tip bone:** Tip Transform created as child of `forearm_R` at `localPosition=(0,0,0)`. `LimbSolver2D` computes bone lengths as world-space distances between chain transforms. A zero-length second segment (`forearm→tip = 0 units`) silently breaks the analytical solve — no error, no output.
+- **Root cause 2 — Wrong `UpdateIK` overload:** `UpdateIK(float globalWeight)` silently fails when `solveFromDefaultPose=true` and `StoreLocalRotations()` was never called (stored rotations default to `Quaternion.identity`, producing a degenerate restore→solve cycle). The overload `UpdateIK(List<Vector3> targetPositions, float globalWeight)` — passing target world positions explicitly — works correctly.
+- **Root cause 3 — Edit mode disabled:** `IKManager2D.runInEditMode` defaults to `false`. Moving targets in Scene view has no effect until entering Play mode or explicitly setting `runInEditMode = true`.
+- **Fix:**
+  1. **Non-zero tip offset** — set `IK_Tip.localPosition = new Vector3(forearm.localPosition.x, 0, 0)` so tip is offset by the same length as the upper arm bone.
+  2. **`solveFromDefaultPose = false`** on all `LimbSolver2D` components created via code.
+  3. **`manager.runInEditMode = true`** on `IKManager2D` for Edit mode preview.
+  4. Re-call `chain.Initialize()` after repositioning tip bones so `chain.lengths` recomputes.
+- **Date:** April 2026
+- **Checklist for any future IK setup via code:**
+  - `chain.lengths` — both values must be `> 0` after `Initialize()`, else tip bone has zero offset
+  - `solveFromDefaultPose = false` unless you've explicitly called `StoreLocalRotations()` first
+  - `runInEditMode = true` on `IKManager2D` for Edit mode preview
+  - `LimbSolver2D` always resolves to `transformCount=3` after `Initialize()`: `[shoulder, forearm, tip]` — expected, not a bug
+  - Use `UpdateIK(List<Vector3>, float)` overload when forcing solves from code
+
+---
+
 ## Art & Assets
 
 ### [Assets] Craftpix tower defense tileset (305231) is not a tile grid

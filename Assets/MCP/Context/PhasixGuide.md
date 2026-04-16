@@ -1,5 +1,5 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.0.0 · April 2026
+**Version:** 1.1.0 · April 2026
 **Loaded automatically via `unity_get_project_context` at the start of every planning session.**
 
 ---
@@ -43,9 +43,23 @@
 | Pixel Perfect Camera | 320×180 PPU on Main Camera | SampleScene | ✅ Done |
 | Sprite setup editor tool | `PhasixSpriteSetup.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | Animator generator tool | `PhasixAnimatorGenerator.cs` | `Assets/Scripts/Editor/` | ✅ Done |
+| 2D IK foundation (arms) | `IKManager2D` + 2× `LimbSolver2D` | SampleScene → Mr_chimken/IK | ✅ Done |
 
 **Active scene:** SampleScene
 **Player object:** `Mr_chimken` (placeholder character, bone rig, left-facing → `_rigFacesRight = false`)
+
+> **IK hierarchy on Mr_chimken** (added April 2026)
+> ```
+> Mr_chimken  ← IKManager2D (runInEditMode=true, weight=1)
+>   body/shoulder_R/forearm_R/IK_Tip_Arm_R   ← effector (localPos offset = forearm.localPos.x)
+>   body/shoulder_L/forearm_L/IK_Tip_Arm_L   ← effector
+>   IK/IK_Target_Arm_R   ← move this to drive right arm (LimbSolver2D, solveFromDefaultPose=false)
+>   IK/IK_Target_Arm_L   ← move this to drive left arm
+> ```
+> **IK gotchas — read LESSONS_LEARNED.md §2D IK before modifying:**
+> - Tip bones MUST have non-zero `localPosition` or the solve silently fails
+> - Use `UpdateIK(List<Vector3>, float)` overload when forcing solves from code
+> - `solveFromDefaultPose` must be `false` unless `StoreLocalRotations()` was called first
 
 ---
 

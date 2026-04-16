@@ -328,3 +328,28 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Why:** Real tileset PNG not yet sourced. Placeholder lets tilemap, WorldChunkManager, and Cinemachine camera be fully tested now. Swap in real art without script changes.
 - **Date:** April 2026
 - **Revisit if:** Real tileset is sourced — replace tile sprites in Tile assets, no code changes needed
+
+---
+
+## New Entries — April 2026 IK Session
+
+### [IK] Solver type — LimbSolver2D for arm chains
+- **Decided:** `LimbSolver2D` (from `com.unity.2d.animation`) for both arm chains on Mr_chimken. One solver per arm (`shoulder→forearm→tip`).
+- **Why:** Arms are exactly 2-bone chains — LimbSolver2D is the correct analytical solver for this. CCD/FABRIK are for longer or unknown-length chains.
+- **Alternatives rejected:** `CCDSolver2D` / `FabrikSolver2D` (overkill for 2-bone limbs; slower, no analytical solution)
+- **Date:** April 2026
+- **Revisit if:** A Phasix creature has arm chains longer than 2 bones — use CCDSolver2D in that case
+
+### [IK] Foundation only — no driving script this session
+- **Decided:** IK targets (`IK_Target_Arm_R/L`) left as free-floating GameObjects. No script drives them yet.
+- **Why:** Exploring IK behaviour first before committing to a specific use case (mouse-aim, procedural sway, foot planting, etc.).
+- **Alternatives rejected:** Mouse-follow script, procedural sway script (deferred until use case is confirmed)
+- **Date:** April 2026
+- **Revisit if:** A concrete use case is decided — add a driving script at that point
+
+### [IK] solveFromDefaultPose=false + runInEditMode=true required for code-created IK
+- **Decided:** All `LimbSolver2D` components created via `unity_execute_code` must have `solveFromDefaultPose=false`. `IKManager2D` must have `runInEditMode=true`.
+- **Why:** `solveFromDefaultPose=true` requires `StoreLocalRotations()` to be called first — skipping it causes a degenerate restore cycle that silently breaks the solve. `runInEditMode=false` means targets can't be tested without entering Play mode.
+- **Alternatives rejected:** `solveFromDefaultPose=true` with manual `StoreLocalRotations()` call (fragile, extra step, no benefit for foundation setup)
+- **Date:** April 2026
+- **Revisit if:** Never for code-created setups. Inspector-created IK can use defaults safely.
