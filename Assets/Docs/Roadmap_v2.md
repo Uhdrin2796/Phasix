@@ -80,12 +80,25 @@
 
 ### Milestones
 
+#### Phase 2 Kickoff — Core: EventBus + GameManager + GameStrings
+- Create `Assets/Scripts/Core/EventBus.cs` — static class, typed `event Action<T>` delegates, null-safe Raise helpers
+  - Phase 2 live events: `OnBondChanged`, `OnBondMilestoneReached`
+  - Phase 3 stubs (defined, no subscribers yet): `OnBattleWon`, `OnBattleLost`, `OnSkillUsed`, `OnTimedInputSuccess`, `OnDamageTaken`
+  - Phase 4 stubs: `OnEvolved`, `OnDevolved`, `OnPhasixCaptured`, `OnAuraDropped`
+- Create `Assets/Scripts/Core/GameManager.cs` — singleton MonoBehaviour skeleton, `DontDestroyOnLoad`
+  - Add `_GameManager` empty GameObject to SampleScene with script attached
+  - No logic — placeholder for future system references (BattleManager, SaveManager, etc.)
+- Create `Assets/Scripts/Core/GameStrings.cs` — static class with pending display name constants
+  - `GameStrings.PoolName` and `GameStrings.SensitivityName` — reference everywhere in UI, never hardcode
+  - When names are decided: update the constant here, entire game updates automatically
+- **Tags:** Core/ · EventBus static · GameManager singleton · GameStrings constants
+
 #### Wk 9 — PhasixData ScriptableObject — full schema
 - Implement all 8 base stats: Vitality, Force, Resonance, Guard, Ward, Resolve, Instinct, Aura
 - Temper enum (Edge / Anchor / Flux)
 - Personality enum (16 traits)
 - Two-layer stat system: base stats layer + unnamed pool layer — both always visible in UI
-- Use `[POOL_NAME]` token for unnamed pool in all UI strings until GDD names it
+- Reference `GameStrings.PoolName` for unnamed pool in all UI strings — never hardcode; update the constant in GameStrings.cs when name is decided
 - Bond float (0–100), bondFloor float, phaseSaturation float
 - **Aptitude** — separate persistent int field (devolution counter, never resets). Grows +1 per devo cycle. Not a base stat — do not put in the 8-stat group.
 - **Aura resources** — NOT on the ScriptableObject. Runtime state in save data only: commonAura, specificAuraDict (by emotional type), rareVariantAura. Scaffold the save-data struct here; implementation in Phase 4 save system.
@@ -141,6 +154,8 @@
 - Coroutine-driven sequence
 - HP bars, name plates, move menu UI
 - Enemy uses random move selection for now
+- **Active party size:** Use `BattleConfig.ActivePartySize = 3` as prototype constant — never magic-number this value. Revisit at Phase 3 gate before building full battle UI; confirm or revise to final value then.
+- **IK driving script:** Defer to this phase. Evaluate Option D — arm IK targets move toward target lane during attack animations. See `LESSONS_LEARNED.md §2D IK` before implementing.
 - **Tags:** State machine · Coroutines · GDD §16 Partial
 
 #### Mo 5 Wk 3–4 — Timed input system
@@ -259,14 +274,14 @@
 
 #### Mo 10–11 — Devolution + unnamed pool growth
 - On devolve: base stats reset to tier floor, unnamed pool grows by `excessStats × bondMultiplier`
-- Devolution costs Specific Aura (portion of what was spent to evolve — exact values pending NumericalCalibration.md, scaffold with `// TODO` constant)
+- **Devolution is FREE — no cost, no conditions, no time limit.** Authority: Evolution_System_Directive_v1_1_0
 - Bond fully preserved on devolve
 - Aptitude grows +1 on devolve (raises stat ceiling for next cycle — see Progression_Directive Function A)
 - Higher Aptitude before devolving = larger unnamed pool gain (side effect of higher stat ceiling = more excess stats)
 - All evolution branches reopen
 - Skill library preserved — all previously learned skills remain accessible
 - High bond gain on devolve/re-evolve cycle (highest single bond gain action)
-- **Tags:** Progression_Directive · GDD §3 + §5 Locked · Devo costs Specific Aura · Pool growth formula · Aptitude +1 · Skill library preserved
+- **Tags:** Progression_Directive · GDD §3 + §5 Locked · Devolution FREE · Pool growth formula · Aptitude +1 · Skill library preserved
 
 #### Mo 11 — Item-gated evolution + Fusion scaffold
 - Item-gated: standard threshold met + specific key item consumed on top; item returned on devolve
@@ -348,7 +363,7 @@
 #### Mo 17–18 — Audio system + full UI pass
 - Audio Manager singleton (FMOD or Unity built-in — see DECISIONS.md)
 - Zone BGM per region, battle music with intro + loop, SFX per skill type
-- Full UI redesign: party screen, storage box, skill tree browser showing all 18 types, bond display showing both stat layers, unnamed pool display (use `[POOL_NAME]` until locked)
+- Full UI redesign: party screen, storage box, skill tree browser showing all 18 types, bond display showing both stat layers, unnamed pool display (reference `GameStrings.PoolName` — update the constant in GameStrings.cs when name is decided)
 - Asset Store or free JRPG audio packs
 - **Tags:** AudioManager · UI Toolkit · Unnamed pool UI · FMOD decision
 
@@ -419,4 +434,4 @@ These are implementation choices that cannot be made until development reaches t
 |---------|------|---------|
 | v1.0 | March 2026 | Initial roadmap — 18 months, 5 phases, generic structure |
 | v2.0 | March 2026 | GDD-aligned revision — skill tree system integrated, 9-attribute schema, full bond floor logic, status engine detail, 20-month timeline, all pending items flagged |
-| v2.1 | March 2026 | Design session sync — Aura system replaces XP/leveling throughout (Progression_Directive), stat minimum replaces level floor, devolution costs Specific Aura, Aptitude mechanics clarified, Hub + Realms replaces Region 1/2/3/4 identity refs (WorldDesign_Directive), 8 base stats (Aptitude removed from stat group), PhasixData replaces MonsterData, loss state refs updated (no Aura loss), pending table updated with Calendar/3-layer encounter/Hub+Realm identity gaps |
+| v2.1 | March 2026 | Design session sync — Aura system replaces XP/leveling throughout (Progression_Directive), stat minimum replaces level floor, devolution cost was initially scoped (superseded — devolution is FREE per Evolution_System_Directive_v1_1_0), Aptitude mechanics clarified, Hub + Realms replaces Region 1/2/3/4 identity refs (WorldDesign_Directive), 8 base stats (Aptitude removed from stat group), PhasixData replaces MonsterData, loss state refs updated (no Aura loss), pending table updated with Calendar/3-layer encounter/Hub+Realm identity gaps |

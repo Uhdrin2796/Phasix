@@ -22,7 +22,8 @@ When documents conflict — the more specific Directive always wins over the GDD
 | Document | Version | Location | Covers | Notes |
 |---|---|---|---|---|
 | GDD_Phasix | v0.8.0 | Docs/GDD_CreatureRPG_v0_8_0.html | Master design document — all core systems | §21 XP/leveling superseded by Progression Directive. §3 tier structure superseded by Evolution Directive. §19, §24 supplemented by World Design Directive. §18 supplemented by Combat Directive. |
-| Evolution_System_Directive | v1.1.0 | Docs/Evolution_System_Directive_v1_1_0.pdf | Evolution web, devolution (free), fusion, tier structure, Unity implementation | Supersedes GDD §3 tier structure. Supersedes Progression_Directive devolution cost section. Primary evolution authority. |
+| Evolution_System_Directive | v1.1.0 | Docs/Evolution_System_Directive_v1_1_0.pdf | Evolution web, devolution (free), fusion, tier structure, Unity implementation | Supersedes GDD §3 tier structure. Supersedes Progression_Directive devolution cost section. Primary evolution authority. **PDF is canonical source.** |
+| Evolution_System_Directive (MCP mirror) | v1.1.0 | Docs/Evolution_System_Directive_v1_1_0.md | Full plain-text Markdown mirror of the PDF above | MCP-readable version. If content conflicts with the PDF, the PDF takes precedence. |
 | Progression_Directive | v0.1.0 | Docs/Progression_Directive_v0_1_0.md | Aura system, stat growth, Aptitude, evolution gating | Supersedes GDD §21 XP/leveling model. Note: devolution cost section superseded by Evolution_System_Directive (devolution is now free). |
 | WorldDesign_Directive | v0.1.0 | Docs/WorldDesign_Directive_v0_1_0.md | World structure (Multiple Hubs + Realms), encounter initiation, calendar, factions, visibility model, blackout/banking, perspective model, bone rigs, narrative arc | Supplements GDD §19, §24 |
 | Combat_Directive | v0.1.0 | Docs/Combat_Directive_v0_1_0.md | Combat perspective, 7-lane stage, action commands, turn structure | Supplements GDD §18 |
@@ -62,11 +63,11 @@ When documents conflict — the more specific Directive always wins over the GDD
 
 | Content | Location | Status |
 |---|---|---|
-| The Fracture event lore | LoreBible_Phasix.html | Auto-filled without approval in prior session. Shifted significantly. Requires full revisit before any implementation. |
-| Phase Dimension details | LoreBible_Phasix.html | Same as above |
-| Original Five Factions | LoreBible_Phasix.html | Same as above. New faction framework (Suppressors/Amplifiers/Avoiders/Integrators) is working replacement — also pending refinement. |
-| Elemental Frequencies (Ignis/Virel/Aether/Veil/Flux) | LoreBible_Phasix.html | Deferred — relationship to PrimalType and emotionalType unclear. Do not implement until lore revisit session resolves this. |
-| LoreBible_Phasix.html | Docs/LoreBible_Phasix.html | REFERENCE ONLY. Contains: Vorthex encounter prototype (→ Prototypes/ revisit Phase 3), emotional root system (compatible with WorldDesign_Directive), Phasix visibility model (adopted). Deprecated sections: Fracture lore, Phase Dimension, Five Factions, Elemental Frequencies (all pending lore revisit). Do not implement any section without explicit approval. |
+| The Fracture event lore | LoreBible_Phasix_(obsolete).html | Auto-filled without approval in prior session. Shifted significantly. Requires full revisit before any implementation. |
+| Phase Dimension details | LoreBible_Phasix_(obsolete).html | Same as above |
+| Original Five Factions | LoreBible_Phasix_(obsolete).html | Same as above. New faction framework (Suppressors/Amplifiers/Avoiders/Integrators) is working replacement — also pending refinement. |
+| Elemental Frequencies (Ignis/Virel/Aether/Veil/Flux) | LoreBible_Phasix_(obsolete).html | Deferred — relationship to PrimalType and emotionalType unclear. Do not implement until lore revisit session resolves this. |
+| LoreBible_Phasix_(obsolete).html | Docs/LoreBible_Phasix_(obsolete).html | REFERENCE ONLY. Contains: Vorthex encounter prototype (→ Prototypes/ revisit Phase 3), emotional root system (compatible with WorldDesign_Directive), Phasix visibility model (adopted). Deprecated sections: Fracture lore, Phase Dimension, Five Factions, Elemental Frequencies (all pending lore revisit). Do not implement any section without explicit approval. |
 
 ---
 
