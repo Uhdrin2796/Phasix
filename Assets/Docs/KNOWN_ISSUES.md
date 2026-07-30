@@ -7,21 +7,17 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
+*(none currently — MCP-001 below was closed when the Unity MCP bridge migrated from AnkleBreaker to CoplayDev; see CHANGELOG.md July 2026)*
+
 ---
 
-### [MCP-001] — unity_get_project_context HTTP 500 bug
-**Status:** Has Workaround
-**Affects:** MCP session startup — `unity_get_project_context` tool
-**Description:** Calling `unity_get_project_context` returns an HTTP 500 error in the current MCP server version. The tool fails silently, leaving the MCP without project context for the entire session. This means architecture rules, pending systems, code style, and the no-NavMesh/SO-read-only constraints are unknown to the MCP.
-**Workaround:** Use `unity_execute_code` to load PhasixGuide.md directly at session start:
-```csharp
-return System.IO.File.ReadAllText(Application.dataPath + "/MCP/Context/PhasixGuide.md");
-```
-This is documented in the CLAUDE.md Planning Session Checklist and in the PhasixGuide.md header.
-**Resolution:** Will be fixed in a future MCP server version update. When fixed:
-- Remove this entry
-- Remove the workaround note from the PhasixGuide.md header
-- Restore `unity_get_project_context` to the CLAUDE.md planning checklist
+## Closed Issues
+
+### [MCP-001] — unity_get_project_context HTTP 500 bug — CLOSED (moot)
+**Status:** Closed — moot, not fixed
+**Affects:** Was: MCP session startup under the old AnkleBreaker unity-mcp server
+**Description:** Calling `unity_get_project_context` returned an HTTP 500 error under AnkleBreaker's MCP server. Resolved not by a bug fix but by the July 2026 migration to CoplayDev/unity-mcp — the CoplayDev tool catalog has no `unity_get_project_context` tool at all (confirmed against the live `tool-groups` resource), so the bug can't recur. Project context now comes from reading `PhasixGuide.md` directly (Claude Code has filesystem access) plus the `mcpforunity://editor/state` resource for live Unity status.
+**Closed:** July 2026, alongside the MCP migration.
 
 ---
 

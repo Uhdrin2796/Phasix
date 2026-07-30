@@ -1,10 +1,10 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.2.0 · April 2026
+**Version:** 1.3.0 · July 2026
 
-> **⚠️ KNOWN BUG: `unity_get_project_context` has an HTTP 500 bug in this MCP server version.**
-> **Do NOT call it.** Use this workaround to load this file at session start:
-> `unity_execute_code` → `return System.IO.File.ReadAllText(Application.dataPath + "/MCP/Context/PhasixGuide.md");`
-> See `Assets/Docs/KNOWN_ISSUES.md` entry MCP-001 for full details and resolution steps.
+> Unity MCP bridge is CoplayDev/unity-mcp (migrated from AnkleBreaker July 2026 — see
+> DECISIONS.md → [Tooling]). Load this file by reading it directly (Claude Code has
+> filesystem access); no Unity round-trip tool call needed. For live Unity status, read the
+> `mcpforunity://editor/state` resource.
 
 ---
 
@@ -51,6 +51,11 @@
 | EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | GameManager skeleton | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | GameStrings constants | `GameStrings.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
+| BattleResult stub | `BattleResult.cs` | `Assets/Scripts/Core/` | ✅ Stub (Phase 3 pending) |
+| PhasixData SO (species/form template) | `PhasixData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
+| PhasixRuntimeData (per-individual state) | `PhasixRuntimeData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
+| Supporting types (StatType, BondZone, Temper, OriginType, TempoType, SignalType, Personality, SkillTreeType, PrimalType, StatBlock, EvolutionHistoryEntry) | `PhasixEnums.cs`, `PrimalType.cs`, `StatType.cs`, `BondZone.cs`, `StatBlock.cs`, `EvolutionHistoryEntry.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
+| SkillData stub | `SkillData.cs` | `Assets/Scripts/Creatures/` | ✅ Stub (full skill content pending roster) |
 
 **Active scene:** SampleScene
 **Player object:** `Mr_chimken` (placeholder character, bone rig, left-facing → `_rigFacesRight = false`)
@@ -74,9 +79,11 @@
 ```
 Assets/
   Scripts/
-    Core/        ← GameManager, EventBus, SaveManager (pending)
+    Core/        ← GameManager, EventBus, BattleResult (stub); SaveManager (pending)
     Player/      ← PlayerController, PlayerController_SideScroll
-    Creatures/   ← PhasixData, BondSystem, EvolutionManager, CompanionAI (pending)
+    Creatures/   ← PhasixData, PhasixRuntimeData, StatBlock, EvolutionHistoryEntry,
+                   PhasixEnums, PrimalType, StatType, BondZone, SkillData (stub) — done;
+                   BondSystem, EvolutionManager, CompanionAI (pending)
     Evolution/   ← EvolutionEvaluator, Executor, Pathfinder, WebController (pending)
     Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator (pending)
     World/       ← WorldChunkManager, EncounterTrigger, ZoneManager (pending)
@@ -92,44 +99,57 @@ Assets/
     TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table, pending)
     Aura/        ← AuraTypeData SOs (pending)
   MCP/
-    Context/     ← This file (loaded by unity_get_project_context)
+    Context/     ← This file (read directly by Claude Code, no Unity round-trip)
 ```
 
 ---
 
 ## Applicable MCP Tools for Phasix (by priority)
 
-### 🔴 Core — Used Every Session
-Scripts, Components, GameObjects, Prefabs, ScriptableObjects, Console, Compilation errors, Scene management
+Rewritten July 2026 against CoplayDev/unity-mcp's actual tool catalog (verified live via
+the `tool-groups` resource) — the previous version described AnkleBreaker's tool
+categories, which no longer apply. All groups below were observed already active in this
+project; if a tool is ever missing, `manage_tools(action='activate', group='<name>')`
+turns its group on.
+
+### 🔴 Core — Used Every Session (always on, 25 tools)
+`manage_scene`, `manage_gameobject`, `manage_prefabs`, `manage_asset`, `manage_components`,
+`manage_material`, `manage_camera`, `manage_physics`, `manage_editor` (play mode, tags,
+layers, undo/redo), `manage_build`, `manage_packages`, `create_script`, `manage_script`,
+`script_apply_edits`, `apply_text_edits`, `delete_script`, `validate_script`, `find_gameobjects`,
+`find_in_file`, `get_sha`, `read_console`, `refresh_unity`, `execute_menu_item`, `batch_execute`
 
 ### 🔴 High Priority (Phase 2+)
-- **Animation (24 tools)** — Phasix animator controllers, battle transition, UI animations
-- **Input System (8 tools)** — Action commands (timed battle inputs), battle/hub menu input
-- **Tags & Layers (5 tools)** — 7-lane sorting layers (Lane1–Lane7), physics layer matrix
-- **Textures (5 tools)** — 16 PPU pixel art import on every new art asset
-- **UI (5 tools)** — Battle UI, stat allocation UI, bond display, evolution menu
+- **`manage_scriptable_object`, `execute_code`** (scripting_ext group) — every Creatures/Data
+  SO: PhasixData, SkillData, and future EvolutionBranchData/AuraTypeData/PrimalTypeChart assets
+- **`manage_animation`** — Phasix animator controllers, battle transitions, UI animation
+- **`manage_ui`** (UI Toolkit — UXML/USS/UIDocument) — battle UI, stat allocation UI, bond
+  display, evolution menu
+- **`unity_docs`, `unity_reflect`** (docs group) — verify Unity APIs live before writing
+  code; training data may be stale, use before assuming a class/member exists
 
 ### 🟡 Medium Priority (specific systems)
-- **Physics (6 tools)** — collision matrix, lane raycasts for battle targeting
-- **Sprite Atlas (7 tools)** — creature/UI sprite batching (Phase 4+)
-- **Shader Graph (14 tools)** — aura glow, type hit flash, evolution/devolution effects
-- **Particle System (6 tools)** — action command feedback, aura drop VFX, evolution sequence
-- **Lighting (5 tools)** — per-realm emotional atmosphere (2D Light2D)
-- **Audio (3 tools)** — AudioManager, Signal Type cues, action command SFX
-- **Assembly Definitions (8 tools)** — Combat/Creatures/World/UI/Core/Save/Editor asmdefs
-- **Settings (9 tools)** — URP renderer, Physics2D (zero gravity top-down), time step
+- **`manage_shader`, `manage_texture`, `manage_vfx`** (vfx group) — aura glow, type-hit
+  flash, evolution/devolution effects, 16 PPU pixel art import. Confirm whether `manage_vfx`
+  targets VFX Graph or legacy Particle System before using it for 2D effects — not yet
+  verified which this project's setup prefers.
+- **`run_tests`, `get_test_job`** (testing group) — EditMode tests for damage formula/bond
+  math once those systems exist
+- **`manage_profiler`** (profiling group) — perf/memory work, low priority until real
+  content exists to profile
 
-### 🟢 Low Priority (optimization/dev tooling)
-Profiler & Memory, Debugger, Testing (EditMode tests for damage formula/bond math)
+### 🟢 Situational
+- **`generate_audio`, `generate_image`, `generate_model`, `import_model`,
+  `import_model_file`** (asset_gen group) — AI-assisted generation/import, bring-your-own-key.
+  CLAUDE.md's stated pipeline is Asset Store art, not AI-generated — treat this group as a
+  prototyping/placeholder option, not the primary art pipeline, unless told otherwise.
 
 ### ❌ NOT APPLICABLE — Never suggest these for Phasix
-- **Terrain** — 2D Tilemap world, no 3D terrain
-- **NavMesh** — using A* Pathfinding Project
-- **MPPM** — no multiplayer
-- **UMA** — custom pixel art sprites
-- **Amplify Shader** — using URP Shader Graph
-- **LOD** — 2D game
-- **VFX Graph** — Particle System preferred for 2D
+- **`manage_probuilder`** — 3D modeling; Phasix is 2D Tilemap, no 3D level geometry
+- **NavMesh** — not in this MCP's tool catalog at all; project uses A* Pathfinding Project
+- **MPPM** — no multiplayer in this project
+- **UMA** — custom pixel-art sprites, not UMA humanoid generation
+- **LOD** — 2D game, not applicable
 
 ---
 
@@ -177,11 +197,19 @@ Never hardcode pending player-facing display names. Always reference `GameString
 ```
 Assets/Docs/DOCUMENT_INDEX.md                       ← Read first
 Assets/Docs/ClaudeCode_Primer_v1_1_0.md             ← Full spec
-Assets/Docs/Evolution_System_Directive_v1_1_0.pdf   ← Supersedes GDD §3
+Assets/Docs/GDD_CreatureRPG_v0_8_0.html              ← Master GDD — Primal/Signal/Origin/
+                                                        Tempo/Personality/Skill Tree systems
+Assets/Docs/Evolution_System_Directive_v1_1_0.md    ← Supersedes GDD §3 (full .md mirror of
+                                                        the canonical .pdf; has internal
+                                                        inconsistencies — see DECISIONS.md)
 Assets/Docs/Progression_Directive_v0_1_0.md         ← Supersedes GDD §21
 Assets/Docs/Combat_Directive_v0_1_0.md              ← Combat + 7-lane stage
 Assets/Docs/WorldDesign_Directive_v0_1_0.md         ← World, calendar, factions
 Assets/Docs/NumericalCalibration.md                 ← All pending numerical values
+Assets/Docs/DECISIONS.md                            ← Implementation decisions not in GDD —
+                                                        includes Creatures architecture
+                                                        rationale + unbuilt future-systems notes
+Assets/Docs/LESSONS_LEARNED.md                      ← Debugging traps hit before — check first
 Assets/Docs/CHANGELOG.md                            ← Session log
 Assets/Docs/KNOWN_ISSUES.md                         ← Active bugs
 ```

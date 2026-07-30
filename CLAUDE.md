@@ -194,10 +194,9 @@ Flag with `// TODO: pending design — [topic]`
 
 ## Planning Session Checklist
 At the start of every planning session, run these three calls **before writing a single line of plan:**
-1. Read `Assets/MCP/Context/PhasixGuide.md` via `unity_execute_code` — full architecture, what's built, what's pending, applicable MCP tools. Use: `return System.IO.File.ReadAllText(Application.dataPath + "/MCP/Context/PhasixGuide.md");`
-   *(Note: `unity_get_project_context` has a known HTTP 500 bug in this MCP server version — use the execute_code workaround above)*
-2. `unity_editor_state` — confirms Unity is open, which scene is active, and compilation status
-3. `unity_get_compilation_errors` — surface any broken state before planning new features
+1. Read `Assets/MCP/Context/PhasixGuide.md` — full architecture, what's built, what's pending, applicable MCP tools. Read it directly (Claude Code has filesystem access); no Unity round-trip needed.
+2. `mcpforunity://editor/state` resource (via `ReadMcpResourceTool`) — confirms Unity is open, which scene is active, focus state, and compilation status
+3. `read_console` with `types: ["error"]` — surface any broken state before planning new features
 
 ---
 
