@@ -83,6 +83,46 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Date:** March 2026
 - **Revisit if:** Name needs to be locked before any player-facing text is written
 
+### [Art] Placeholder-first pipeline — colored primitives until the game reaches a working state
+- **Decided:** Refines the March 2026 `[Art] Art pipeline` entry further — even Asset Store
+  sprite sourcing is now deferred, not just a custom art pipeline. Until the game is
+  genuinely playable end-to-end (core systems functional, not just compiling), new visual
+  needs are met with Unity's built-in primitive sprites tinted via `SpriteRenderer` color,
+  the same approach already locked for tilemap tiles in the April 2026 Tilemap Session.
+  - **Mr_chimken (player):** unchanged. Already has a working bone-rigged placeholder with
+    IK — not worth touching.
+  - **Phasix creatures:** represented by a colored shape derived systematically from
+    `PrimalType`, not hand-picked per species (no roster exists yet to hand-pick against
+    anyway). Base 8 types reuse the exact hex colors already locked in the GDD's own Primal
+    wheel diagram (§9) rather than inventing a new palette:
+
+    | Type | Hex | Type | Hex |
+    |---|---|---|---|
+    | Fire | `#C04020` | Light | `#807010` |
+    | Water | `#1A6A9A` | Shadow | `#503070` |
+    | Earth | `#7A5A20` | Life | `#2A7A2A` |
+    | Wind | `#207A40` | Lightning | `#B09020` |
+
+    The 28 duo-merge types derive their color by blending their two parent base colors
+    (not hand-authored individually) — keeps this systematic and cheap to extend if the
+    roster grows.
+  - **Tilemap:** no change — keeps the existing green/grey placeholder squares from the
+    April 2026 Tilemap Session. A `tileset.PNG` was found in `Assets/Artwork/Tilesets/`
+    during this discussion and investigated: it's a 334×512px promotional/cover thumbnail
+    (baked-in text labels, rounded panel framing per "UNIVERSE 1/2/3" branding), not a raw
+    sliceable tile grid, and its `.meta` confirms it was never sliced. Rejected as a source;
+    not worth chasing down a replacement right now either.
+- **Why:** The goal is to reach a working, playable prototype as fast as possible without
+  art-sourcing blocking gameplay-system development (Bond, Combat, Evolution, etc.). Real
+  art and animation work is explicitly deferred to **after** that milestone, not skipped.
+- **Alternatives rejected:** Sourcing a minimal real tileset now (the original Wk 7–8 plan)
+  — deferred in favor of finishing core systems first. Simplifying Mr_chimken too — rejected
+  since it already works and isn't blocking anything.
+- **Date:** July 2026
+- **Revisit if:** The game reaches a genuinely playable, systems-complete state (all core
+  loops functional) — that's the trigger to begin real art/animation work, per the March
+  2026 `[Art] Art pipeline` entry this one refines.
+
 ---
 
 ## World & Architecture

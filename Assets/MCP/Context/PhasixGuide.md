@@ -156,6 +156,13 @@ layers, undo/redo), `manage_build`, `manage_packages`, `create_script`, `manage_
 ## What Is Pending — Scaffold Only
 Flag all pending work with `// TODO: pending design — [topic]`
 
+> **Art strategy (July 2026):** Real art/animation is intentionally deferred until the game
+> reaches a playable, systems-complete state. Until then, any new visual need (Phasix
+> creatures, new NPCs) gets a colored Unity primitive sprite, not sourced art — Phasix
+> color derives from `PrimalType` (table in `DECISIONS.md` → [Art]). Do not go looking for
+> or suggesting sourcing real creature/NPC art before that milestone is reached. Mr_chimken
+> and the tilemap's existing placeholder tiles are unaffected — already fine as they are.
+
 - Species roster — no Phasix designed; use placeholder SOs
 - Skill content — taxonomy locked, individual skills TBD
 - `GameStrings.PoolName` — unnamed pool UI label TBD; reference this constant in all UI strings, never hardcode

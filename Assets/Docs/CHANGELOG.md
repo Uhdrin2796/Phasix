@@ -18,6 +18,18 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-30] Art — placeholder-first pipeline decided (colored primitives, real art deferred)
+- Decided: New visual needs (Phasix creatures, future NPCs) use Unity built-in primitive
+  sprites tinted by `PrimalType`-derived color, not sourced art — extends the same approach
+  already used for tilemap placeholder tiles. Mr_chimken and the existing tilemap are
+  unchanged. Full rationale, the 8-color base table, and the merge-blending rule are in
+  `DECISIONS.md` → [Art]
+- Investigated: `Assets/Artwork/Tilesets/tileset.PNG` — a candidate real tileset the user
+  thought was already in the project. Turned out to be a 334×512px promotional cover
+  thumbnail, not sliceable tile content; rejected as a source
+- Next: real art/animation work is intentionally deferred until the game reaches a
+  playable, systems-complete state — not scheduled yet
+
 [2026-07-30] Creatures — Origin moved from PhasixData to PhasixRuntimeData
 - Changed: `origin` field removed from `PhasixData` (SO), added to `PhasixRuntimeData`,
   matching how `temper`/`personality` already live there
