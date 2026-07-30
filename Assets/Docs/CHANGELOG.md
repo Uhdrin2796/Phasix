@@ -41,7 +41,21 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
   (16x16 equivalent, 1 world unit/tile, matches the existing Grid's cellSize already in the
   scene) and A* cell size (0.5 units, for smoother companion-following pathing). Full
   rationale in `DECISIONS.md`.
-- Next: Wk 11 — Personality's full mechanic (rolling on capture, item-based swap)
+- Next: the PrimalType-driven colored placeholder sprite for Phasix (the visual piece of
+  the placeholder-first art pipeline decision below — not built yet, will be the first
+  thing from recent sessions actually visible on screen), then Wk 11 — Personality's full
+  mechanic (rolling on capture, item-based swap)
+
+---
+### Session close — 2026-07-30
+Pushed through `0fe3d2c`. Everything built today (PhasixData, PhasixRuntimeData, Bond
+System, supporting types) is backend/data logic only — no GameObjects, no scene changes,
+nothing visible in the Editor yet, which is expected, not a bug. Pick up tomorrow with the
+PrimalType placeholder-visual piece (see "Next" above) — that's the first thing that'll
+actually render something. `git status` is clean except for the pre-existing, unrelated
+`SampleScene.unity` modification and untracked `Screenshots/` from an earlier IK session —
+neither is this session's concern.
+---
 
 [2026-07-30] Art — placeholder-first pipeline decided (colored primitives, real art deferred)
 - Decided: New visual needs (Phasix creatures, future NPCs) use Unity built-in primitive
