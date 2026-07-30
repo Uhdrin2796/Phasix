@@ -213,14 +213,31 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Revisit:** Once user decides on creature color palette / evolution visual language
 
 ### [A* grid] Cell size
-- **Status:** Undecided — depends on tile size chosen
-- **Revisit:** Phase 1, during tilemap setup
-- **Note:** Common values: 0.5 units (32px tiles at 16 PPU), 1.0 unit (32px tiles at 32 PPU)
+- **Decided:** 0.5 world units per A* node
+- **Why:** Half the tile's world-unit size (see `[Tileset] Tile base size` below — 1 unit/tile)
+  gives finer navigation resolution, which matters for smooth companion-following pathing
+  around obstacles (Wk 12–13). Chunk-based worlds (already decided — `WorldChunkManager`)
+  keep the extra node count from being a real performance concern at this world scale.
+- **Alternatives rejected:** 1.0 unit (matches tile size 1:1, cheaper to bake, but coarser
+  companion movement — not worth it at this scale)
+- **Date:** July 2026
+- **Revisit if:** Companion pathing looks too grid-locked even at 0.5, or profiling shows
+  the extra nodes are actually a cost worth caring about
 
 ### [Tileset] Tile base size
-- **Status:** Undecided — 16×16 or 32×32
-- **Revisit:** Phase 1, when first Asset Store tileset is purchased
-- **Note:** Technical Directive references 16×16 or 32×32 as valid; choice locks pixel-per-unit settings
+- **Decided:** 16×16 px equivalent, at 1 world unit per tile — matches the already-locked
+  16 PPU Pixel Perfect Camera exactly (see `[Camera] Pixel Perfect Camera PPU locked`,
+  April 2026), no scale mismatch.
+- **Why:** The placeholder-first art pipeline (see `[Art] Placeholder-first pipeline`,
+  July 2026) means no real tileset PNG is being sourced right now — this locks the world
+  *scale* the existing placeholder tiles already occupy, so A* grid size and future real
+  tile art both have a stable target instead of staying open indefinitely.
+- **Alternatives rejected:** 32×32 px (2 units/tile) — would double world unit scale
+  against the creature sprite pipeline, which is already locked at 32 PPU import settings
+  matching a 16 PPU camera baseline; keeping tiles at 1 unit avoids that mismatch.
+- **Date:** July 2026
+- **Revisit if:** A real tileset is eventually sourced at a different native pixel size —
+  reconcile then, don't assume 16×16 forever.
 
 ---
 
@@ -344,11 +361,11 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Date:** April 2026
 - **Revisit if:** Never — PPU is locked to the camera resolution choice
 
-### [Tileset] Tile pixel size — PENDING
-- **Status:** Undecided — tile grid PNG not yet sourced
-- **Impact:** Determines world unit scale per tile. 16×16 px = 1 unit/tile at 16 PPU. 32×32 px = 2 units/tile at 16 PPU.
-- **Impact on A* cell size:** A* node size = tile world unit size (or half for finer navigation)
-- **Revisit:** When real tileset PNG is imported — lock this entry immediately
+### [Tileset] Tile pixel size — LOCKED July 2026
+- **Decided:** 16×16 px equivalent, 1 world unit per tile. See `[Tileset] Tile base size`
+  (Pending Decisions section, July 2026) for the full decision — locked without waiting for
+  a real tileset PNG, per the placeholder-first art pipeline.
+- **A* cell size:** 0.5 units — see `[A* grid] Cell size` (Pending Decisions section).
 
 ### [Camera] Cinemachine version
 - **Decided:** Cinemachine 3.1.x (Unity 6 package). Using `CinemachineCamera` component (not legacy `CinemachineVirtualCamera`). CinemachineConfiner2D for room boundary confinement. CinemachinePixelPerfect extension for lens sync.

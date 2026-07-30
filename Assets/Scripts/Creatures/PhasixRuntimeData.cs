@@ -93,6 +93,16 @@ public class PhasixRuntimeData
     /// <summary>Highest bond milestone floor reached. Permanent — never decreases.</summary>
     public float bondFloor;
 
+    /// <summary>
+    /// Cumulative bond loss applied this session (magnitude, not signed). Not in the
+    /// literal schema — added so BondSystem can enforce the locked "session loss cap: 5%
+    /// max regardless of event count" rule. Reset by BondSystem.ResetSessionLoss(), which
+    /// should be called on hub visit / bank once that system exists (Blackout and Banking,
+    /// WorldDesign_Directive_v0_1_0.md) — currently nothing calls it, so this only tracks
+    /// within a single continuous play session.
+    /// </summary>
+    public float sessionBondLoss;
+
     /// <summary>Accumulates toward evolution thresholds. Resets to 0 on evolution.</summary>
     public float phaseSaturation;
 

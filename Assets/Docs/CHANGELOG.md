@@ -18,6 +18,31 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-30] Phase 2 Wk 10 — Bond System implemented and verified
+- Built: `Assets/Scripts/Creatures/BondSystem.cs` — static rules-enforcement layer for bond
+  gain/loss: floor logic (`newBond = max(newBond, bondFloor)`), session loss cap (5% max),
+  damping above 60%/80% (halved/quartered), 100% permanent immunity, multi-milestone
+  detection in one call. Wires `EventBus.Raise_BondChanged`/`Raise_BondMilestoneReached` —
+  `EventBus.cs`'s own comment said these were "wired in BondSystem.cs" before this existed
+- Changed: Added `sessionBondLoss` field to `PhasixRuntimeData` (not in the literal schema,
+  same category as `activeSignalType` — needed so the locked session-cap rule has
+  somewhere to track cumulative loss; needs wiring to a future hub-visit/bank reset, not
+  built yet)
+- Verified: Not just compiled clean — exercised via `execute_code` with 8 scenarios
+  (basic gain/loss, floor clamping, session cap engaging partially and fully, both damping
+  thresholds, a multi-milestone jump in one call, 100% immunity). All 8 matched expected
+  values exactly.
+- Decided: `BondSystem` deliberately does not know gain/loss *amounts* (those are pending
+  NumericalCalibration.md, owned by future combat/activity systems) — it only enforces the
+  structural rules on whatever raw delta it's given. Also does not handle Origin Change
+  (GDD §14.4), the one mechanic allowed to break through a floor — that must set
+  `bondFloor` directly rather than going through `ApplyBondChange`.
+- Also locked (per the placeholder-first art pipeline unblocking Wk 7-8): tile base size
+  (16x16 equivalent, 1 world unit/tile, matches the existing Grid's cellSize already in the
+  scene) and A* cell size (0.5 units, for smoother companion-following pathing). Full
+  rationale in `DECISIONS.md`.
+- Next: Wk 11 — Personality's full mechanic (rolling on capture, item-based swap)
+
 [2026-07-30] Art — placeholder-first pipeline decided (colored primitives, real art deferred)
 - Decided: New visual needs (Phasix creatures, future NPCs) use Unity built-in primitive
   sprites tinted by `PrimalType`-derived color, not sourced art — extends the same approach
