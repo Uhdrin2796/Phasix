@@ -3,10 +3,6 @@
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp@latest"]
-    },
-    "unity-mcp": {
-      "command": "npx",
-      "args": ["-y", "anklebreaker-unity-mcp@latest"]
     }
   }
 }

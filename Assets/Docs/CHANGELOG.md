@@ -18,6 +18,24 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-29] MCP tooling — Unity MCP bridge migrated to CoplayDev
+- Built: Removed AnkleBreaker Studio unity-mcp — `Packages/manifest.json`/`packages-lock.json`
+  dependency and the `unity-mcp` entry in `.mcp.json` (the latter had been missed in an earlier
+  session despite being checked off as done — verified and fixed this session)
+- Built: Installed `uv` (0.12.0). Added CoplayDev's `com.coplaydev.unity-mcp` git package to
+  `Packages/manifest.json`
+- Decided: CoplayDev chosen over AnkleBreaker and Unity's official beta MCP — sustainability
+  (company backing, MIT license, community size) prioritized over raw tool count, since
+  project risk profile is low (solo dev, no critical/proprietary data). Full reasoning in
+  `DECISIONS.md` → [Tooling]
+- Blocked: Live connection not yet verified — needs Unity Editor to regain focus and compile
+  the new package, then Window → MCP for Unity → "Configure All Detected Clients" (writes the
+  actual CoplayDev server entry into `.mcp.json`), then a Claude Code session restart. All of
+  these are manual/GUI steps outside this session's reach.
+- Next: Once the manual steps above are done, verify by listing scene GameObjects and reading
+  the console through the reconnected `unity-mcp` tools, and confirm `.mcp.json` has no
+  AnkleBreaker leftovers.
+
 [2026-04-12] Phase 1 Wk 7–8 — Asset organisation + Tilemap + Cinemachine (in progress)
 - Built: `Assets/Scripts/World/WorldChunkManager.cs` — chunk activation/deactivation by player proximity via coroutine (not Update); _activateRadius=30, _deactivateRadius=40, _checkInterval=0.5s
 - Built: `Assets/Artwork/Characters/` — player/companion rig subfolders moved here (Dark Fluffy, Dark Uhdrin, MercuryVI, mr_bot, mr_chimken_new, mr_chimken_obs)

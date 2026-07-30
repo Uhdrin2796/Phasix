@@ -353,3 +353,32 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Alternatives rejected:** `solveFromDefaultPose=true` with manual `StoreLocalRotations()` call (fragile, extra step, no benefit for foundation setup)
 - **Date:** April 2026
 - **Revisit if:** Never for code-created setups. Inspector-created IK can use defaults safely.
+
+---
+
+## Tooling & AI Workflow
+
+### [Tooling] Unity MCP server choice
+- **Decided:** CoplayDev/unity-mcp (MIT license) as the Unity MCP bridge for Claude Code
+- **Why:** Long-term sustainability was the deciding factor over feature count. Coplay is a
+  company whose core business is Unity AI tooling — direct incentive to keep maintaining it.
+  MIT license means the community can fork it if Coplay ever stops. Largest community
+  (~5,800+ stars) gives the best bus factor and the most already-documented fixes.
+- **Alternatives rejected:** AnkleBreaker Studio's unity-mcp (268+ tools, broader category
+  coverage — Shader Graph, terrain, NavMesh, MPPM multiplayer). Rejected despite more tools:
+  it's a side project of a small indie game studio whose actual business is their own games
+  (Mithrall, Kickdom), uses a custom non-standard license (attribution + no-resale clauses),
+  and has a much smaller community (~341 stars). Unity's own official MCP Server (bundled in
+  Unity AI beta) was also considered and rejected for now — $10/mo subscription cost on
+  Personal after trial, plus concurrent-connection limits tied to plan tier.
+- **Date:** July 2026
+- **Revisit if:** Coplay discontinues the open-source MCP server, or Unity's official one
+  drops its subscription gate / connection limits post-beta.
+- **Security note:** Like all current community Unity MCP servers, this one runs an
+  unauthenticated local server (no auth by design, localhost-only). Accepted as a reasonable
+  risk for this project — solo dev, no proprietary or critical data at stake. Don't re-flag
+  this as a new problem in a future session; it was already weighed and accepted.
+- **Migration note:** AnkleBreaker's Unity package and `.mcp.json` entry were removed and the
+  CoplayDev git package added to `Packages/manifest.json` in this session. Live-connection
+  verification (Package Manager compile + "Configure All Detected Clients" + session restart)
+  is a manual follow-up — see `CHANGELOG.md` for status.

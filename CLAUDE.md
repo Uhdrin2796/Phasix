@@ -207,6 +207,12 @@ At the start of every planning session, run these three calls **before writing a
 - **`CLAUDE.md`** — update ONLY if folder structure or architecture rules changed
 - Commit all updated docs alongside the feature/fix
 
+## Tooling
+- **Unity MCP:** CoplayDev/unity-mcp (git package, MIT license) — bridges this session to
+  the live Unity Editor (scene state, console, GameObjects). Requires Unity Editor open.
+- Config: Window → MCP for Unity → Configure All Detected Clients
+- See DECISIONS.md → [Tooling] for why this was chosen over AnkleBreaker / Unity's official beta
+
 ## Reference Files in This Project
 ```
 Assets/Docs/DOCUMENT_INDEX.md                       ← Read first — document hierarchy and status
