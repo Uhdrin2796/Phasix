@@ -18,23 +18,28 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
-[2026-07-29] MCP tooling — Unity MCP bridge migrated to CoplayDev
+[2026-07-29] MCP tooling — Unity MCP bridge migrated to CoplayDev (verified live)
 - Built: Removed AnkleBreaker Studio unity-mcp — `Packages/manifest.json`/`packages-lock.json`
   dependency and the `unity-mcp` entry in `.mcp.json` (the latter had been missed in an earlier
   session despite being checked off as done — verified and fixed this session)
-- Built: Installed `uv` (0.12.0). Added CoplayDev's `com.coplaydev.unity-mcp` git package to
-  `Packages/manifest.json`
+- Built: Installed `uv` (0.12.0) and Python 3.10 was already present but missing from PATH —
+  added it. Added CoplayDev's `com.coplaydev.unity-mcp` git package to `Packages/manifest.json`
+  (resolved to v10.1.0)
+- Built: `.mcp.json` unity-mcp entry now `{"command": "uvx", "args": ["--from",
+  "mcpforunityserver==10.1.0", "mcp-for-unity", "--transport", "stdio"], "type": "stdio"}`.
+  Added `"unity-mcp"` to `enabledMcpjsonServers` in `.claude/settings.json` (was missing —
+  project-scoped MCP servers silently don't load without this). Unity's MCP for Unity window
+  Transport switched from default HTTP Local (port 8080, which collided with an unrelated
+  pre-existing service) to Stdio (port 6400)
 - Decided: CoplayDev chosen over AnkleBreaker and Unity's official beta MCP — sustainability
   (company backing, MIT license, community size) prioritized over raw tool count, since
   project risk profile is low (solo dev, no critical/proprietary data). Full reasoning in
   `DECISIONS.md` → [Tooling]
-- Blocked: Live connection not yet verified — needs Unity Editor to regain focus and compile
-  the new package, then Window → MCP for Unity → "Configure All Detected Clients" (writes the
-  actual CoplayDev server entry into `.mcp.json`), then a Claude Code session restart. All of
-  these are manual/GUI steps outside this session's reach.
-- Next: Once the manual steps above are done, verify by listing scene GameObjects and reading
-  the console through the reconnected `unity-mcp` tools, and confirm `.mcp.json` has no
-  AnkleBreaker leftovers.
+- Verified: Live connection confirmed working — `read_console` and `manage_scene
+  get_hierarchy` both returned real data from the open Phasix project (SampleScene, 8 root
+  GameObjects). Full troubleshooting chain (4 stacked blockers) logged in
+  `LESSONS_LEARNED.md` → [Tooling] for future reference
+- Next: None — migration complete.
 
 [2026-04-12] Phase 1 Wk 7–8 — Asset organisation + Tilemap + Cinemachine (in progress)
 - Built: `Assets/Scripts/World/WorldChunkManager.cs` — chunk activation/deactivation by player proximity via coroutine (not Update); _activateRadius=30, _deactivateRadius=40, _checkInterval=0.5s

@@ -3,6 +3,11 @@
     "context7": {
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "unity-mcp": {
+      "command": "uvx",
+      "args": ["--from", "mcpforunityserver==10.1.0", "mcp-for-unity", "--transport", "stdio"],
+      "type": "stdio"
     }
   }
 }

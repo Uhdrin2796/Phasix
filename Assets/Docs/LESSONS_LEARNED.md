@@ -82,3 +82,19 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Fix:** Import individual PNGs directly. Build AnimationClips by dragging frames into the Animation window in sequence. No TexturePacker or Fresco step needed.
 - **Date:** April 2026
 - **Key rule:** Do NOT assemble these into a PSD bone rig — they are pre-animated frame-by-frame sprites, not rigs.
+
+---
+
+## Tooling
+
+### [Tooling] CoplayDev unity-mcp migration — four stacked blockers before the bridge connected
+- **Symptom:** After installing the `com.coplaydev.unity-mcp` package and clicking "Configure All Detected Clients," Claude Code still had zero working connection to Unity — no errors surfaced anywhere obvious.
+- **Root cause (four separate issues, each hiding the next):**
+  1. Claude Code was never in the "detected clients" list — its `ClaudeCodeConfigurator` shells out to the `claude` CLI binary, which isn't on PATH in this desktop-app-hosted setup. `.mcp.json` has to be hand-edited instead of relying on the auto-configure button.
+  2. Project `.claude/settings.json` only allow-listed `context7` in `enabledMcpjsonServers` — any `.mcp.json` server not in that array is silently never loaded, regardless of how correct the entry is.
+  3. The package's default HTTP transport (`http://127.0.0.1:8080`) collided with an unrelated pre-existing Windows service (`ApplicationWebServer.exe`) already bound to port 8080 — Unity's HTTP listener never actually came up, but the UI didn't make that obvious.
+  4. The manually-written stdio command used the wrong package identifier — `mcp-for-unity` is the *executable/tool name*, not the PyPI package. The install source must be `--from mcpforunityserver==<version>` (see `AssetPathUtility.GetUvxCommandParts()` in the package source) with `mcp-for-unity` only as the trailing arg.
+  Even after all of that, Unity's own Transport dropdown (Window → MCP for Unity) still defaulted to "HTTP Local" and needed to be switched to "Stdio" to match, then required one manual "Start Session" click for the already-open Editor session (stdio auto-starts via `[InitializeOnLoad]` on every subsequent Editor launch — this was a one-time nudge, not a recurring step).
+- **Fix:** `.mcp.json` entry: `{"command": "uvx", "args": ["--from", "mcpforunityserver==10.1.0", "mcp-for-unity", "--transport", "stdio"], "type": "stdio"}`. Add `"unity-mcp"` to `enabledMcpjsonServers` in `.claude/settings.json`. Set Unity's MCP for Unity window Transport to Stdio.
+- **Date:** July 2026
+- **Key rule:** When a CoplayDev/unity-mcp client isn't in "detected clients," don't assume the package is broken — check whether the client's detector depends on a CLI binary being on PATH, and hand-edit `.mcp.json` instead. Always cross-check `.claude/settings.json`'s `enabledMcpjsonServers` array whenever a project-scoped MCP server silently fails to load.
