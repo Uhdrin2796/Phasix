@@ -18,6 +18,39 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-29] Phase 2 Wk 9 — PhasixData ScriptableObject implemented (MCP-driven build)
+- Built: `Assets/Scripts/Creatures/StatType.cs`, `BondZone.cs`, `PhasixEnums.cs` (Temper,
+  OriginType, TempoType, SignalType, Personality, SkillTreeType), `PrimalType.cs`,
+  `StatBlock.cs`, `EvolutionHistoryEntry.cs`, `SkillData.cs` (stub), `PhasixData.cs`
+  (the SO), `PhasixRuntimeData.cs` (plain C# runtime state) — created and verified live via
+  the newly-connected Unity MCP tools (`create_script`, `read_console`,
+  `manage_scriptable_object`), not by hand-editing files blind
+- Built: `Assets/Scripts/Core/BattleResult.cs` (empty stub) — required for the entire
+  default assembly to compile at all; without it, `EventBus.cs`'s pre-existing forward-ref
+  errors blocked domain reload for every script in the project, not just the new ones
+- Decided: Real locked names used throughout instead of placeholders — PrimalType (8 base +
+  28 duo merges), SignalType (9), SkillTreeType (18, A–R) — all verified directly against
+  `GDD_CreatureRPG_v0_8_0.html`, not invented. Found and used the actual 18-row Personality
+  table despite the GDD's own prose/changelog saying "16 traits" in two places (verified
+  discrepancy, not an invented count)
+- Decided: `Temper` and `Personality` both live on `PhasixRuntimeData`, not `PhasixData` —
+  both are per-individual and runtime-changeable (Re-Tempering GDD §6.4, personality item
+  GDD §7), which would violate the Hard Architecture Rule if baked into the shared SO.
+  `PhasixRuntimeData`'s shape (StatBlock stats, GUID-based skill refs, evolutionHistory,
+  currentNodeGuid/speciesData pointer) matches `Evolution_System_Directive_v1_1_0.md`'s
+  spec exactly, to avoid a rework when Phase 4's evolution graph is built. Full rationale
+  in `DECISIONS.md` → [Tooling/Creatures]
+- Verified: Compiles clean (only the expected, out-of-scope `EventBus.cs` errors were
+  present before this work — all now resolved). Created and round-trip-tested a scratch
+  `_Test_PhasixData.asset` via `manage_scriptable_object` (set fields, saved, read back the
+  serialized YAML directly to confirm), then deleted it — not real roster content
+- Blocked (resolved): Unity's post-compile domain reload was silently not completing while
+  the Editor window lacked focus — `read_console` showed zero errors but new types were
+  invisible to `unity_reflect`/`manage_scriptable_object` until the user clicked into the
+  Unity window. Logged in `LESSONS_LEARNED.md` → [Tooling]
+- Next: Phase 2 continues — Bond System (Wk 10, needs `BondZone` wiring which now exists)
+  or Phase 1 Wk 7–8 tilemap polish (still blocked on sourcing a real tileset asset)
+
 [2026-07-29] MCP tooling — Unity MCP bridge migrated to CoplayDev (verified live)
 - Built: Removed AnkleBreaker Studio unity-mcp — `Packages/manifest.json`/`packages-lock.json`
   dependency and the `unity-mcp` entry in `.mcp.json` (the latter had been missed in an earlier

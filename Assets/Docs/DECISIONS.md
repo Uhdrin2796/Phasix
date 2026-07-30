@@ -382,3 +382,93 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
   CoplayDev git package added to `Packages/manifest.json` in this session. Live-connection
   verification (Package Manager compile + "Configure All Detected Clients" + session restart)
   is a manual follow-up — see `CHANGELOG.md` for status.
+
+---
+
+## Creatures — PhasixData / PhasixRuntimeData
+
+### [Creatures] Temper and Personality live on PhasixRuntimeData, not PhasixData
+- **Decided:** Both fields are excluded from `PhasixData` (the SO) despite being listed
+  directly in CLAUDE.md's schema block. Both live on `PhasixRuntimeData` instead.
+- **Why:** Both are per-individual and runtime-changeable — Personality is "shown on
+  capture" and swappable via a consumable item ("any personality to any other," GDD §7).
+  Temper is changeable via Re-Tempering at a Temper Forge using Temper Cores (GDD §6.4).
+  Writing either to a shared `PhasixData` asset at runtime would violate the Hard
+  Architecture Rule (CLAUDE.md: "ScriptableObjects = read-only at runtime"). The only
+  alternative — one SO asset per Temper/Personality combination per species-form — would
+  mean up to 3× (Temper) or 18× (Personality) asset multiplication, which is far worse than
+  just moving the fields to runtime state.
+- **Alternatives rejected:** Baking Temper into 3 separate SO assets per species+tier (an
+  earlier draft of this decision, corrected after finding GDD §6.4's re-tempering rule).
+  Baking Personality onto the SO per the Roadmap's literal wording — rejected because it
+  would need a rework the moment the personality-swap item is built.
+- **Date:** July 2026
+- **Revisit if:** Never, unless a future directive states Temper/Personality are fixed at
+  creation with no swap mechanic (would contradict GDD §6.4/§7 as currently written).
+
+### [Creatures] PhasixRuntimeData matches Evolution_System_Directive_v1_1_0.md's spec, not CLAUDE.md's literal schema
+- **Decided:** `PhasixRuntimeData` uses `StatBlock` (not raw ints) for `baseStats` and
+  `unnamedPool`, GUID strings (not `SkillData` object references) for
+  `learnedSkillGuids`/`equippedSkillGuids`, plus `currentNodeGuid`/`speciesData`
+  pointer fields and an `evolutionHistory` list — none of which appear in CLAUDE.md's
+  schema block, which shows plain ints and object-reference lists instead.
+- **Why:** `Evolution_System_Directive_v1_1_0.md` is the project's primary evolution
+  authority (per `DOCUMENT_INDEX.md`) and already specifies this exact shape, used by
+  logic that doesn't exist yet (`EvolutionExecutor`, `SaveManager`) but will when Phase 4
+  is built. Matching it now avoids a breaking rework later. `DOCUMENT_INDEX.md`'s own
+  precedence rule ("the more specific Directive always wins over the GDD") extends
+  naturally to CLAUDE.md's schema block, which is a simplified summary, not the
+  authoritative source.
+- **Alternatives rejected:** Building `PhasixRuntimeData` to match CLAUDE.md's literal
+  schema (raw ints, object-reference skill lists) — faster now, but confirmed to require a
+  full rework once Phase 4's evolution graph is built, per the Directive's own field usage.
+- **Date:** July 2026
+- **Revisit if:** A future revision of the Evolution Directive changes this shape.
+
+### [Creatures] Base stat tier-floor ints stay on PhasixData for now, not EvolutionNodeSO
+- **Decided:** The 8 base stat ints (`vitality`, `force`, etc.) remain on `PhasixData` as
+  tier-floor seed values, even though `Evolution_System_Directive_v1_1_0.md` implies they
+  belong on `EvolutionNodeSO.tierStatFloor` instead (a type that doesn't exist yet).
+- **Why:** `EvolutionNodeSO` is Phase 4 scope — not building it now would leave nowhere for
+  the Roadmap's literal Wk 9 ask ("Implement all 8 base stats... on PhasixData") to live.
+  Flagged as a known future seam, not a design mistake.
+- **Date:** July 2026
+- **Revisit if:** When `EvolutionNodeSO` is built (Phase 4), decide whether these fields
+  migrate there or `PhasixData` keeps them and `EvolutionNodeSO` references `PhasixData`
+  for tier-floor stats instead.
+
+### [Creatures] OriginType naming (renamed from CLAUDE.md's "Origin")
+- **Decided:** Enum is named `OriginType`, matching `Evolution_System_Directive_v1_1_0.md`'s
+  actual usage (`speciesData.origin`, typed `OriginType`), not `Origin` as CLAUDE.md's
+  schema names it. Same 6 values either way — free naming alignment, no structural cost.
+- **Date:** July 2026
+
+### [Creatures] Real locked GDD names used instead of invented placeholders
+- **Decided:** `PrimalType` (8 base + 28 duo merges), `SignalType` (9 types), `Personality`
+  (18 traits, not 16), and `SkillTreeType` (18 types, A–R) all use the actual names locked
+  in `GDD_CreatureRPG_v0_8_0.html`, verified directly against the document rather than
+  invented as `TODO` placeholders.
+- **Why:** All four systems are marked `Locked` in the GDD itself — using invented
+  placeholders would have contradicted already-settled design content, not respected the
+  "no invented content for pending systems" rule (which only applies to genuinely pending
+  content, and none of these four are pending).
+- **Note:** `Personality`'s GDD prose/changelog says "16 traits" in two places, but the
+  actual §7.3 table has 18 rows. Used the verified table count, not the prose summary —
+  flagged as a doc discrepancy worth a designer's confirmation pass, not silently resolved
+  as if it were never a discrepancy.
+- **Date:** July 2026
+
+### [Creatures] Evolution_System_Directive_v1_1_0.md has internal inconsistencies — flagged, not fixed
+- **Found:** `EvolutionNodeSO`, `EvolutionBranchSO`, `EvolutionGraphSO`, and
+  `EvolutionEvaluator`/`EvolutionExecutor` as specified in the Directive have real
+  conflicts between declared field names (in the class definitions) and actually-used
+  field names (in the logic that references them) — e.g. `EvolutionNodeSO.formID`
+  (declared) vs. `node.nodeGuid` (used); `ConditionalType` has 6 declared members but 7
+  different members are switched on elsewhere; `BranchConditional` is used as a type but
+  never defined (only the similarly-shaped `ConditionalRequirement` is).
+- **Why not fixed now:** None of these types are needed for Phase 2 Wk 9 (PhasixData) —
+  they're Phase 4 scope. Fixing them requires a design pass on the source document itself,
+  which is out of scope for a code implementation task.
+- **Action needed:** Before Phase 4 (Evolution system) implementation starts, resolve these
+  inconsistencies in `Evolution_System_Directive_v1_1_0.md` (or its PDF source) first.
+- **Date:** July 2026
