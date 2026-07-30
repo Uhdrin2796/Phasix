@@ -480,3 +480,154 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Action needed:** Before Phase 4 (Evolution system) implementation starts, resolve these
   inconsistencies in `Evolution_System_Directive_v1_1_0.md` (or its PDF source) first.
 - **Date:** July 2026
+
+---
+
+## Creatures — Future Systems (Designed, Not Yet Built)
+
+Both entries below came out of a design discussion prompted by reviewing the PhasixData
+parameter list and asking what makes Temper/Origin/Signal worth caring about together, not
+just individually. **Neither is implemented.** Recorded in full — including the options
+rejected and the risks raised — so a future session (or a future us) doesn't have to
+re-derive the reasoning from scratch before deciding whether to build these.
+
+### [Creatures] Resonance system — Temper/Origin/Signal synchronization (proposed)
+- **Status:** Designed, not implemented. No code, no schema changes.
+- **Concept:** A computed (not hand-authored) synergy check. Each value in Temper (3),
+  Origin (6), and active Signal (9) gets tagged with a shared behavioral keyword —
+  draft set: **Aggressive, Defensive, Elemental, Patient**. A creature's rolled
+  Temper + Origin + active Signal are compared: if all 3 share a tag, it's **Full
+  Resonance** (a real bonus); if 2 share a tag, **Partial Resonance** (a smaller bonus);
+  otherwise **Dissonant** — deliberately **no penalty**, only an absence of bonus, so a
+  "bad roll" never feels like a defective creature.
+- **Draft tag table** (starting proposal, not locked — grounded in each value's existing
+  flavor text, not invented from nothing):
+
+  | | Aggressive | Defensive | Elemental | Patient |
+  |---|---|---|---|---|
+  | **Temper** | Edge | Anchor | Flux | — |
+  | **Origin** | Corrupted | Synthetic | Ascended | Hollow, Primordial |
+  | **Signal** | Surge, Overflow | Silence, Current | Catalyst, Echo | Frequency, Static, Pulse |
+
+  Open problem: **Wild doesn't fit cleanly** into any of the four tags. Either add a 5th
+  tag (e.g. "Natural") or let Wild deliberately sit outside the system as a no-strong-lean
+  baseline — undecided.
+- **Why considered:** Today, Temper/Origin/Signal are purely additive — nothing rewards or
+  reacts to *which combination* a creature rolled. The GDD's own pillar ("Species, Temper,
+  Origin, Signal... all shape what a creature is. No two builds are identical") is only
+  half true without an interaction layer: no two builds are identical, but they don't
+  relate to each other either.
+- **Precedents referenced:** Fire Emblem's Support system (personality-compatibility combat
+  bonus), Pokémon's Nature/IV system (invisible per-individual modifier, huge competitive
+  engagement despite no explicit chart), Persona's Arcana-compatible fusion bonuses,
+  Digimon's Vaccine/Data/Virus triangle (directly relevant — Phasix is explicitly
+  Digimon-inspired per CLAUDE.md), Magic: The Gathering's color pie, and **Teamfight
+  Tactics' trait stacking** — the direct inspiration, though see the note below on how it
+  was adapted.
+- **Options considered:**
+  1. **Full 3-axis matrix** (3×6×9 = 162 explicit combinations) — rejected. The existing
+     2-axis systems (Primal 8×8, Signal 9×9) aren't even numerically calibrated yet;
+     committing to a 162-cell matrix on top, across three axes at once, is much harder for
+     players to discover than two, and risked real design debt against systems that don't
+     exist to test it against yet.
+  2. **Lightweight curated pairwise tags**, matching the pattern Tempo↔Signal already uses
+     live in the GDD (a few called-out "pairs well with" bullets) — viable, but doesn't
+     capture a true 3-way interaction.
+  3. **Computed shared-keyword-tag system** *(this is the direction taken)* — cheap to
+     author (18 tags total, not 162 combinations), scales cleanly if a 4th Origin or 10th
+     Signal is ever added, and produces genuine emergent variety per individual catch
+     without exhaustive content fill.
+  4. **True TFT mechanic (party-composition based)** — considered and explicitly rejected
+     in favor of a single-creature check. Real TFT synergies count shared traits *across
+     your whole active board*, not within one unit's own traits — that's a genuinely
+     different system (team-building strategy layer) from "does this one creature's own
+     three rolled axes align." The user confirmed single-creature was the intended
+     direction after this distinction was raised.
+- **Confirmed supporting fact:** all three axes really do vary per individual (verified,
+  not assumed) — Signal explicitly ("Wild spawns can appear with any type from their
+  pool," GDD §16.3), Temper implied by Re-Tempering existing at all (GDD §6.4), and Origin
+  confirmed by GDD §14.4 "Origin Change" (a Bond-cost mechanic — see the Origin
+  architecture fix entry above, which this discussion directly caused).
+- **UI concept:** A chip/icon on the party roster or capture-reveal screen — dim outline
+  normally, fills at Partial, glows at Full. No tooltip wall of text, matching the
+  project's existing "discovery over instruction" philosophy (already used for Signal,
+  which also has zero text feedback in combat).
+- **Open questions before this can be built:** final tag assignments (especially Wild),
+  actual bonus magnitudes (pending NumericalCalibration.md like everything else numeric),
+  and where the Resonance tier should actually surface in UI flow.
+- **Date:** July 2026
+- **Revisit if/when:** Before Combat (Phase 3) or Evolution (Phase 4) numeric calibration
+  locks in, since Resonance bonuses would need to interact with the damage/stat formulas
+  those phases define.
+
+### [Creatures] Defuse / Infuse — creature release + Resonance investment (proposed)
+- **Status:** Designed, not implemented. Depends conceptually on the Resonance system above
+  (reuses its keyword tags) — should not be built before Resonance is, and ideally not
+  before Resonance has actually been played, not just implemented.
+- **Concept:** Two paired actions, named to fit the "crystallization of emotional states"
+  premise rather than the genre-standard "recycle/fodder" framing (see naming note below).
+  - **Defuse** — permanently release an owned Phasix (not in the active party) that you
+    don't want. Yields Common Aura + Specific Aura (keyed to its `emotionalType`) always;
+    Rare Variant Aura only if its Origin is one of the rarer ones (Ascended/Hollow/
+    Primordial read as rare in their own flavor text; Wild/Synthetic/Corrupted don't).
+    Amount scales with evolution tier. Also yields **typed Essence** matching whichever
+    Resonance keyword the creature's dominant matching axis falls under (or
+    untyped/generic Essence at Dissonant).
+  - **Infuse** — spend Essence on a *kept* creature to raise its Resonance tier directly
+    (Dissonant → Partial → Full) **without changing its actual Temper/Origin/Signal
+    values**. Cost scales with the size of the tier jump (same shape as Origin Change's
+    wheel-distance cost); keyword-matched Essence should cost less than generic/mismatched
+    Essence.
+- **Why considered:** Under the Resonance system alone, a Dissonant creature has no
+  penalty but also no use beyond being itself — this closes that gap by giving every
+  catch, even a "bad roll," a productive purpose.
+- **Deliberate non-overlap:** Infuse does **not** reroll Temper/Origin/Signal — those three
+  already each have a dedicated, already-designed change mechanic (Temper Forge
+  re-tempering GDD §6.4, Origin Change GDD §14.4, the pending Signal swap item GDD §16.3).
+  A generic "Essence rerolls anything" system would just compete with those. Infuse
+  instead operates on the Resonance tier as its own independent investment track — a
+  player has two genuinely different reasons to reach for one tool over the other
+  (change *what a creature is*, vs. improve *how well its rolled axes work together*).
+- **Precedents referenced:** Path of Exile's Divine Orbs / Diablo's enchanting (targeted
+  property nudge rather than full reroll), Summoners War's Devilmon / gacha "fodder"
+  feeding (the genre-standard answer to "what do I do with dupes"), Pokémon GO's
+  Candy/Transfer system (species-specific currency from release), Diablo's salvaging
+  (preserves some value from an investment you're moving on from).
+- **Naming — rejected "Recycle":** the word reads as gacha-fodder vocabulary and clashes
+  with a game whose core metaphor is emotional bonding, not resource optimization.
+  "Defuse"/"Infuse" was chosen instead — Defuse reads as releasing/processing a charged
+  emotional state rather than discarding a creature; Infuse reads as channeling that
+  released energy into another. Names are a first pass, not final.
+- **Constraints as framed:** Defuse is permanent (the one irreversible release-equivalent
+  action in the game, distinct from Devolution which is free/reversible and Fusion which
+  returns ingredients on devolve). Blocked entirely at 100% bond (Bond-100 is already
+  framed as a "permanent achievement" — casually discarding it would undercut that).
+  Confirmation gate proposed at Partner bond (60%) or above.
+- **Known risks — flagged during design, not resolved:**
+  1. **Tonal risk.** Renaming away from "recycle" addresses the surface-level word choice,
+     but the underlying mechanic — converting a creature into resources — still nudges
+     toward treating creatures as interchangeable units. Worth re-checking the *whole*
+     mechanic against tone once actually written up in full, not just the verb.
+  2. **Aura economy risk.** Aura currently has exactly one source: battle wins. Adding
+     Defuse as a second source risks letting players bypass the intended battle loop
+     entirely via catch-and-release farming. Mitigation direction (not yet decided as a
+     rule): keep Defuse's Aura yield lower than equivalent battle-farming, so it's a
+     convenience for unwanted creatures, not a competing progression path.
+  3. **Tension with Resonance's own "no judgment" goal.** Resonance was deliberately built
+     with no penalty for Dissonant creatures specifically so a bad roll wouldn't feel bad.
+     Defuse reintroduces a keep-or-release valuation on every catch one layer up, even
+     though nothing mechanical punishes Dissonant directly. Common in the genre (Pokémon
+     players do this constantly) but a real cost against the "bond with what you get"
+     framing this project has otherwise leaned into.
+  4. **Scope.** This is a second new system stacked on top of Resonance, which is itself
+     stacked on top of Bond/Combat/Evolution — none of which are fully built or
+     numerically calibrated yet. Recommendation from this discussion: design-and-park,
+     don't implement, and prioritize playtesting Resonance alone first once it exists.
+  5. **Possible confusion with Fusion.** Both Fusion and Defuse conceptually "combine or
+     transform" creatures; they need clearly distinct framing/UI once built so players
+     don't conflate "make something new (reversible)" with "release for parts
+     (permanent)."
+- **Date:** July 2026
+- **Revisit if/when:** After the Resonance system above is implemented and playtested on
+  its own; before NumericalCalibration.md's Aura economy numbers are finalized, since
+  Defuse's yield needs balancing against battle-Aura rates (risk #2 above).
