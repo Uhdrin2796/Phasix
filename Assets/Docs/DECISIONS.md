@@ -387,24 +387,32 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 
 ## Creatures — PhasixData / PhasixRuntimeData
 
-### [Creatures] Temper and Personality live on PhasixRuntimeData, not PhasixData
-- **Decided:** Both fields are excluded from `PhasixData` (the SO) despite being listed
-  directly in CLAUDE.md's schema block. Both live on `PhasixRuntimeData` instead.
-- **Why:** Both are per-individual and runtime-changeable — Personality is "shown on
-  capture" and swappable via a consumable item ("any personality to any other," GDD §7).
-  Temper is changeable via Re-Tempering at a Temper Forge using Temper Cores (GDD §6.4).
-  Writing either to a shared `PhasixData` asset at runtime would violate the Hard
-  Architecture Rule (CLAUDE.md: "ScriptableObjects = read-only at runtime"). The only
-  alternative — one SO asset per Temper/Personality combination per species-form — would
-  mean up to 3× (Temper) or 18× (Personality) asset multiplication, which is far worse than
-  just moving the fields to runtime state.
+### [Creatures] Temper, Personality, and Origin all live on PhasixRuntimeData, not PhasixData
+- **Decided:** All three fields are excluded from `PhasixData` (the SO) despite being listed
+  directly in CLAUDE.md's schema block. All three live on `PhasixRuntimeData` instead.
+- **Why:** All three are per-individual (rolled at capture, like Personality's "shown on
+  capture") and runtime-changeable — Personality via a consumable item ("any personality to
+  any other," GDD §7). Temper via Re-Tempering at a Temper Forge using Temper Cores (GDD
+  §6.4). Origin via "Origin Change" (GDD §14.4) — a Bond-cost mechanic tied to wheel
+  distance (Adjacent = cheap, Opposite = expensive, e.g. Wild→Corrupted costs 15% bond) that
+  doubles as the only way to break through a bond floor. Writing any of these to a shared
+  `PhasixData` asset at runtime would violate the Hard Architecture Rule (CLAUDE.md:
+  "ScriptableObjects = read-only at runtime"). The only alternative — one SO asset per
+  Temper/Personality/Origin combination per species-form — would mean up to 3× (Temper),
+  18× (Personality), or 6× (Origin) asset multiplication, far worse than moving the fields
+  to runtime state.
+- **Correction:** Origin was originally kept on `PhasixData` in the first pass of this work
+  — GDD §14.4 (Origin Change) wasn't found until a later session. Moved to
+  `PhasixRuntimeData` once found, matching Temper/Personality's already-established pattern.
 - **Alternatives rejected:** Baking Temper into 3 separate SO assets per species+tier (an
   earlier draft of this decision, corrected after finding GDD §6.4's re-tempering rule).
   Baking Personality onto the SO per the Roadmap's literal wording — rejected because it
-  would need a rework the moment the personality-swap item is built.
+  would need a rework the moment the personality-swap item is built. Keeping Origin on the
+  SO — rejected once GDD §14.4 confirmed it changes at runtime.
 - **Date:** July 2026
-- **Revisit if:** Never, unless a future directive states Temper/Personality are fixed at
-  creation with no swap mechanic (would contradict GDD §6.4/§7 as currently written).
+- **Revisit if:** Never, unless a future directive states one of these three is fixed at
+  creation with no swap/change mechanic (would contradict GDD §6.4/§7/§14.4 as currently
+  written).
 
 ### [Creatures] PhasixRuntimeData matches Evolution_System_Directive_v1_1_0.md's spec, not CLAUDE.md's literal schema
 - **Decided:** `PhasixRuntimeData` uses `StatBlock` (not raw ints) for `baseStats` and

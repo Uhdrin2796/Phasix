@@ -61,6 +61,14 @@ public class PhasixRuntimeData
     public Personality personality;
 
     /// <summary>
+    /// Rolled per individual on capture. Changeable at runtime via "Origin Change" (GDD
+    /// §14.4) — costs Bond% based on wheel distance (Adjacent = cheap, Opposite =
+    /// expensive, e.g. Wild to Corrupted costs 15%). The only way to break through a bond
+    /// floor. Immune to change once bondPercent reaches 100.
+    /// </summary>
+    public OriginType origin;
+
+    /// <summary>
     /// The individual's currently manifested Signal type, chosen from speciesData.SignalPool.
     /// Changeable via a swap item (GDD §16.3).
     /// TODO: pending design — swap item (GDD §16.3)

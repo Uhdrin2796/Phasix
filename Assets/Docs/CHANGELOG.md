@@ -18,6 +18,22 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-30] Creatures — Origin moved from PhasixData to PhasixRuntimeData
+- Changed: `origin` field removed from `PhasixData` (SO), added to `PhasixRuntimeData`,
+  matching how `temper`/`personality` already live there
+- Decided: Found during a design discussion about a possible Temper/Origin/Signal
+  synchronization mechanic — checking whether wild spawns roll a random Origin per
+  individual led to reading GDD §14.4 "Origin Change," a locked mechanic that lets Origin
+  change at runtime by spending Bond% (cost scales with wheel distance). This confirms
+  Origin is per-individual, mutable state, not a fixed species-form property — the same
+  category as Temper/Personality. Full rationale in `DECISIONS.md` → [Creatures]
+- Verified: Compiles clean, confirmed live via `unity_reflect get_type PhasixRuntimeData`
+  (origin now present) — no need to re-test the SO round-trip since PhasixData's other
+  fields are unaffected
+- Next: Evaluating a Temper/Origin/Signal synchronization system (party-composition vs.
+  per-creature combo vs. TFT-style trait stacking) — design discussion in progress, not
+  yet implemented
+
 [2026-07-29] Phase 2 Wk 9 — PhasixData ScriptableObject implemented (MCP-driven build)
 - Built: `Assets/Scripts/Creatures/StatType.cs`, `BondZone.cs`, `PhasixEnums.cs` (Temper,
   OriginType, TempoType, SignalType, Personality, SkillTreeType), `PrimalType.cs`,

@@ -6,9 +6,10 @@ using System.Collections.Generic;
 /// Read-only at runtime — never write to this asset during play (Hard Architecture Rule,
 /// CLAUDE.md). Per-individual mutable state lives on PhasixRuntimeData instead.
 ///
-/// Temper and Personality are deliberately NOT fields here despite being listed in
-/// CLAUDE.md's schema block — both are rolled/assigned per individual and changeable at
-/// runtime via a Temper Forge (GDD §6.4) or item (GDD §7), which would require writing to
+/// Temper, Personality, and Origin are deliberately NOT fields here despite being listed
+/// in CLAUDE.md's schema block — all three are rolled per individual and changeable at
+/// runtime: Temper via a Temper Forge (GDD §6.4), Personality via item (GDD §7), Origin via
+/// the "Origin Change" bond-cost mechanic (GDD §14.4). All three would require writing to
 /// this SO at play time. See DECISIONS.md for the full rationale.
 /// </summary>
 [CreateAssetMenu(fileName = "New PhasixData", menuName = "Phasix/Creature/Phasix Data", order = 1)]
@@ -25,7 +26,6 @@ public class PhasixData : ScriptableObject
     [SerializeField] private int _evolutionTier;
 
     [SerializeField] private PrimalType _primalType;
-    [SerializeField] private OriginType _origin;
 
     [Tooltip("3-4 Signal types consistent with this creature's identity. Wild spawns can appear with any type from this pool.")]
     [SerializeField] private SignalType[] _signalPool;
@@ -56,7 +56,6 @@ public class PhasixData : ScriptableObject
     public string EmotionalType => _emotionalType;
     public int EvolutionTier => _evolutionTier;
     public PrimalType PrimalType => _primalType;
-    public OriginType Origin => _origin;
     public SignalType[] SignalPool => _signalPool;
     public TempoType TempoType => _tempoType;
 
