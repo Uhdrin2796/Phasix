@@ -23,6 +23,131 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Date:** April 2026
 - **Key rule:** Any collider used exclusively for camera confinement (CinemachineConfiner2D) must always be **Is Trigger = true**.
 
+### [Physics] Manual collision test showed the player passing through the companion — twice — and both times the test was wrong, not the collision setup
+- **Symptom:** Wrote a script-driven physics test (using manual `Physics2D.Simulate()`, per the earlier Play-Mode-doesn't-tick workaround) to confirm the player would be physically blocked by the companion. First attempt: player sailed straight through, ending up on the far side. Disabling `PlayerController_SideScroll` first (to rule out its own `FixedUpdate` fighting the test) made no difference — still passed through.
+- **Root cause (two separate test-authoring mistakes, not a real bug):**
+  1. `Mr_chimken`'s `CapsuleCollider2D` has a local `offset` of `(0, 14)` — after the character's `(0.1, 0.1, 0.1)` scale, that's +1.4 world units above the root Transform (a bone-rigged torso collider, not centered on the feet-pivot root). Test code positioned both objects' *root transforms* at the same Y, assuming that meant the colliders were vertically aligned — they were actually 1.4 units apart and never overlapped no matter how close the roots got horizontally.
+  2. After fixing that and repositioning objects again, `Collider2D.bounds` was read immediately after the `transform.position` assignment, with no intervening physics step — `bounds` doesn't recompute synchronously on a bare Transform write, so it returned stale data from a previous test's end state, silently producing a bogus starting distance for the next test.
+- **Fix:** For any manual/script-driven Collider2D test: (1) always check `Collider2D.bounds.center`, not `transform.position`, when reasoning about actual overlap distance — a rigged/asymmetric collider's effective center can be meaningfully offset from its root; (2) call `Physics2D.SyncTransforms()` immediately after any manual `transform.position` change, before reading `Collider2D.bounds`, or you'll read leftover values from before the move.
+- **Date:** July 2026
+- **Key rule:** The underlying game systems here were fine both times — this was a case of a flawed verification script producing a false negative. When a physics test result looks wrong, verify the *test's own* position/bounds assumptions (via `bounds.center` post-`SyncTransforms()`) before concluding the game logic is broken.
+
+### [Physics] Physics2D.simulationMode = Script is a global, persistent PROJECT setting — not a per-call test toggle
+- **Symptom:** After a testing session using `Physics2D.simulationMode =
+  SimulationMode2D.Script` (to manually drive `Physics2D.Simulate()` for deterministic
+  verification), `git status` showed `ProjectSettings/Physics2DSettings.asset` modified.
+  Left as `Script` mode, Unity would stop automatically stepping 2D physics every
+  `FixedUpdate` at all — silently breaking all real Rigidbody2D-based movement in actual
+  play, not just the object being tested.
+- **Root cause:** `Physics2D.simulationMode` is a global project setting
+  (`m_SimulationMode` in `Physics2DSettings.asset`), not a scoped/local flag — setting it
+  from a test script changes it for the whole project, persistently, until something sets
+  it back. It's easy to reach for this to get deterministic manual-stepping control during
+  a scripted test (needed earlier this session for `Rigidbody2D.MovePosition` verification)
+  and forget it's a standing project-wide change, not something that reverts on its own.
+- **Fix:** Explicitly restore `Physics2D.simulationMode = SimulationMode2D.FixedUpdate`
+  after any test that changes it. Caught this time by reviewing `git status`/`git diff` on
+  `ProjectSettings/*.asset` before reporting work as done — not by noticing broken gameplay
+  directly.
+- **Date:** July 2026
+- **Key rule:** Any test that sets `Physics2D.simulationMode` (or similar global engine
+  settings) MUST restore the original value before finishing, and it's worth a
+  `git status`/`git diff` sanity check on `ProjectSettings/*.asset` after any session that
+  did low-level engine-state manipulation via `execute_code` — an unintended global setting
+  change won't show up as a script/console error, only as a silent project settings diff.
+
+### [Physics] "Is it closing in?" dot-product check had the comparison sign backwards
+- **Symptom:** `CompanionAI`'s personal-space repel (nudge away from the player when they're
+  very close and approaching) did the exact opposite in every test: it repelled when the
+  player was moving *away*, and stayed inert when the player was actually closing in.
+- **Root cause:** `awayFromPlayer` points from the player toward the companion. If the
+  player's movement direction (`playerDelta`) has a *positive* dot product with that vector,
+  the player is moving in roughly the same direction as "toward the companion" — i.e.
+  closing in. The check was written as `Dot(...) < 0f`, backwards from that.
+- **Fix:** `Dot(playerDelta.normalized, awayFromPlayer.normalized) > 0f`. Caught by testing
+  the method in isolation (via reflection) against known approach angles with a clearly
+  predicted expected sign for each, rather than trusting the logic by inspection.
+- **Date:** July 2026
+- **Key rule:** For any "is A moving toward B" dot-product check, sanity-test with one
+  concrete, easy-to-eyeball case (e.g., B directly east of A, A moving east) before trusting
+  the sign — it's very easy to get backwards, and the bug produces confidently-wrong
+  behavior in 100% of cases, not an edge-case glitch, so a single test case exposes it fully.
+
+### [Physics] Unflattened Z noise on a "2D" Transform silently corrupts normalized direction math
+- **Symptom:** In a real (user-driven) play session, `CompanionAI`'s follow/repel behavior
+  effectively stopped working — the companion barely moved and didn't step away from the
+  player. Live inspection found `_smoothedTargetDirection` sitting at
+  `(-0.51, -0.01, -0.86)` — a huge Z component for a value that's supposed to represent a
+  2D top-down movement direction.
+- **Root cause:** `CompanionAI` computed its direction/repel math directly from
+  `Transform.position` deltas without ever constraining them to the XY plane. Confirmed the
+  player's own movement script (`Rigidbody2D.linearVelocity`, a `Vector2`) and Animator
+  (`applyRootMotion = false`) don't touch Z — so wherever the Z noise actually originates
+  (not conclusively pinned down; candidates include floating-point drift, IK solver
+  precision, or something else touching the root Transform), the real lesson is that the
+  *consuming* code had no defense against it at all. A `Vector3.normalized` call on a
+  mostly-flat vector is extremely sensitive to a small Z component — it can swing the
+  resulting direction far from what X/Y alone would suggest — and because this particular
+  direction is smoothed frame-to-frame (`RotateTowards`), one bad sample keeps poisoning the
+  result for a long stretch afterward rather than self-correcting next frame.
+- **Fix:** Explicitly flatten to XY (`new Vector3(v.x, v.y, 0f)`) at the point of computing
+  any delta/direction vector that's about to be normalized, in a script that's meant to be
+  purely 2D. Don't rely on the source Transform "should" only ever have Z=0 — verify by
+  actually flattening in the consumer, since confirming the true upstream source can be a
+  much deeper investigation than the two-line defensive fix.
+- **Date:** July 2026
+- **Key rule:** In a 2D top-down project, any gameplay script doing `.normalized` on a
+  position delta should explicitly flatten to XY first, even when the source Transform is
+  "supposed to" stay at Z=0 — small, hard-to-trace Z noise from any source becomes
+  wildly disproportionate once normalized, and smoothed/blended direction values let one
+  bad frame corrupt many frames afterward.
+
+### [Physics] Spawning two colliders exactly coincident causes a large, compounding separation push
+- **Symptom:** User screen-recorded starting the game with zero input and watched the
+  companion visibly push the player around from the very first moment.
+- **Root cause:** `PartySystem.EnsureCompanionInstance()` instantiated the companion at
+  `_playerTransform.position` — the exact same point as the player, full 100% collider
+  overlap at spawn. Reproduced directly: with the player's own `PlayerController_SideScroll`
+  fully active and correctly re-asserting zero velocity every `FixedUpdate` (i.e. NOT a
+  test-methodology gap — this was checked first), the player still drifted ~4-6 world units
+  over roughly 2 seconds before settling, purely from the initial full-overlap separation
+  compounding with the companion's own active path-following.
+- **Fix:** Spawn the companion at an explicit offset from the target
+  (`PartySystem._spawnOffset`, default `(0, -1.2, 0)`) that's comfortably larger than the
+  combined collider radii (~0.8 here), never exactly coincident.
+- **Date:** July 2026
+- **Key rule:** Never `Instantiate` a solid (non-trigger) collider at the exact same
+  position as another solid collider it will immediately need to separate from — even a
+  "temporary" full overlap produces an outsized physics response, and if either object has
+  its own active movement logic, that response can compound instead of resolving cleanly
+  in one step. Always spawn with a deliberate offset comfortably beyond both objects'
+  combined collision radii.
+
+### [Physics] A position-delta-based "which way is X moving" signal creates a feedback loop when X can also be externally displaced
+- **Symptom:** Companion follow/repel logic derived the player's movement direction from
+  `Transform.position` deltas frame-to-frame. In live play, this meant that any time the
+  companion's own collider nudged the player (even a barely-visible amount), the resulting
+  tiny position shift got picked up as "the player moved," which updated the companion's
+  trailing/repel direction, which moved the companion again, which nudged the player again
+  — a self-sustaining loop requiring zero real player input to continue indefinitely.
+- **Root cause:** `.normalized()` doesn't care about a vector's magnitude, only its
+  direction — a millimeter-scale involuntary nudge produces an equally "confident"
+  full-strength direction signal as a deliberate WASD keystroke. Position is fundamentally
+  the wrong signal to read for "player intent" in any scene where the tracked object can
+  also be moved by forces other than its own input (physics collisions, knockback, etc.).
+- **Fix:** Read the target's actual `Rigidbody2D.linearVelocity` instead. As long as the
+  target's own control script re-asserts its intended velocity every `FixedUpdate`
+  (`PlayerController_SideScroll` does — see its `FixedUpdate`), velocity reflects real
+  control intent and self-corrects within one physics tick after any external disturbance,
+  unlike raw position which just... changed, permanently, with no notion of "was that
+  intentional."
+- **Date:** July 2026
+- **Key rule:** For "is the target intentionally moving, and which way" logic, prefer
+  reading velocity (ideally from the target's own control script's asserted/intended
+  value) over raw position deltas whenever the target can be displaced by anything other
+  than its own will — physics knockback, other scripts, cutscenes, etc. Position deltas
+  conflate "moved on purpose" with "moved for any reason at all."
+
 ---
 
 ## Tilemap
@@ -85,6 +210,133 @@ Issues that required significant investigation to resolve. Read before debugging
 
 ---
 
+## A* Pathfinding Project
+
+### [Pathfinding] Configuring AstarPath/GridGraph via script immediately after AddComponent throws NullReferenceException
+- **Symptom:** `gameObject.AddComponent<AstarPath>()` followed immediately by `astar.data.AddGraph(typeof(GridGraph))` threw `NullReferenceException` — first on `astar.data` itself being `null`, then (after manually assigning `astar.data = new AstarData()`) inside `AddGraph` at the `graphTypes.Length` check.
+- **Root cause:** `AstarPath.Awake()` is what actually initializes `data` and populates `data.graphTypes` (via `FindGraphTypes()`) — and `Awake()` doesn't run synchronously the instant a component is added via an external Editor script/reflection call outside Unity's own lifecycle timing. Constructing a bare `new AstarData()` by hand skips that initialization entirely, and `AddGraph` unconditionally loops over `graphTypes` with no null guard.
+- **Fix:** After `AddComponent<AstarPath>()`, force initialization explicitly rather than assuming Unity has called it yet: invoke `Awake()` directly via reflection (`typeof(AstarPath).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public).Invoke(astar, null)`), then also call `astar.data.FindGraphTypes()` directly before `AddGraph` — don't rely on `Awake()` alone having done it.
+- **Date:** July 2026
+
+### [Pathfinding] AIPath applies fake gravity by default — falls/sinks with no Rigidbody or explicit zero
+- **Symptom:** A companion GameObject using `Seeker`+`AIPath` (no Rigidbody2D) visibly sank
+  downward over time in the Scene, independent of any pathfinding/following logic.
+- **Root cause:** `AIBase.gravity` defaults to `new Vector3(float.NaN, float.NaN, float.NaN)`
+  — a sentinel meaning "use `Physics.gravity`" (Unity's 3D gravity, `(0,-9.81,0)` by
+  default). Per `AIBase.cs`: gravity is only skipped if `gravity == Vector3.zero` OR a
+  **non-kinematic** Rigidbody/Rigidbody2D is attached (letting the real physics engine
+  handle gravity instead). A Kinematic Rigidbody2D does NOT suppress it — only Dynamic
+  does, or an explicit zero.
+- **Fix:** For any purely 2D top-down agent with no vertical axis at all, explicitly set
+  `aiPath.gravity = Vector3.zero`. Don't rely on adding *any* Rigidbody2D to suppress it —
+  only a non-kinematic one would, and a Kinematic body (the usual choice for an
+  AI-pathed agent) still needs the explicit zero.
+- **Date:** July 2026
+- **Key rule:** Always set `gravity = Vector3.zero` explicitly on `AIPath`/`AIBase` for 2D
+  top-down games — don't assume `is2D`/`orientation = YAxisForward` on the graph implies
+  gravity is off too; it's a completely separate field with its own default.
+
+### [Pathfinding] RigidbodyType2D enum order is Dynamic=0, Kinematic=1, Static=2 — easy to get backwards
+- **Symptom:** Set `Rigidbody2D.bodyType = 2` intending Kinematic (for an AI-pathed
+  companion). Read the component back afterward and it reported `bodyType: Static`, not
+  Kinematic.
+- **Root cause:** `RigidbodyType2D`'s declared field order is `Dynamic, Kinematic, Static`
+  — so the integer values are Dynamic=0, Kinematic=1, Static=2. Assumed 2=Kinematic without
+  checking; it's actually 1.
+- **Fix:** Verified via `unity_reflect get_type UnityEngine.RigidbodyType2D` before
+  correcting to `bodyType = 1`. Confirmed via component read-back afterward, not assumed.
+- **Date:** July 2026
+- **Key rule:** Never assume a Unity enum's underlying integer values from memory — a
+  handful of common ones (`SortingLayer` values are unrelated per-project data, not an enum,
+  so that one's always fine; but built-in engine enums like this one are worth a quick
+  `unity_reflect get_type` check) before setting them by raw int.
+
+### [Pathfinding] Rigidbody2D.MovePosition (Kinematic) needs an actual physics step — manual `FinalizeMovement` calls alone don't move it
+- **Symptom:** After adding a Kinematic `Rigidbody2D` to an `AIPath`-driven companion (so
+  AIPath would move it via `Rigidbody2D.MovePosition` instead of the raw Transform, for
+  consistency with the player's own Rigidbody2D-based structure), the previously-working
+  manual verification technique (repeatedly calling `aiPath.MovementUpdate(...)` +
+  `aiPath.FinalizeMovement(...)` in a loop — see the Play-Mode-doesn't-tick entry below)
+  stopped moving the GameObject at all. Position stayed frozen across 60 manual iterations.
+- **Root cause:** Once a Rigidbody2D is present, `FinalizeMovement` calls
+  `Rigidbody2D.MovePosition()` internally instead of writing `transform.position` directly.
+  `MovePosition` on any Rigidbody2D (Kinematic included) only takes effect during the next
+  actual Physics2D simulation step — it does not update the transform synchronously the way
+  a direct assignment does. Since nothing in this environment ticks real physics steps
+  either (same underlying cause as the Play-Mode-frame-ticking entry below), the queued
+  moves never got resolved.
+- **Fix:** Call `Physics2D.Simulate(deltaTime)` after each manual
+  `FinalizeMovement` — set `Physics2D.simulationMode = SimulationMode2D.Script` once, then
+  drive `Physics2D.Simulate(1f/60f)` alongside the existing manual movement-stepping loop.
+  This resolves the queued `MovePosition` synchronously, the same way `BlockUntilCalculated`
+  resolves a queued path.
+- **Date:** July 2026
+- **Key rule:** Any time a script-driven agent gains a Rigidbody2D, manual verification
+  needs a manual physics step too (`Physics2D.Simulate`) — not just manually invoking the
+  script's own Update-equivalent methods.
+
+### [Pathfinding] Manually-scanned GridGraph vanishes on the next domain reload
+- **Symptom:** Scanned a `GridGraph` successfully (2280 nodes, 1576 walkable) via script, everything worked in that same session — but after the next `refresh_unity` compile/domain reload, `astar.data.graphs.Length == 0` and `gridGraph == null`. Console showed `Caught exception when loading from zip` from `JsonSerializer.cs` during the reload.
+- **Root cause:** A*'s graph data round-trips through a serialized byte blob (`AstarData.data_cachedStartup`), not plain Unity field serialization. Configuring a `GridGraph` purely via runtime C# mutation (as opposed to using the actual AstarPath Inspector GUI, which calls the serialize step for you after every edit) never populates that blob, so there's nothing valid for the next domain reload to restore from.
+- **Fix:** After scanning, explicitly persist it: `astar.data.cacheStartup = true; var bytes = astar.data.SerializeGraphs(); astar.data.SetData(bytes);` then `EditorUtility.SetDirty` + save the scene.
+- **Correction (same day, later in the same session):** The fix note above originally
+  continued by recommending `cacheStartup = false` + `scanOnStartup = true` instead, reasoning
+  that a cached bake would go stale against `WorldChunkManager`'s dynamic chunk toggling. That
+  reasoning about staleness is still correct, but the specific recommendation was wrong: with
+  `cacheStartup = false`, **the graph's configuration itself doesn't persist either** — not
+  just node walkability data. A domain reload silently reverted a fully-configured GridGraph
+  (`cutCorners = false`, `collision.diameter = 2`) back to library defaults
+  (`cutCorners = true`, `diameter = 1`), because without a cached blob to deserialize from,
+  `AstarData.graphs` has nothing to restore *at all*. The actually-correct combination: keep
+  `cacheStartup = true` (so the configured graph — dimensions, collision mask, diameter,
+  cutCorners, everything — reliably survives) **and** `scanOnStartup = true` (so the
+  walkability *data* is always freshly recomputed against whatever's actually active at
+  startup, addressing the original staleness concern without losing the configuration).
+- **Date:** July 2026
+- **Key rule:** Don't assume a runtime-configured AstarPath survives a domain reload just because `EditorUtility.SetDirty` was called — A*'s graphs need their own explicit serialize step (`SerializeGraphs`/`SetData`) with `cacheStartup = true`. Setting `cacheStartup = false` to avoid a stale bake throws out the configuration along with the node data — use `scanOnStartup = true` for freshness instead, not `cacheStartup = false`. Verify persistence claims about this library by forcing an actual domain reload and re-reading the values back — don't assume from a single successful save.
+
+### [Pathfinding] GraphCollision.diameter is scaled by nodeSize — not an absolute world-unit value
+- **Symptom:** Set `collision.diameter = 1` expecting a 1-world-unit collision check
+  diameter. A companion using the resulting `GridGraph` visibly ended up standing on top of
+  a decoration/stump collider that should have been marked unwalkable.
+- **Root cause:** Read `GraphCollision.Check()` and `GridGenerator.cs` directly rather than
+  guessing further. `GraphCollision.Initialize(transform, scale)` is called as
+  `collision.Initialize(transform, nodeSize)` — i.e. `scale` in
+  `finalRadius = diameter * scale * 0.5f` is the graph's `nodeSize`, not `1`. With
+  `nodeSize = 0.5`, `diameter = 1` produced a real check radius of only `0.25` world units —
+  small enough to miss decoration colliders that don't perfectly fill their tile cell or
+  sit slightly off the grid's own node centers.
+- **Fix:** Treat `diameter` as "how many node-widths of clearance," not world units. Derive
+  it as `desiredWorldDiameter / nodeSize`. Verified empirically against all 96 painted
+  Decorations tiles across several candidate values — `diameter = 2` (real radius `0.5`) was
+  the smallest value producing zero misclassified obstacle tiles for this scene; higher
+  values only eroded walkable area further with no further correctness benefit.
+- **Date:** July 2026
+- **Key rule:** Never assume an A* Pathfinding Project numeric field is in plain world
+  units — several (like this one) are scaled by `nodeSize` internally. When a collision/size
+  value looks like it should be simple, grep the actual source
+  (`Assets/AstarPathfindingProject/Generators/Base.cs` and `GridGenerator.cs` for
+  `GraphCollision`) before assuming, and verify empirically against real scene geometry
+  (e.g. checking every painted obstacle tile's nearest-node walkability), not just a raw
+  node walkable/unwalkable count.
+
+### [Pathfinding] GridGraph's default `cutCorners = true` lets a sized agent clip through corners it can't fit through
+- **Symptom:** Companion following the player would visibly get stuck/jitter in the same
+  specific spots — always right around a decoration object, never in open floor.
+- **Root cause:** `cutCorners = true` (GridGraph's default) permits a path to connect two
+  diagonally-adjacent nodes even when both of their shared cardinal neighbors are blocked —
+  a diagonal "corner clip" that assumes a zero-size point agent. `AIPath.radius` here is
+  `0.4` (real, non-zero) — a gap the grid's connectivity considers valid can still be
+  physically too tight for the agent, producing jittery, stuck-looking movement exactly at
+  obstacle corners.
+- **Fix:** Set `cutCorners = false` on the GridGraph and rescan.
+- **Date:** July 2026
+- **Key rule:** Any GridGraph used by an agent with a real non-zero `radius` should have
+  `cutCorners = false` — the default assumes a point agent and will produce corner-clipping
+  artifacts for anything larger.
+
+---
+
 ## Tooling
 
 ### [Tooling] CoplayDev unity-mcp migration — four stacked blockers before the bridge connected
@@ -107,6 +359,17 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Fix:** Ask the user to click into/focus the Unity Editor window (resolves issue 1). Create a trivial empty stub for any type still blocking full-assembly compilation, even if it's out of scope for the current task — the project's own "Stub rule" (in `Evolution_System_Directive_v1_1_0.md`) explicitly sanctions this: forward-referenced types only need to exist, not be fully implemented, for the rest of the assembly to compile.
 - **Date:** July 2026
 - **Key rule:** `read_console` showing "only N pre-existing errors" is not proof the rest of your new code loaded successfully — in a project with no assembly definition splitting, any error anywhere blocks domain reload for everything. Cross-check with `unity_reflect search` (or an actual asset-creation attempt) before trusting a clean-looking error diff. Also check `editor.is_focused` in `mcpforunity://editor/state` before assuming a stuck domain reload is a code problem.
+
+### [Tooling] Play Mode doesn't tick frames at all while the Editor window is unfocused (MCP automation)
+- **Symptom:** Entered Play Mode via `manage_editor(action="play")`, added a party member, moved the player's Transform via `execute_code`, waited several real seconds (both `Bash sleep` between calls and `Thread.Sleep` inside a single call), then checked — `Time.frameCount` was still `1` or `2`. The companion GameObject never moved, `AIPath.destination` read back as `(Infinity, Infinity, Infinity)` (its "never been set" sentinel), and `AIPath.hasPath` stayed `false` even after manually calling `SearchPath()` and sleeping.
+- **Root cause:** Unity's Player Loop (`MonoBehaviour.Update`, `FixedUpdate`, and the async path-request delivery A* Pathfinding Project relies on) simply does not tick when the Editor process has no OS focus/visibility in this automation environment — regardless of `Application.runInBackground` / `PlayerSettings.runInBackground` (tried both; no effect). Calling `EditorApplication.QueuePlayerLoopUpdate()` in a loop from inside a synchronous `execute_code` call does not help either — it only *schedules* a tick for whenever the main thread goes idle, but that same call is what's currently occupying the main thread, so it can never actually run before the call returns. This is a distinct issue from the already-documented "domain reload doesn't complete unfocused" entry above — that one is about compilation/domain reload; this one is about Play Mode's per-frame simulation loop.
+- **Fix — bypass automatic ticking entirely for verification, don't fight it:**
+  1. Any per-frame *decision logic* in your own script (state machines, distance checks, etc.) can be verified by invoking the private `Update()`/`FixedUpdate()` method directly via reflection (`typeof(T).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(instance, null)`) — this proved `CompanionAI`'s state/destination computation was correct long before movement itself could be tested.
+  2. A* Pathfinding Project specifically: build and solve a path synchronously with `var path = ABPath.Construct(from, to, null); AstarPath.StartPath(path); path.BlockUntilCalculated();` (this genuinely blocks and completes without needing frame ticks — proven both for a raw path request and for feeding it into an `AIPath` via `aiPath.SetPath(path)`).
+  3. To prove actual movement (not just pathing), manually step `AIBase`'s own movement API in a loop: `aiPath.MovementUpdate(1f/60f, out var nextPos, out var nextRot); aiPath.FinalizeMovement(nextPos, nextRot);` — 60 iterations at a 1/60s delta reliably simulates ~1 second of real gameplay movement synchronously.
+  4. None of this workaround is needed for an actual human playtesting the game in a focused Editor window or a build — standard Play Mode ticking works completely normally there. It's purely a constraint of driving Unity headlessly through this specific automation path.
+- **Date:** July 2026
+- **Key rule:** If `Time.frameCount` isn't advancing across separate MCP tool calls despite real wall-clock time passing, stop waiting longer — it will never tick on its own in this environment. Drive the specific subsystem synchronously instead (reflection-invoke your own `Update()`, and for A* Pathfinding Project specifically, `BlockUntilCalculated()` + manual `MovementUpdate`/`FinalizeMovement` stepping).
 
 ### [Tooling] Unity MCP stdio connection doesn't survive Unity being closed/reopened mid-session
 - **Symptom:** After closing and reopening the Unity Editor while a Claude Code session kept running, `unity-mcp` tools either disappeared from the tool list entirely, or Unity's own "MCP for Unity" window showed a stale "No Session" (red) indicator even when the connection was actually working fine.

@@ -57,6 +57,8 @@ Assets/
     UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay
     Audio/       ← AudioManager
     Save/        ← SaveSystem, SaveData
+  Prefabs/
+    Creatures/   ← Phasix placeholder/visual prefabs (Phasix_Placeholder, etc.)
   Data/
     Species/     ← PhasixData SOs (placeholder until roster designed)
     Skills/      ← SkillData SOs (placeholder until species designed)

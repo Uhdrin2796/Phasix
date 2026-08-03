@@ -125,6 +125,34 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 
 ---
 
+### [Art] Placeholder Phasix visual — one shape, underglow halo, sorting layer
+- **Decided:** All Phasix placeholders use one shared shape (Unity's built-in 2D `Circle`
+  sprite) — color from `PrimalTypeColor` is the sole systematic differentiator, no
+  per-type shape variation. A second, larger `Underglow` sprite renders behind the `Body`
+  sprite, tinted the same color lightened 35% toward white at 40% alpha (both tunable per
+  `PhasixPlaceholderVisual` instance) — no separate ground-shadow layer was added.
+  Duo-merge colors are a plain 50/50 `Color.Lerp` of the two parent base colors (no
+  weighting), matching DECISIONS.md's existing "blend" wording literally. Both renderers
+  use the `Characters` sorting layer (existing layer, already used by Mr_chimken) — the
+  `Default` layer was tried first and found to render *behind* the tilemap's `Ground`
+  layer, making the placeholder invisible despite having the correct color.
+- **Why:** One shape keeps this a pure color-driven system with no second mapping to
+  invent ahead of a species roster (mirrors the tilemap's own one-shape/color-only
+  pattern). The underglow was the user's explicit ask over a ground-shadow alternative.
+  50/50 blend is the simplest, most literal reading of the already-locked "blend their two
+  parent base colors" wording — no basis existed for an asymmetric weighting.
+- **Alternatives rejected:** Shape-per-PrimalType (would need a second full mapping and
+  a rule for what the 28 duo types inherit — no justification without a roster). Ground-
+  shadow layer instead of underglow — user chose underglow. Leaving sprites on the
+  `Default` sorting layer — found to be simply wrong (renders behind ground tiles), not a
+  style choice.
+- **Date:** July 2026
+- **Revisit if:** A species roster eventually wants per-species shape distinction, or the
+  underglow tuning values (0.35 lighten / 0.4 alpha) look wrong once real creature
+  silhouettes replace the circle.
+
+---
+
 ## World & Architecture
 
 ### [World] Chunk management approach
@@ -140,6 +168,162 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Alternatives rejected:** Unity NavMesh with NavMeshSurface2D — less intuitive for tile-based worlds
 - **Date:** March 2026
 - **Revisit if:** Free tier hits feature ceiling (upgrade to Pro, not switch library)
+- **Update, July 2026:** The free version is no longer on the Unity Asset Store (Store
+  listing is Pro-only now) — it's downloaded directly from arongranberg.com/astar/download
+  instead. Import confirmed live via `unity_reflect` and a real solved `ABPath`.
+
+### [Pathfinding] Grid Graph — dedicated Obstacles layer, cached config + fresh scan on startup
+- **Decided:** Created a new `Obstacles` physics layer. `Walls` and `Decorations` tilemap
+  colliders moved onto it (were on `Default`, same as the player's own collider — scanning
+  against `Default` would have marked the player's own collider as an obstacle). The
+  `GridGraph`'s 2D collision mask targets `Obstacles` only, with `collision.diameter = 2`
+  and `cutCorners = false` (see the two entries below for why). **Both**
+  `AstarPath.scanOnStartup = true` **and** `data.cacheStartup = true` are needed together —
+  not `scanOnStartup` alone, corrected from an earlier version of this entry (see Update
+  below).
+- **Why:** `WorldChunkManager` (Phase 1) dynamically `SetActive`s world chunks based on
+  player proximity — a graph that's only ever restored from a stale cached scan would
+  silently go wrong the moment chunks toggle in/out. `scanOnStartup = true` re-runs the
+  actual collision scan fresh every time Play begins, so walkability always reflects
+  whatever's active right now.
+- **Update, July 2026 (same session):** The original version of this entry set
+  `cacheStartup = false`, believing that "not caching" was how to force a fresh scan.
+  That was wrong and was corrected the hard way: without `cacheStartup = true` +
+  `SerializeGraphs`/`SetData`, **nothing** about the graph persists across a domain
+  reload — not just stale node data, but the graph's own configuration (`diameter`,
+  `cutCorners`, dimensions, mask, all of it), since A*'s graphs are restored entirely by
+  deserializing the cached blob, not through normal Unity field serialization. Confirmed by
+  a domain reload reverting a configured graph to library defaults
+  (`cutCorners: True, diameter: 1`) despite `EditorUtility.SetDirty` + a scene save having
+  been called. The correct combination is: cache the *configured* graph
+  (`cacheStartup = true` + explicit `SerializeGraphs`/`SetData` after any Edit-mode config
+  change) so settings survive, AND keep `scanOnStartup = true` so the actual walkability
+  data is always freshly recomputed at runtime against whatever's active then. See
+  LESSONS_LEARNED.md → [Pathfinding] for the full investigation.
+- **Alternatives rejected:** `cacheStartup = false` alone (the original, incorrect version
+  of this decision) — loses the configuration itself, not just node data.
+- **Date:** July 2026
+- **Revisit if:** Rescanning the whole graph on every startup becomes a real load-time cost
+  once the world is larger than the current single test room — at that point, consider
+  scanning only active chunks, or graph updates on chunk toggle, instead of one full scan.
+
+### [Pathfinding] GraphCollision.diameter is in nodeSize units, not world units — and cutCorners needs to be off
+- **Decided:** `collision.diameter = 2` (not `1`, the value first tried) and
+  `cutCorners = false` (not the GridGraph default of `true`).
+- **Why:** User-reported bug — the companion visibly sat on top of a stump/rock decoration
+  it should have routed around. Direct investigation (not guessing) found two compounding
+  causes: (1) `GraphCollision.finalRadius = diameter * nodeSize * 0.5` (confirmed by reading
+  `Base.cs`/`GridGenerator.cs` source directly) — `diameter` is a multiple of the graph's
+  `nodeSize` (0.5 here), not an absolute world-unit value. `diameter = 1` therefore meant an
+  actual collision-check radius of only 0.25 world units, small enough to miss decoration
+  colliders that don't perfectly fill their tile cell or sit slightly off the grid's own
+  node centers (the grid's node positions aren't guaranteed to align with the tilemap's own
+  cell centers). Tested empirically across several values against all 96 painted
+  Decorations tiles; `diameter = 2` (real radius 0.5) was the smallest value that produced
+  zero misclassified tiles, and going higher only eroded the walkable area further with no
+  further benefit. (2) `cutCorners = true` (the GridGraph default) allows the path to
+  connect two diagonally-adjacent nodes even when both their shared cardinal neighbors are
+  blocked — geometrically a gap the agent's real ~0.4 radius can't fit through cleanly,
+  which reads as jittering/getting stuck exactly at obstacle corners.
+- **Alternatives rejected:** Assuming `diameter` was already in world units (the original,
+  incorrect assumption) — silently produced a check radius 4x smaller than intended.
+- **Date:** July 2026
+- **Revisit if:** A different `nodeSize` is ever chosen — `diameter` must be re-derived as
+  `desiredWorldRadius * 2 / nodeSize`, not copied as a literal number.
+
+### [Pathfinding] Companion uses Rigidbody2D (Kinematic) + CircleCollider2D, matching PlayerController_SideScroll's structure
+- **Decided:** `Phasix_Placeholder.prefab` has a `Rigidbody2D` (Kinematic body type,
+  `gravityScale = 0`, frozen rotation, continuous collision detection, interpolation — same
+  values as `PlayerController_SideScroll`'s Rigidbody2D, except Kinematic instead of Dynamic
+  since AIPath drives it rather than force/velocity) and a `CircleCollider2D` (radius 0.4,
+  matching `AIPath.radius`). `CompanionAI.Awake()` also explicitly sets `_aiPath.gravity =
+  Vector3.zero`.
+- **Why:** User-reported bug — the companion was visibly sinking. Root cause: `AIPath`'s
+  built-in fake-gravity/ground-check system (for 3D/sloped terrain) defaults to
+  `Physics.gravity` unless a non-kinematic Rigidbody is present or gravity is explicitly
+  zeroed, and neither was true before this fix. Beyond just fixing the symptom, adding a
+  Rigidbody2D matching the player's own structure was the more correct fix: A* Pathfinding
+  Project's `AIPath` explicitly supports driving a Rigidbody2D instead of the raw Transform
+  when one is present (confirmed in `AIBase.cs` source, not assumed) — this also gives the
+  companion real Physics2D collision/trigger participation for free, which the next roadmap
+  item (Wk 14-16, wild encounter Trigger2D) will likely want anyway.
+- **Alternatives rejected:** Just zeroing gravity without adding a Rigidbody2D — fixes the
+  falling but leaves the companion structurally inconsistent with every other physics-based
+  character in the project, and without real collider participation.
+- **Date:** July 2026
+
+### [Creatures] Companion's collider is a trigger — the player must never be physically influenced by it
+- **Decided:** `Phasix_Placeholder.prefab`'s `CircleCollider2D.isTrigger = true`, superseding
+  the earlier solid-collider setup from earlier in this same session.
+- **Why:** Explicit user requirement — the companion must never influence player movement at
+  all, under any circumstance; the companion is always the one that accommodates. A solid
+  (non-trigger) collider on a Kinematic Rigidbody2D will always physically displace a Dynamic
+  body it touches — this is unconditional Unity 2D physics behavior, true regardless of how
+  well-tuned the companion's own AI avoidance logic is. The only way to guarantee zero
+  physical influence on the player is to remove physical collision entirely and make 100% of
+  avoidance the companion's own scripted responsibility (the trailing + repel logic already
+  built). Confirmed not a limitation of A* Pathfinding Project — this is collider
+  configuration, unrelated to which library drives the companion's movement.
+- **Supersedes:** The `[2026-07-31] Verified — player can physically collide with the active
+  companion` CHANGELOG entry from earlier this session. That verification was accurate for
+  what was built at the time (solid collider), but the user has since clarified that solid
+  blocking is NOT the desired design — it directly conflicted with "the companion should
+  never influence player movement."
+- **Date:** July 2026
+
+### [Creatures] Companion spawns at an offset from the player, never exactly coincident
+- **Decided:** `PartySystem` spawns the companion at `_playerTransform.position +
+  _spawnOffset` (default `(0, -1.2, 0)`), not directly at the player's position.
+- **Why:** User screen-recorded the companion pushing the player around with zero input,
+  from the very start of the game. Reproduced and confirmed: spawning two solid, non-trigger
+  colliders exactly coincident forces a large physics separation response that compounds
+  with the companion's own active path-following, producing several seconds of drift before
+  settling — even with the player's own movement script correctly re-asserting zero velocity
+  every `FixedUpdate` the whole time (i.e. not a side-effect of any AI logic bug, confirmed
+  separately from the fix below).
+- **Date:** July 2026
+
+### [Creatures] CompanionAI reads the player's Rigidbody2D.linearVelocity, not Transform position deltas
+- **Decided:** `CompanionAI`'s "which way is the player moving" signal comes from
+  `_target.GetComponent<Rigidbody2D>().linearVelocity`, falling back to a flattened position
+  delta only if the target has no Rigidbody2D.
+- **Why:** Position deltas don't distinguish "the player intentionally moved" from "the
+  player's Transform changed for any reason" — including being physically nudged by the
+  companion's own collider. Combined with `.normalized()` (which is magnitude-blind), this
+  created a real feedback loop: companion nudges player → tiny involuntary position shift →
+  read as player movement → companion reacts → nudges again, sustainable with zero actual
+  input. `Rigidbody2D.linearVelocity` reflects `PlayerController_SideScroll`'s own asserted
+  intent (it overwrites the Rigidbody's velocity every `FixedUpdate` regardless of what
+  physics did to it in between), so it self-corrects within one physics tick instead of
+  persisting.
+- **Alternatives rejected:** Raising the position-delta detection threshold — would only
+  narrow the window for false triggers, not eliminate the underlying category error (using
+  position as a proxy for intent at all).
+- **Date:** July 2026
+
+### [Pathfinding] CompanionAI's trail direction is turn-rate-limited, not snapped instantly
+- **Decided:** `CompanionAI._smoothedTargetDirection` (the direction the companion trails
+  behind) now updates via `Vector3.RotateTowards` at a tunable `_directionTurnSpeed`
+  (degrees/sec, default 180), instead of snapping to the player's latest per-frame movement
+  delta instantly.
+- **Why:** An instant snap meant the companion's computed follow-point whipsawed every time
+  the player's heading changed quickly — which is exactly what happens continuously while
+  curving around an obstacle. Combined with the GridGraph fixes above, this contributed to
+  the "getting stuck near objects" symptom: the destination itself was jittering, not just
+  the path to it.
+- **Date:** July 2026
+
+### [Pathfinding] AIPath over AILerp for companion following
+- **Decided:** `CompanionAI` uses `AIPath` (physics/acceleration-based movement), not
+  `AILerp` (constant-speed linear interpolation between path corners).
+- **Why:** The player (`PlayerController_SideScroll`) already moves via smoothed
+  Rigidbody2D acceleration/deceleration — `AIPath`'s similarly physics-flavored movement
+  (`maxAcceleration`, speed ramping) reads as consistent with that, whereas `AILerp`'s
+  constant-speed snapping between waypoints would look visually different from the
+  player's own movement feel.
+- **Alternatives rejected:** `AILerp` — simpler and cheaper, but the wrong movement feel
+  for a companion meant to visually match the player's motion style.
+- **Date:** July 2026
 
 ---
 
@@ -540,6 +724,50 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 
 ---
 
+### [Creatures] Personality roll is uniform random; stat-nudge table built now as unwired scaffolding
+- **Decided:** `PersonalitySystem.RollRandom()` picks uniformly among all 18 traits — GDD
+  §7 doesn't specify any weighting, and no capture system exists yet to suggest one is
+  needed. `PersonalityStatModifier`'s trait→stat-nudge table (GDD §7.3, locked) was built
+  now even though nothing consumes it yet — the numeric growth formula lives in the
+  not-yet-built Aura allocation system (Progression_Directive_v0_1_0.md). User chose to
+  build it now rather than defer, since the mapping itself is fully locked content, not
+  invented, and the cost of adding it now is low.
+- **Why:** Uniform random is the simplest default with zero evidence for any other
+  distribution — matches "no invented content" (don't add a weighting rule the GDD never
+  specified). The stat-nudge table follows the same forward-reference precedent already
+  established for `PhasixRuntimeData`'s unwired evolution-graph fields.
+- **Alternatives rejected:** Weighting personality rolls by Temper or PrimalType (no GDD
+  basis, would be invented). Deferring the stat-nudge table entirely until Aura allocation
+  exists — rejected by the user in favor of capturing the locked data now.
+- **Date:** July 2026
+- **Revisit if:** A designer specifies non-uniform capture odds, or once the Aura
+  allocation system is built and needs to consume `PersonalityStatModifier`.
+
+---
+
+### [Creatures] PartySystem is a MonoBehaviour singleton, not static like BondSystem/PersonalitySystem
+- **Decided:** `PartySystem` is a `MonoBehaviour` singleton (`PartySystem.Instance`), not a
+  stateless static class.
+- **Why:** BondSystem and PersonalitySystem are pure rules-enforcement layers — they take an
+  externally-owned `PhasixRuntimeData` and mutate it, with no state or asset references of
+  their own. `PartySystem` is a different kind of thing: it owns the party roster itself
+  (which Phasix are in which of the 3 slots) AND needs an Inspector-assigned prefab
+  reference (the companion visual) plus a live spawned GameObject instance it must track
+  across calls. That's the same category as `GameManager` (a scene-resident manager with
+  Inspector wiring), not a stateless static utility.
+- **Also decided:** Switching the active party slot re-skins and re-targets a single
+  persistent companion `GameObject` (via `PhasixPlaceholderVisual.ApplyFromSpeciesData` +
+  `CompanionAI.SetTarget`) rather than destroying and instantiating a new one per switch —
+  keeps slot-switching from ever looking like the "Instantiate/Destroy in a loop" pattern
+  the architecture rules warn against, even though slot switches themselves aren't frequent
+  enough to need real pooling.
+- **Date:** July 2026
+- **Revisit if:** A future save system (Phase 4) needs the party roster to live somewhere
+  serializable — `PartySystem` may become the in-memory mirror of that saved state rather
+  than the sole source of truth.
+
+---
+
 ## Creatures — Future Systems (Designed, Not Yet Built)
 
 Both entries below came out of a design discussion prompted by reviewing the PhasixData
@@ -616,6 +844,73 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Revisit if/when:** Before Combat (Phase 3) or Evolution (Phase 4) numeric calibration
   locks in, since Resonance bonuses would need to interact with the damage/stat formulas
   those phases define.
+
+### [Creatures] Companion movement/following pattern archetypes (outline only — not designed)
+- **Scope — open world only.** This entire entry is about **overworld companion-following
+  AI** (`CompanionAI`, Wk 12-13) — how the active party Phasix physically moves around the
+  player while exploring outside of battle. It has no relationship to Tempo's in-battle
+  action economy, skill trees, or any combat system. Do not conflate the two when reading
+  this entry later.
+- **Status:** Outline for future discussion only. Nothing decided, nothing implemented.
+  Written down purely so a future session doesn't restart this from zero — every option
+  below is a draft to argue with, not a proposal to build as-is.
+- **Concept:** `CompanionAI` (Wk 12-13) already exposes several tunable knobs per instance —
+  `_trailDistance`, `_directionTurnSpeed`, `_walkSpeed`/`_runSpeed`,
+  `_idleDistance`/`_runDistance`, `_repelDistance`/`_repelStrength`. Right now every Phasix
+  uses the same prefab defaults for all of these. The idea: let different Phasix *feel*
+  different when following, driven by per-species or per-individual data rather than one
+  fixed tuning.
+- **Investigated and rejected as the driving hook: `TempoType`.** Checked the actual locked
+  definition (GDD §11, "Locked v0.5.1") before assuming it would fit: Tempo is explicitly
+  **battle action economy** — "what a creature can structurally do when its turn arrives"
+  (one action / chain / bank), chosen before battle and locked for that fight's duration.
+  It has nothing to do with movement and reusing it for overworld following would conflict
+  with its actual locked meaning, not extend it.
+- **Leading candidate hook: Personality (18 traits, already built —
+  `PersonalityStatModifier`).** Unlike Tempo, Personality is about temperament (Reckless,
+  Calm, Timid, Jolly, Cautious, ...) with no locked meaning outside "stat nudge" — mapping
+  temperament to movement *feel* is a natural, low-conflict extension, and the 6 existing
+  thematic groups (GDD §7.3: Offensive, Elemental, Defensive, Technical, Resilient,
+  Versatile) already suggest natural movement-style clusters:
+  - **Offensive** (Reckless, Fierce) → eager, close-following, quick to Run-state
+  - **Defensive** (Cautious, Hardy) → measured distance, calmer turn speed, slower to panic-run
+  - **Resilient** (Stubborn, Gentle, Patient, Lively) → steady/unflappable, doesn't react to
+    every small player movement
+  - **Versatile** (Brave, Jolly, Timid, Naive) → most varied — Timid in particular could
+    lean toward the "keeps more distance" archetype below rather than the close-follow norm
+  - **Elemental** (Quirky, Calm) and **Technical** (Hasty, Careful, Shrewd, Thorough) not yet
+    drafted — no strong movement-flavor read on these two groups yet.
+- **Tier 1 — parameter presets (buildable now, no new movement code):** just different
+  combinations of the knobs `CompanionAI` already has.
+  - *Close Shadow* — small trail distance, fast turn speed, low idle threshold (glued to
+    the player, reacts instantly)
+  - *Wide Wanderer* — large trail distance, slower turn speed (hangs back, unhurried)
+  - *Eager Runner* — low idle distance + high run speed (always feels like it's hustling to
+    catch up)
+  - *Steady Anchor* — large idle distance, doesn't feel rushed to stay close
+- **Tier 2 — new behavior patterns (would need actual new logic, not just tuning):**
+  - *Orbiting* — circles the player at a radius instead of trailing directly behind
+  - *Flanking* — holds a side position (left/right of the player) rather than directly
+    behind
+  - *Skittish* — inverted repel logic: prefers to keep MORE distance than normal and darts
+    away if the player gets too close, rather than the current close-follow norm
+  - *Wandering* — periodically breaks off to explore nearby, then returns on its own
+  - *Aerial/Flying* — ignores the GridGraph's ground obstacles entirely, moves in straight
+    lines (would need its own non-pathfinding movement mode, not an AIPath tuning change)
+  - *Bounding* — discrete hop/pause rhythm instead of continuous movement (ties into the
+    Idle/Walk/Run Animator scaffold already built, once real animation content exists)
+- **Open questions:** whether Personality is the right final hook or a dedicated new field
+  is cleaner; the Elemental/Technical group movement reads; whether Tier 2 patterns are
+  worth the complexity before a real species roster exists to assign them meaningfully
+  (per-species flavor without real species feels like guessing); actual numeric tuning
+  values per archetype (would be its own NumericalCalibration.md-style pass).
+- **Date:** July 2026
+- **Revisit if/when:** the species roster (Phase 5, GDD §25) exists — assigning movement
+  flavor to real, designed species is a much better-grounded exercise than guessing ahead
+  of it.
+- **Try it now:** `CompanionAI.ApplyMovementPreset()` + `DebugMovementPresetCycler.cs`
+  (temporary, press Tab in Play mode) let all 5 Tier 1 presets above be compared live on the
+  existing placeholder companion, before committing to Personality or any other hook.
 
 ### [Creatures] Defuse / Infuse — creature release + Resonance investment (proposed)
 - **Status:** Designed, not implemented. Depends conceptually on the Resonance system above

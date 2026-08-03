@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 42d85e8caffa3c5469adda6aa355f782, type: 3}
+  m_Name: Test_SteamType
+  m_EditorClassIdentifier: Assembly-CSharp::PhasixData
+  _speciesName: Test Steam Placeholder
+  _emotionalType: 
+  _evolutionTier: 0
+  _primalType: 8
+  _signalPool: 
+  _tempoType: 0
+  _vitality: 0
+  _force: 0
+  _resonance: 0
+  _guard: 0
+  _ward: 0
+  _resolve: 0
+  _instinct: 0
+  _aura: 0
+  _availableTreeTypes: 

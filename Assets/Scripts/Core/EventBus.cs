@@ -35,6 +35,17 @@ public static class EventBus
 
 
     // -------------------------------------------------------------------------
+    // PHASE 2 — Personality System (live — wired in PersonalitySystem.cs)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Fires when a Phasix's personality changes (item-based swap, GDD §7.2). Not fired on initial capture-time roll.</summary>
+    public static event Action<PhasixRuntimeData, Personality> OnPersonalityChanged;
+
+    public static void Raise_PersonalityChanged(PhasixRuntimeData phasix, Personality newPersonality)
+        => OnPersonalityChanged?.Invoke(phasix, newPersonality);
+
+
+    // -------------------------------------------------------------------------
     // PHASE 3 — Battle System (stubs — wired when BattleManager is built, Mo 5)
     // -------------------------------------------------------------------------
 

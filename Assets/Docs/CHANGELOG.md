@@ -18,6 +18,454 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-07-31] Tuning — reference companion resized to half scale
+- `Phasix_Placeholder.prefab` root `localScale` 1→0.5. `CircleCollider2D`'s world-space
+  bounds shrink automatically with transform scale (no manual radius change needed,
+  confirmed via read-back: bounds went from 0.8×0.8 to 0.4×0.4). `AIPath.radius` (a plain
+  data field the pathfinding math uses directly, NOT auto-scaled by Transform like a real
+  Collider2D) manually halved 0.4→0.2 to stay proportional to the smaller visual/physical
+  size.
+- `DebugMovementPresetCycler`'s floating label scale doubled (0.075→0.15) to compensate —
+  it's a child of the companion, so it would otherwise have shrunk along with the halved
+  parent, undoing the size already agreed on earlier this session.
+- Verified visually via Scene View screenshot after confirming (via a fresh Play session —
+  the first check accidentally read a stale pre-edit instance still running from before)
+  that the live companion's `transform.localScale` actually reads `(0.5, 0.5, 0.5)`.
+- **Date:** 2026-07-31
+
+[2026-07-31] Fix — DashThrough cut off mid-run, Orbit lagged once the player moved
+- **User feedback (video):** Eager Runner's path visibly changed mid-transit before
+  completing a dash. Orbit tracked correctly while the player stood still, but lagged
+  behind once they started moving — user's own diagnosis: "maybe the orbit needs an
+  additive so it moves in relation to the player velocity?" — confirmed correct.
+- **DashThrough root cause:** re-targeting was gated purely on a fixed clock
+  (`_dashIntervalMin`/`_dashInterval`, 0.35-0.9s) with no regard for whether the current
+  dash had actually been reached — at short intervals this cut dashes off well before
+  arrival. **Fix:** re-targets on `AIPath.reachedDestination` instead; the interval fields
+  are now a safety-net maximum wait (in case a target becomes unreachable), widened to
+  2-3s so they essentially never fire under normal conditions.
+- **Orbit root cause:** purely reactive chasing of a moving target point always leaves
+  residual lag once the target itself is moving, regardless of catch-up speed — the
+  destination never stops moving, so a `MoveTowards`-style pursuit is structurally always
+  a step behind. Compounded by running the position update in `Update()` (render-tick)
+  while the player's own movement applies in `FixedUpdate()` (physics-tick) — a cadence
+  mismatch. **Fix:** moved Orbit's movement to `FixedUpdate`, and added a feedforward term
+  — the player's current `Rigidbody2D.linearVelocity` is applied directly to the
+  companion's motion each physics step (zero-lag translation, matching how the player
+  moves themselves), with `OrbitCatchUpSpeed` now only handling the small residual
+  correction (the orbit's own rotational sweep, drift, pattern-switch settling) instead of
+  the whole job.
+- **Verified:** DashThrough — remaining distance to each dash target now shrinks steadily
+  to near-zero before a new one is picked (2.393→1.991→0.684, then 5.316→...→0.039),
+  instead of being cut off early. Orbit — with the player under **continuous** velocity
+  (not stationary), distance from the orbit center held between 1.93-2.07 (radius 2)
+  across every sample, essentially eliminating the lag visible in the reported video.
+  Both verified on isolated throwaway test objects.
+- **Process note:** `Physics2D.simulationMode` was correctly restored to `FixedUpdate`
+  after this round of testing (see the earlier lesson learned about this) — confirmed via
+  both a direct read-back and a `git diff` check on `ProjectSettings/Physics2DSettings.asset`
+  showing no unintended change.
+- **Date:** 2026-07-31
+
+[2026-07-31] Tuning — Eager Runner erratic on both axes, Orbit tightened + center-corrected
+- **User feedback:** Eager Runner needed to feel more erratic (speed + dash length, not just
+  fast in one direction); Orbit needed to be faster, centered correctly (was orbiting the
+  player's feet-pivot Transform, not their visible body — needed an upward shift), and
+  needed near-zero lag ("almost non-existent" delay between the orbit and the player's
+  current position) while still supporting a looser/trailing variant later if wanted.
+- **DashThrough now randomizes two independent axes per cycle**, not just angle: added
+  `DashIntervalMin`/`DashOvershootMin` alongside the existing values (now treated as maxes)
+  — both the timing between dashes AND the overshoot distance are randomized each cycle.
+  Eager Runner: `RunSpeed` 9→14, `WalkSpeed` 4→6, interval randomized 0.35-0.9s, overshoot
+  randomized 1.5-5 units, angle spread widened to ±150°.
+- **Orbit reworked to bypass AIPath's own movement entirely.** Root cause of the lag: AIPath's
+  gradual acceleration/steering was the delay itself, not a tuning problem — no amount of
+  speed/turn-speed tuning on AIPath's own steering could make it feel "tight." Fixed by
+  disabling `AIPath.canMove` for this pattern and directly driving the Rigidbody2D via
+  `Vector3.MoveTowards` at a new tunable `OrbitCatchUpSpeed` (world units/sec) each frame —
+  high values (30-40+) read as near-instant tracking; low values (3-8) deliberately preserve
+  the option for a future looser/trailing orbit variant, per the user's explicit ask to keep
+  that door open.
+- **Added `OrbitCenterOffset` (Vector2)** — orbits around `target.position + offset` instead
+  of the raw Transform position, compensating for the player's feet-pivot rig (same root
+  cause as the CapsuleCollider2D offset found earlier this session). Orbiting Moon preset:
+  `OrbitAngularSpeed` 60→220 deg/sec, offset `(0, 1.4)`, `OrbitCatchUpSpeed` = 40.
+- **Verified on isolated throwaway test objects** (not the live session): orbit distance
+  from `target.position + offset` held at **exactly** 2.000 across every sampled frame while
+  visibly sweeping through all four quadrants over one loop (confirms both the faster
+  angular speed and the corrected center simultaneously); `AIPath.canMove` confirmed `false`
+  while Orbit is active (confirms AIPath is fully bypassed, not fighting the manual
+  positioning).
+- **Date:** 2026-07-31
+
+[2026-07-31] Feature — real Tier 2 movement patterns (not just parameter tuning)
+- **User feedback, from live hands-on comparison:** Tier 1 presets (same trailing-point
+  algorithm, different numbers) didn't read as genuinely different behavior — Close Shadow
+  vs Eager Runner, and Wide Wanderer vs Steady Anchor, felt like the same thing at
+  different speeds. This is exactly the Tier 1/Tier 2 distinction DECISIONS.md's outline
+  already called out, now confirmed by actually trying it rather than guessed.
+- Built: `CompanionMovementPatternType` enum (`Direct`, `Wavy`, `DashThrough`,
+  `StopAndGo`, `Orbit`) plus pattern-specific tuning fields added to
+  `CompanionMovementPreset`. `CompanionAI.ComputeDestination()` now dispatches to a
+  different algorithm per pattern instead of always using the same trailing-point formula:
+  - **Wavy** — trailing point + a perpendicular sine-wave offset (weaving path)
+  - **DashThrough** — ignores the trailing point; every `DashInterval` seconds picks a new
+    angle (current travel direction ± up to 120°, randomized) and targets a point
+    `DashOvershootDistance` past the player along it — runs toward and past the player,
+    overshoots, repeats from a new angle
+  - **StopAndGo** — trailing point as normal, but alternates `MoveDuration`/`PauseDuration`
+    between moving and a full halt (`aiPath.maxSpeed = 0`)
+  - **Orbit** — ignores the trailing point; continuously circles the player at a fixed
+    `OrbitRadius`, angle advancing at `OrbitAngularSpeed` degrees/sec every frame regardless
+    of whether the player is moving (a moon around a planet, not a following companion)
+- Updated presets: Close Shadow tightened further (even closer, per feedback), Wide
+  Wanderer → Wavy, Eager Runner → DashThrough, Steady Anchor → StopAndGo, new 6th preset
+  "Orbiting Moon" → Orbit.
+- Also: floating preset-name label above the companion (added last session) shrunk to half
+  size per feedback.
+- **Verified:** Wavy confirmed via direct testing — genuine sine oscillation (destination
+  swung from 0.96 up to a 1.20 peak and back down through -0.69), not a one-time drift.
+  Orbit confirmed via an isolated throwaway test object (not the live session, to avoid
+  disrupting a hands-on test in progress) — distance from target held at **exactly** 2.000
+  across every sampled call while the angle smoothly advanced counterclockwise as expected.
+- **Date:** 2026-07-31
+
+[2026-07-31] Tool — live movement-preset cycler for comparing follow-feel options
+- Built: `CompanionMovementPreset` (struct, in `CompanionAI.cs`) bundles the follow-feel
+  tunables (`_trailDistance`, `_directionTurnSpeed`, `_walkSpeed`/`_runSpeed`,
+  `_idleDistance`/`_runDistance`, `_repelDistance`/`_repelStrength`) so a whole movement
+  "style" can be swapped in one call — `CompanionAI.ApplyMovementPreset(preset)`. This is a
+  real, reusable API addition, not debug-only — any future per-species/Personality hook
+  will need exactly this entry point.
+- Built: `Assets/Scripts/Creatures/DebugMovementPresetCycler.cs` — TEMPORARY tool, attached
+  to `_PartySystem`. Press **Tab** in Play mode to cycle the active companion through the 5
+  Tier 1 presets drafted in `DECISIONS.md` → [Creatures] (Default, Close Shadow, Wide
+  Wanderer, Eager Runner, Steady Anchor), with an on-screen `OnGUI` label showing which one
+  is active. Lets these be compared side-by-side on the existing placeholder companion
+  before any of them are tied to Personality or another hook.
+- **DELETE `DebugMovementPresetCycler.cs`** once a real per-species/Personality movement
+  hook exists and applies presets itself.
+- Verified: applied all 3 distinct presets via the same code path the Tab key uses and
+  confirmed `CompanionAI`'s actual fields updated correctly for each (trail distance and
+  walk speed spot-checked per preset, matched expected values exactly).
+- Also clarified in `DECISIONS.md`: the movement-pattern outline is explicitly **open-world
+  only** (overworld `CompanionAI` following) — no relationship to Tempo's in-battle action
+  economy or any combat system.
+- **Date:** 2026-07-31
+- **Follow-up (same day):** added a floating world-space label (`TextMesh`, child of the
+  companion, sorted above its sprites) showing the short preset name above its head, so
+  which preset is active is visible at a glance without checking the corner overlay — the
+  Tab-cycle overlay text was hard to associate with the moving companion at a glance.
+  Verified via screenshot both before and after shortening the label text (full descriptive
+  names overflowed at normal zoom; now shows just e.g. "Close Shadow").
+
+[2026-07-31] Design correction — companion collider is now a trigger, never physically blocks the player
+- **User clarification:** the companion must never physically influence player movement at
+  all — the player is always 100% authoritative, and the companion is entirely responsible
+  for accommodating/getting out of the way, never the reverse. Earlier in this session the
+  companion's `CircleCollider2D` was solid (non-trigger), which meant Unity's physics engine
+  would still physically shove the player on contact regardless of how good the scripted
+  repel/avoidance logic was — a solid Kinematic body always displaces a Dynamic body it
+  touches, independent of any AI logic driving it. Not an A* Pathfinding Project limitation
+  — plain Unity 2D physics, would happen with any movement code driving a solid Kinematic
+  collider.
+- **Fix:** `Phasix_Placeholder.prefab`'s `CircleCollider2D.isTrigger = true`. Still detects
+  contact (`OnTriggerEnter2D`, useful later for encounter systems) but never physically
+  blocks or displaces anything — all avoidance is now 100% the companion's own scripted
+  responsibility (trailing + repel logic, both already built).
+- **Verified:** player holding a continuous "move right" input straight through where the
+  companion was standing kept a perfectly clean, constant velocity the entire time
+  (`(5, 0)`, never disturbed) — while the companion visibly slid out of the path
+  (`(3,0) → (2.6,0.2) → (1.7,0.55) → (0.78,0.9) → (0,1.2)`) and settled once clear.
+- Decision logged: `DECISIONS.md` → [Creatures].
+- **Date:** 2026-07-31
+
+[2026-07-31] Fix — companion pushing the player around with zero input (screen-recording confirmed)
+- **Symptom (user-reported, with screen recording):** starting the game fresh, with no
+  input at all, showed the companion visibly pushing Mr_chimken around.
+- **Root cause 1 (the actual one — confirmed by reproduction):**
+  `PartySystem.EnsureCompanionInstance()` spawned the companion at
+  `_playerTransform.position` — exactly coincident with the player. Two fully-overlapping
+  circle/capsule colliders force the physics engine into a large separation response at
+  the very first physics step, and since the companion is also actively path-following
+  toward a destination near the player, that separation compounds with the companion's own
+  movement rather than resolving in one clean step — reproduced directly: with the old
+  spawn behavior, a stationary player (zero input, `PlayerController_SideScroll` fully
+  active) still drifted ~4-6 units over about 2 seconds before settling.
+- **Root cause 2 (a real, related bug found and fixed while investigating, though not the
+  primary cause of the video):** `CompanionAI` derived "which way is the player moving"
+  from raw `Transform.position` deltas. Position deltas are contaminated by ANY external
+  displacement — including the companion's own collider nudging the player on contact —
+  and `.normalized()` turns even a tiny, unintended position shift into a full-strength
+  direction signal, indistinguishable from real WASD input. This is a textbook feedback
+  loop: companion nudges player → tiny position shift → misread as "player moved" →
+  companion reacts and nudges again.
+- **Fix 1:** `PartySystem` now spawns the companion offset from the player
+  (`_spawnOffset`, default `(0, -1.2, 0)` — comfortably beyond the ~0.8 combined collider
+  radii) instead of exactly on top of them.
+- **Fix 2:** `CompanionAI` now reads the target's `Rigidbody2D.linearVelocity` instead of a
+  position delta. `PlayerController_SideScroll` re-asserts its own intended velocity every
+  `FixedUpdate` regardless of what physics did to it in between, so velocity reflects the
+  player's real control intent and isn't susceptible to the position-based feedback loop.
+  Falls back to a flattened position delta only if the target has no Rigidbody2D.
+- **Verified:** reproduced the original bug faithfully first (confirmed ~4-6 units of
+  zero-input drift with the old spawn behavior, even with the target's own `FixedUpdate`
+  properly driven in the test — ruling out a test-methodology false positive). After both
+  fixes: 5 full simulated seconds of zero input from a natural fresh spawn produced
+  **exactly zero** drift and zero velocity throughout — completely stable at rest.
+- Full writeup: `LESSONS_LEARNED.md` → [Physics]. Decision: `DECISIONS.md` → [Creatures].
+- **Date:** 2026-07-31
+
+[2026-07-31] Fix — repel wasn't actually kicking in during real play (Z-axis corruption)
+- **Symptom (user-reported):** after the repel feature landed, walking toward the companion
+  still didn't make it step away — and the companion appeared able to be pushed/dragged by
+  the player instead.
+- **Root cause:** live inspection of the running game found `CompanionAI`'s
+  `_smoothedTargetDirection` with a Z component of `-0.86` — nearly as large as X. Since
+  this is a 2D top-down game, that should be structurally impossible; `Rigidbody2D` only
+  ever touches X/Y and `Animator.applyRootMotion` is `false` (confirmed, not just assumed).
+  The exact upstream source of the Z noise on the target Transform wasn't conclusively
+  identified, but regardless of source, `CompanionAI`'s own direction math had no guard
+  against it — normalizing a mostly-flat delta with even a small Z component can swing the
+  resulting direction vector wildly, and because the trail direction blends gradually
+  (`RotateTowards`), that corruption persists across many frames, collapsing the computed
+  destination down to nearly the companion's own current position.
+- **Fix:** `CompanionAI` now explicitly flattens to the XY plane (`FlattenToXY`) at the
+  point of computing `playerDelta` and `awayFromPlayer` — the two vectors that get
+  normalized into directions. This is the correct constraint for a 2D top-down game
+  regardless of the Z-noise source, and verified to fully neutralize it (fed a simulated
+  Z=0.9 target position through a real `Update()` call — resulting smoothed direction
+  stayed at `z=0` exactly).
+- **Also found (not a bug, but worth knowing):** when the player and the actively-moving
+  Kinematic companion do make contact, Unity's physics engine naturally redirects the
+  player's `Rigidbody2D` velocity on collision — same as bumping into any solid object. A
+  manual test exaggerated how persistent this feels, because it required disabling
+  `PlayerController_SideScroll` for clean velocity control, which also removed the
+  continuous per-frame input correction that normally self-corrects a knock like this in
+  real play. The actual in-game feel of this needs a human playtest, not another script.
+- **Verified:** all 7 repel-direction test cases from the previous entry re-passed after
+  this change, plus an 8th case injecting Z noise into both position and delta produced an
+  identical result to its clean counterpart.
+- Full writeup: `LESSONS_LEARNED.md` → [Pathfinding] / [Physics].
+- **Date:** 2026-07-31
+
+[2026-07-31] Feature — companion personal-space repel (avoid corner-wedging)
+- Built: `CompanionAI` now nudges its destination directly away from the player's current
+  position whenever the player is closer than `_repelDistance` (default 0.7) AND still
+  closing the distance — recomputed fresh every frame from the live relative position, so
+  it works correctly from any of the 360°, not just left/right (this is a free-movement
+  top-down game). No repel if the player is far away, stationary, or already moving away.
+  Two new tunables: `_repelDistance`, `_repelStrength` (default 0.8).
+- Found & fixed a real bug in the first draft of this: the "is the player closing in"
+  dot-product check had the comparison sign backwards (`< 0f` instead of `> 0f`), which
+  meant it repelled exactly when it shouldn't have (player moving away) and stayed inert
+  exactly when it should have fired (player closing in) — the reverse of the intended
+  behavior in every case.
+- Verified: not just compiled clean — tested `ComputeRepelOffset` in isolation (bypassing
+  the stateful trail-direction smoothing, which would have made a full-`Update()` test
+  ambiguous) against 7 scenarios: closing in from west/north/southwest/east all correctly
+  pushed away in the corresponding opposite direction; far away, stationary, and
+  moving-away cases all correctly produced zero offset. All 7 matched exactly once the sign
+  bug was fixed — the first run (with the bug) failed in exactly the way the bug predicts.
+- **Date:** 2026-07-31
+
+[2026-07-31] Verified — player can physically collide with the active companion
+- No code change needed: the Kinematic Rigidbody2D + CircleCollider2D added to
+  `Phasix_Placeholder.prefab` for the earlier gravity fix already gives correct
+  Dynamic-vs-Kinematic collision resolution against Mr_chimken's own Rigidbody2D, the same
+  as any stump/wall.
+- Verification wasn't clean on the first two tries — both were mistakes in the *test*
+  script, not the game: didn't account for `Mr_chimken`'s `CapsuleCollider2D` having a
+  vertical offset from its root (a rigged torso collider), then read stale
+  `Collider2D.bounds` before calling `Physics2D.SyncTransforms()`. Once corrected, the
+  player was blocked at the expected distance (~0.86 units, matching the sum of both
+  collider radii). Full writeup: `LESSONS_LEARNED.md` → [Physics].
+- **Date:** 2026-07-31
+
+[2026-07-31] Fix — companion was standing on top of decorations it should route around
+- **Symptom (user-reported, with screenshot):** companion visibly sitting on top of a
+  stump/rock decoration — something Mr_chimken physically cannot do (he collides with the
+  same object via real Rigidbody2D physics). Also reported: companion getting stuck in the
+  same specific spots while navigating around objects.
+- **Root cause 1:** `GraphCollision.diameter` is scaled by the graph's `nodeSize`
+  internally (`finalRadius = diameter * nodeSize * 0.5`, confirmed by reading the A*
+  source directly) — it's not a plain world-unit value. `diameter = 1` with our
+  `nodeSize = 0.5` produced a real check radius of only 0.25 world units, small enough to
+  miss decoration colliders that don't perfectly fill their tile cell. Verified against all
+  96 painted `Decorations` tiles — 4 were misclassified as walkable at `diameter = 1`.
+- **Root cause 2:** `GridGraph.cutCorners` defaults to `true`, which allows diagonal
+  movement between two nodes even when both shared cardinal neighbors are blocked — a
+  connection a real ~0.4-radius agent can't fit through cleanly, producing jittery/stuck
+  movement right at obstacle corners.
+- **Root cause 3:** `CompanionAI`'s trail direction snapped instantly to the player's
+  latest movement delta rather than actually smoothing — whipsawing the follow destination
+  every time the player's heading changed quickly, exactly what happens while curving
+  around an obstacle.
+- **Fix:** `collision.diameter = 2` (empirically the smallest value producing zero
+  misclassified decoration tiles), `cutCorners = false`, and `CompanionAI` now turns its
+  trail direction at a capped rate (`Vector3.RotateTowards`, tunable
+  `_directionTurnSpeed`) instead of snapping.
+- **Also corrected:** the earlier `cacheStartup = false` decision (previous entry) was
+  itself wrong — without it, the graph's *configuration* doesn't survive a domain reload
+  either, not just node data. Now `cacheStartup = true` (persists config via
+  `SerializeGraphs`/`SetData`) **and** `scanOnStartup = true` (keeps walkability fresh
+  against `WorldChunkManager`'s dynamic chunks) together. Verified by forcing an actual
+  domain reload and reading the values back, not assumed.
+- **Verified:** 0/96 decoration tiles misclassified (was 4/96). A real cross-room `ABPath`
+  (corner to corner, past several decorations) computed cleanly, 50 waypoints, no error.
+  Settings confirmed to survive a forced domain reload.
+- Full investigation and root causes: `LESSONS_LEARNED.md` → [Pathfinding] (three new
+  entries). Decisions: `DECISIONS.md` → [Pathfinding].
+- **Date:** 2026-07-31
+
+[2026-07-31] Fix — companion was falling due to AIPath's default fake gravity
+- **Symptom (user-reported):** two Phasix visible in the Hierarchy, one visibly sinking
+  over time.
+- **Root cause:** `AIPath`'s built-in fake-gravity/ground-check system (meant for 3D/sloped
+  terrain) defaults to using `Physics.gravity` unless a non-kinematic Rigidbody is present
+  or gravity is explicitly zeroed. Neither was true — the companion had no Rigidbody2D at
+  all, so `CompanionAI` never disabled it.
+- **Fix:** `CompanionAI.Awake()` now sets `_aiPath.gravity = Vector3.zero`. Also added a
+  `Rigidbody2D` + `CircleCollider2D` to `Phasix_Placeholder.prefab` matching
+  `PlayerController_SideScroll`'s structure (`gravityScale = 0`, frozen rotation, continuous
+  collision, interpolation) — Kinematic body type (AI-driven, not force-driven), so AIPath
+  now moves it via `Rigidbody2D.MovePosition` instead of raw Transform writes, matching
+  Mr_chimken's physics category and giving it real Physics2D collision/trigger participation
+  for future systems (encounter triggers, etc.). Hit a `RigidbodyType2D` enum-ordering
+  mistake along the way (set `bodyType=2` intending Kinematic; 2 is actually Static —
+  Dynamic=0, Kinematic=1, Static=2) — caught and fixed via a live property read-back, not
+  assumed. See LESSONS_LEARNED.md → [Pathfinding] for both this and a related manual-testing
+  gotcha (`Rigidbody2D.MovePosition` needs an actual physics step to take effect — manual
+  verification now also drives `Physics2D.Simulate()`, not just `MovementUpdate`/
+  `FinalizeMovement`).
+- **Also cleaned up:** deleted the leftover `Phasix_Test_Fire`/`Phasix_Test_Steam` GameObjects
+  from the earlier sprite-verification session — they were confusing to see in the
+  Hierarchy and are superseded by `DebugPartyBootstrap`'s live test path.
+- **Verified:** idle-simulated 2s → zero drift (previously would have sunk). Player-moved
+  1s-simulated follow → companion closed distance to the player correctly, `Run`→approach
+  state transition as expected.
+- **Date:** 2026-07-31
+
+[2026-07-31] Debug — temporary party bootstrap for manual playtesting
+- Built: `Assets/Scripts/Creatures/DebugPartyBootstrap.cs` — adds one test Phasix
+  (`Test_FireType.asset`) to `PartySystem` on Play start, purely so the user can hit Play
+  and walk Mr_chimken around with real keyboard input to see `CompanionAI` follow live,
+  since no capture system exists yet to populate the party normally. Attached to the
+  `_PartySystem` GameObject in `SampleScene`.
+- **DELETE this file and its component once a real capture flow exists** (Phase 3, Mo 8
+  Wk 3 per Roadmap_v2.md) and calls `PartySystem.AddToParty()` itself — this is scaffolding
+  for manual verification only, not a real game system.
+- **Date:** 2026-07-31
+
+[2026-07-31] Phase 2 Wk 12-13 — Companion Following AI implemented and verified
+- Built: Imported A* Pathfinding Project (free) — user downloaded directly from
+  arongranberg.com (Asset Store no longer distributes a free tier, Pro-only listing now).
+  Confirmed live via `unity_reflect` (`AstarPath`, `Seeker`, `AIPath`, `GridGraph` all
+  present) and a synchronous `ABPath` test (21 waypoints, no error) before building on it.
+- Built: New `Obstacles` physics layer — `Walls` and `Decorations` tilemap colliders moved
+  onto it so the Grid Graph's collision scan doesn't treat the player's own collider (same
+  layer as everything else previously) as an obstacle.
+- Built: `GridGraph` scanning the test room (60×38 nodes at the already-locked 0.5-unit A*
+  cell size), 2D collision mode against the `Obstacles` layer only. `AstarPath.scanOnStartup
+  = true` — deliberately does NOT rely on a cached/serialized bake, since
+  `WorldChunkManager`'s dynamic chunk `SetActive` toggling would make a permanent bake stale.
+  See DECISIONS.md → [Pathfinding].
+- Built: `Assets/Scripts/Creatures/CompanionAI.cs` — Seeker+AIPath-driven follow. Trails
+  behind the player's recent movement direction (not the player's exact point) by a tunable
+  distance; computes Idle/Walk/Run from follow-distance and switches `AIPath.maxSpeed`
+  tiers accordingly (Run is faster than Walk, to actually catch up when it falls behind).
+  Animator wiring (`IsMoving`/`IsRunning`, matching `PlayerController_SideScroll`'s existing
+  parameter names) is framework-only — no real animation content exists yet
+  (placeholder-first pipeline), per the Roadmap's own "build the framework, leave content
+  slots empty" two-track rule.
+- Built: `Assets/Scripts/Creatures/PartySystem.cs` — up to 3 slots; only the active slot has
+  a physical GameObject (the same persistent `Phasix_Placeholder`-based instance gets
+  re-skinned/re-targeted on slot switches, never destroyed/recreated, so this never
+  conflicts with the "no Instantiate/Destroy in a loop" architecture rule). A MonoBehaviour
+  singleton, not static like BondSystem/PersonalitySystem — it owns an Inspector-assigned
+  prefab reference and a live spawned instance, the same category as GameManager. See
+  DECISIONS.md → [Creatures].
+- Changed: Added `Seeker` + `AIPath` + `CompanionAI` components to
+  `Assets/Prefabs/Creatures/Phasix_Placeholder.prefab`.
+- Verified: not just compiled clean — full live test in Play Mode. Added a test PhasixData
+  to the party via `PartySystem.AddToParty`, confirmed the companion spawned correctly
+  tinted. Hit a real environment snag (see LESSONS_LEARNED.md → [Tooling], "Play Mode
+  doesn't tick frames while unfocused") where Unity's frame loop wasn't advancing at all in
+  this automated session — worked around it by driving the exact same code paths
+  synchronously: manually invoked `CompanionAI.Update()` via reflection (confirmed correct
+  Run-state + trailing-destination computation), then synchronously solved and assigned a
+  real `ABPath` and manually stepped `AIPath.MovementUpdate`/`FinalizeMovement` 60 times
+  (~1 simulated second) — companion physically moved from (0,0,0) to (3.55, 1.99, 0),
+  closing distance toward the player as expected. Confirmed via Scene View screenshot.
+  None of this manual-stepping workaround is needed in normal play — it was purely to
+  verify correctness without a focused Editor window.
+- Next: no capture system exists yet to naturally populate the party outside of manual
+  test code — that's Phase 3 scope (Mo 8 Wk 3 — Capture mechanic) per Roadmap_v2.md.
+  Immediate next roadmap item is Wk 14-16 — Wild encounter trigger + Primal type reveal.
+
+[2026-07-31] Phase 2 Wk 11 — Personality's full mechanic implemented and verified
+- Built: `Assets/Scripts/Creatures/PersonalitySystem.cs` — static rules layer, matching
+  BondSystem.cs's pattern. `RollRandom()` (uniform roll across all 18 traits, for
+  capture-time assignment, GDD §7.2 "shown on capture") and `ChangePersonality()`
+  (immediate, unconditional swap — "any personality to any other," GDD §7.2; no-op if
+  already that personality). Item consumption for the swap is intentionally out of scope
+  — pending the Item system (§22), same division of responsibility as Origin Change's
+  bond-cost logic living outside BondSystem.
+- Built: `Assets/Scripts/Creatures/PersonalityStatModifier.cs` — static data table
+  transcribing the locked GDD §7.3 stat-nudge table (which stats each of the 18 traits
+  gets ++/+/- on) verbatim. Deliberately unwired scaffolding for now — the numeric
+  growth-rate formula that would consume this lives in the not-yet-built Aura allocation
+  system (Progression_Directive_v0_1_0.md). Built now per user decision (July 2026 session)
+  since the trait→stat mapping itself is fully locked content, not invented.
+- Changed: `Assets/Scripts/Core/EventBus.cs` — added `OnPersonalityChanged` event +
+  `Raise_PersonalityChanged()`, fired by `PersonalitySystem.ChangePersonality()`. Not
+  fired on the initial capture-time roll (no "change" to react to yet).
+- Verified: not just compiled clean — 6 scripted scenarios via `execute_code`: `RollRandom`
+  distribution (18/18 distinct values over 2000 rolls), `ChangePersonality` mutation +
+  event firing, no-op same-personality call correctly suppresses the event, null-phasix
+  call doesn't throw, and `GetNudge` spot-checks against the GDD table (Reckless/Force =
+  StrongBoost, Reckless/Guard = Reduction, Reckless/Aura = none, Brave/Force = Boost,
+  Naive/Guard = Reduction, Naive/Resonance = StrongBoost) — all matched.
+- Next: no capture system or Item system exist yet to actually call `RollRandom()`/
+  `ChangePersonality()` from real gameplay — both are rules-layer scaffolding, same
+  status BondSystem was in before combat/activity systems existed to drive it. Next
+  natural pickup is whatever Phase 2/3 roadmap item comes after this — check
+  `Assets/Docs/CHANGELOG.md`'s own history and the project roadmap doc for the next item.
+
+---
+
+[2026-07-31] Art — PrimalType-driven placeholder sprite (first visible Phasix)
+- Built: `Assets/Scripts/Creatures/PrimalTypeColor.cs` — static color lookup. 8 base hex
+  colors transcribed verbatim from the locked `DECISIONS.md` table; 28 duo-merge parent
+  pairs transcribed verbatim from the GDD §9 "All 28 duo merged types" table (not
+  invented). `GetColor()` returns the base hex directly or a 50/50 `Color.Lerp` of the two
+  parents for duo types; `GetUnderglowColor()` lightens+fades that same color for the halo
+  layer.
+- Built: `Assets/Scripts/Creatures/PhasixPlaceholderVisual.cs` — MonoBehaviour with
+  `SetPrimalType()`/`ApplyFromSpeciesData()`, tinting a Body SpriteRenderer and a larger,
+  lighter/translucent Underglow SpriteRenderer behind it.
+- Built: `Assets/Prefabs/Creatures/Phasix_Placeholder.prefab` (new `Assets/Prefabs/`
+  folder) — Body + Underglow children, both using Unity's built-in 2D `Circle` sprite
+  (`Packages/com.unity.2d.sprite/.../Textures/v2/Circle.png`, 256 PPU — at scale 1 this
+  renders exactly 1 world unit, matching the locked tile size for free).
+- Decided (with user): one shape (Circle) for all Phasix, color is the sole
+  differentiator — no per-type shape variation. Underglow halo layer added; no separate
+  ground-shadow layer. Full rationale in `DECISIONS.md` → `[Art]`.
+- Verified: not just compiled clean — created two test `PhasixData` assets (`Test_FireType`,
+  `Test_SteamType` — a base type and a duo type), instantiated both, called
+  `ApplyFromSpeciesData` via `execute_code`, and read back both renderers' actual `.color`
+  values against `PrimalTypeColor`'s computed output — exact match on all 4 (Fire
+  body/glow, Steam body/glow). Confirmed visually via Scene View screenshot after fixing a
+  sorting-layer bug (see below).
+- Found & fixed: the prefab's SpriteRenderers were created on the `Default` sorting layer
+  (value 0), which renders **behind** the tilemap's `Ground` layer (value 1) — the
+  placeholder was invisible in Scene View despite having the correct color. Moved both to
+  the existing `Characters` sorting layer (value 2, already used by Mr_chimken) on the
+  prefab and on the two live test instances.
+- Next: Wk 11 — Personality's full mechanic (rolling on capture, item-based swap).
+
+---
+
 [2026-07-30] Phase 2 Wk 10 — Bond System implemented and verified
 - Built: `Assets/Scripts/Creatures/BondSystem.cs` — static rules-enforcement layer for bond
   gain/loss: floor logic (`newBond = max(newBond, bondFloor)`), session loss cap (5% max),
