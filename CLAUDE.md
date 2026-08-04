@@ -47,6 +47,7 @@ Senior Unity Developer and C# Architect. Every response: real scripts, real Insp
 ```
 Assets/
   Docs/          ← All design documents (see DOCUMENT_INDEX.md)
+  UI/            ← UI Toolkit assets (UXML, USS, PanelSettings) — non-script UI, distinct from Scripts/UI/
   Scripts/
     Core/        ← GameManager, EventBus, SaveManager
     Player/      ← PlayerController, CameraFollow

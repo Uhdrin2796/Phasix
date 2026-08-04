@@ -97,4 +97,24 @@ public static class EventBus
     public static void Raise_Devolved(PhasixRuntimeData phasix, PhasixData previousForm)  => OnDevolved?.Invoke(phasix, previousForm);
     public static void Raise_PhasixCaptured(PhasixRuntimeData phasix)                     => OnPhasixCaptured?.Invoke(phasix);
     public static void Raise_AuraDropped(string auraTypeId, int amount)                   => OnAuraDropped?.Invoke(auraTypeId, amount);
+
+
+    // -------------------------------------------------------------------------
+    // PHASE 2 — Wild Encounter Scaffold (live — wired in WildEncounterCreature.cs)
+    // Wk 14-16 scaffold only — superseded once BattleScene_Main/BattleManager exist (Phase 3)
+    // and the three-layer encounter system (WorldDesign_Directive) replaces this trigger model.
+    // -------------------------------------------------------------------------
+
+    /// <summary>Fires the instant the player makes contact with a wild Phasix.</summary>
+    public static event Action<PhasixRuntimeData> OnWildEncounterTriggered;
+
+    /// <summary>Fires when the player chooses Flee — the wild Phasix despawns.</summary>
+    public static event Action<PhasixRuntimeData> OnWildEncounterFled;
+
+    /// <summary>Fires when the player chooses Engage. TODO: zero real subscribers until BattleManager exists (Phase 3) — currently resolves identically to Flee.</summary>
+    public static event Action<PhasixRuntimeData> OnWildEncounterEngageRequested;
+
+    public static void Raise_WildEncounterTriggered(PhasixRuntimeData phasix)       => OnWildEncounterTriggered?.Invoke(phasix);
+    public static void Raise_WildEncounterFled(PhasixRuntimeData phasix)            => OnWildEncounterFled?.Invoke(phasix);
+    public static void Raise_WildEncounterEngageRequested(PhasixRuntimeData phasix) => OnWildEncounterEngageRequested?.Invoke(phasix);
 }

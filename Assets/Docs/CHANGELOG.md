@@ -18,6 +18,97 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Scene dressing — two more wild spawn points, pastel pink + vibrant purple
+- **User request:** two more spawn points, different species, one top-left corner and one
+  bottom-right corner of the room; then asked for pastel pink and vibrant purple coloring.
+- **Built:** `PhasixPlaceholderVisual.SetColorOverride(Color)` and `EncounterTrigger`'s new
+  `_overrideTintColor`/`_tintColorOverride` fields — a debug-only tint override that bypasses
+  `PrimalTypeColor` for the in-world sprite only, since pastel pink/vibrant purple aren't part
+  of the locked Primal palette. See `DECISIONS.md` → `[Creatures] Debug-only sprite tint
+  override...` for the full rationale and the one deliberate limitation (the encounter prompt
+  UI swatch is unaffected and still shows the species' real PrimalType color).
+- **Scene:** `Test_WildSpawnPoint_TopLeft` at `(-10, 6, 0)` — `Test_FireType` only, tint
+  overridden to pastel pink `(1, 0.435, 0.690)`. `Test_WildSpawnPoint_BottomRight` at
+  `(10, -6, 0)` — `Test_SteamType` only, tint overridden to vibrant purple
+  `(0.651, 0.302, 1.0)`.
+- **Verified:** Play-mode check via Unity MCP — both spawned at the correct corner positions
+  with the exact overridden colors on their Body sprites.
+- **Date:** 2026-08-04
+
+[2026-08-04] Investigation — AstarPath/missing-script Play errors were a false alarm, not a real bug
+- **Context:** While Play-testing the Wild Encounter feature (below), entering Play mode
+  logged three "referenced script is missing" errors plus `AstarPath`
+  `NullReferenceException: No AstarPath object found in the scene` and `There are no graphs
+  in the scene` — looked like a pre-existing gap where the companion's `Seeker`/`AIPath`
+  had no `AstarPath` graph to path against, so it got logged in `KNOWN_ISSUES.md` and flagged
+  for follow-up.
+- **Investigated:** Checked `CHANGELOG.md`'s own 2026-07-31 entry first, which documented a
+  fully-built `AstarPath` + `GridGraph` (60×38 nodes, `Obstacles` layer, `scanOnStartup =
+  true`) — confirmed still present and correctly configured directly in
+  `SampleScene.unity`'s serialized `AstarPath` MonoBehaviour (cached graph blob intact).
+  Re-entered Play mode cleanly (no early state-querying this time) and confirmed
+  `AstarPath.active.data.graphs` returns `graphCount=1, graph0 type=GridGraph`, and the
+  companion's `AIPath` (`canMove=true`, `reachedDestination=true`) functions normally. The
+  missing-script errors also did not recur.
+- **Root cause:** A timing artifact, not a real config gap — querying live state
+  (`AstarPath.active`, `EncounterPromptController.Instance`, etc.) immediately after
+  `manage_editor(action="play")` reliably returns null/default for the first several real
+  seconds while Unity's post-Play initialization settles
+  (`mcpforunity://editor/state`'s `play_mode.is_changing` stays `true` that whole time). The
+  first Wild Encounter Play-test session hit this exact same class of transient null with
+  `EncounterPromptController.Instance` (see below) and worked around it correctly there by
+  waiting; the AstarPath check that session was made too early and got misread as a real bug.
+- **Documented:** Added a correction/addendum to `LESSONS_LEARNED.md` →
+  `[Tooling] Play Mode doesn't tick frames...` covering this specific "state looks null
+  immediately after Play, but resolves correctly if you wait — don't manually force-run
+  `Awake()` via reflection as a workaround" pattern. Closed the `KNOWN_ISSUES.md` entry as
+  `[AST-001]` (misdiagnosis, not fixed because nothing was broken).
+- **Changed:** None — no code or scene changes were needed.
+- **Date:** 2026-08-04
+
+[2026-08-04] Feature — Wild Encounter Trigger + Primal Type Reveal (Phase 2, Wk 14-16 scaffold)
+- **Built:** `EncounterTrigger.cs` (spawn-point marker, `World/`), `WildEncounterCreature.cs`
+  (contact detection + Flee/Engage resolution, `Creatures/`), `WildSpawnSystem.cs` (static
+  `PhasixRuntimeData` builder, `Creatures/`), `EncounterPromptController.cs` (first script in
+  `Scripts/UI/`, UI Toolkit singleton wrapping a `UIDocument`). New assets:
+  `Assets/UI/EncounterPrompt.uxml`/`.uss`/`EncounterPromptPanelSettings.asset` (the project's
+  first UI Toolkit screen — new `Assets/UI/` folder, added to CLAUDE.md's Folder Structure),
+  `Assets/Prefabs/Creatures/Phasix_WildEncounter.prefab` (stationary variant of
+  `Phasix_Placeholder.prefab` — no `Rigidbody2D`/`Seeker`/`AIPath`/`CompanionAI`). New
+  `EventBus.cs` section: `OnWildEncounterTriggered`/`OnWildEncounterFled`/
+  `OnWildEncounterEngageRequested`. Scene: `UIRoot_EncounterPrompt` and `Test_WildSpawnPoint`
+  added to `SampleScene.unity`.
+- **Decided:** Contact-based trigger model (a visible wild Phasix you walk into, matching
+  `Combat_Directive_v0_1_0.md`) instead of the Roadmap's own simpler "invisible zone collider"
+  wording — see `DECISIONS.md` → `[Encounter] Contact-based trigger model` for the full
+  rationale, plus five more entries in that same session block covering the UI Toolkit choice,
+  chunk-tied repopulation, no-pooling justification, `origin = OriginType.Wild`, and the
+  confirmed Engage-resolves-like-Flee stub behavior.
+- **Known scaffold limitation (intentional, not a bug):** Engage has no `BattleManager`/
+  `BattleScene_Main` to hand off to yet (Phase 3) — it logs a `// TODO` line, fires
+  `OnWildEncounterEngageRequested` (zero subscribers today), then resolves identically to
+  Flee (despawn, hide prompt, unfreeze player). This was confirmed as the intended behavior,
+  not a placeholder oversight.
+- **Verified:** Full Play-mode pass via Unity MCP — wild creature spawns visibly tinted before
+  contact (confirmed the exact Fire+Water Steam-type color blend + underglow lighten math);
+  contact freezes the player (`FreezeMovement()`'s first real exercise anywhere in the
+  project — previously had zero callers) and shows the prompt with correct species/type
+  labels and a matching color swatch; Flee destroys the creature and resumes player input
+  (`UnfreezeMovement()`'s first real exercise); toggling the spawn point inactive/active
+  confirms fresh repopulation via `OnEnable()` with newly-rolled personality/species; Engage
+  logs the TODO line, fires its event exactly once, and resolves like Flee; a companion
+  standing on the creature (player elsewhere) does *not* trigger it, confirming the
+  `PlayerController_SideScroll` component filter; a deliberately duplicated second spawn
+  point confirmed the `EncounterPromptController.IsVisible` clobber guard silently blocks a
+  second simultaneous `Show()` call with no error.
+- **Also:** added a documentation-only backlog row to `Roadmap_v2.md` → `What Is Not In This
+  Roadmap` for map expansion (using only the existing `Assets/Tiles` tile assets, chunked from
+  the start via `WorldChunkManager`) — unrelated to this feature, requested alongside it.
+- **Blocked:** none — feature complete and verified end-to-end.
+- **Next:** Phase 3, Mo 5 Wk 1-2 — Battle scene + turn state machine (`BattleScene_Main`,
+  additive load), which is what Engage is stubbed to eventually hand off to.
+- **Date:** 2026-08-04
+
 [2026-08-04] Process — self-enforcing convention: every AIPath-bypassing pattern must have a gizmo
 - **User request:** wanted a standing rule so any future companion movement pattern built
   outside standard AIPath-following always gets a gizmo, given how many rounds it took to get

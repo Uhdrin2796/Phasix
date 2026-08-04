@@ -1043,3 +1043,126 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Revisit if/when:** After the Resonance system above is implemented and playtested on
   its own; before NumericalCalibration.md's Aura economy numbers are finalized, since
   Defuse's yield needs balancing against battle-Aura rates (risk #2 above).
+
+---
+
+## New Entries — August 2026 Wild Encounter Session
+
+### [Encounter] Contact-based trigger model, not an invisible zone collider
+- **Decided:** Wild encounters use a visible, stationary wild Phasix standing in the world
+  that the player physically walks into (`WildEncounterCreature`'s own trigger `Collider2D`
+  detects contact), not an invisible `EncounterTrigger` zone the Roadmap's own Wk 14-16
+  wording describes.
+- **Why:** `Combat_Directive_v0_1_0.md` (locked, not pending) already specifies: "When the
+  player's overworld sprite contacts an enemy Phasix sprite, a cinematic transition
+  fires..." — the Pokémon/Digimon-style visible-creature model. Building the simpler
+  invisible-zone version now would just mean redoing it later to match the locked spec.
+  `EncounterTrigger.cs` is kept as a spawn-point marker only (per CLAUDE.md's existing
+  `World/` folder listing), not the detector.
+- **Alternatives rejected:** Invisible zone collider on `EncounterTrigger` itself, matching
+  the Roadmap's literal Wk 14-16 wording — rejected as building the wrong shape on purpose.
+- **Date:** August 2026
+- **Revisit if:** Never for this scaffold's contact model — superseded entirely once the
+  three-layer encounter system (Emotional Mirroring / Attunement / Failure-Triggered,
+  `WorldDesign_Directive_v0_1_0.md`) replaces trigger-based encounters in Phase 3-4.
+
+### [UI] UI Toolkit chosen for runtime UI, with PanelSettings locked to the pixel-perfect convention
+- **Decided:** `EncounterPromptController` is the project's first UI script, built in UI
+  Toolkit (`UIDocument` + UXML + USS), not uGUI. `EncounterPromptPanelSettings.asset`:
+  `Scale Mode = Scale With Screen Size`, `Reference Resolution = 320×180`,
+  `Screen Match Mode = Match Width Or Height`, `Match = 0.5`.
+- **Why:** Roadmap_v2.md's own Phase 5 milestone (Mo 17-18) already tags the eventual full
+  UI pass "UI Toolkit" — building this first screen in uGUI would just mean migrating
+  later for no benefit. The `PanelSettings` reference resolution must match the Pixel
+  Perfect Camera's own 320×180 (locked under `[Engine] Pixel resolution` above) or the UI
+  scales independently of the pixel-art world and looks visually mismatched.
+- **Alternatives rejected:** uGUI (Canvas/RectTransform) — would need migrating once the
+  Phase 5 UI pass standardizes on UI Toolkit anyway.
+- **Date:** August 2026
+- **Revisit if:** Never — this locks the UI stack choice for all future UI work, not just
+  this scaffold.
+
+### [Creatures] Wild spawn repopulation tied to chunk activation via parented Instantiate + OnEnable
+- **Decided:** `EncounterTrigger.OnEnable()` (not `Start()`) spawns the wild creature,
+  parented to the spawn point's own transform (`Instantiate(prefab, pos, rot, transform)`).
+  No cooldown timer of any kind.
+- **Why:** `OnEnable()` re-fires every time the spawn point's GameObject cycles active again
+  via `WorldChunkManager`'s `SetActive` chunk toggling — parenting is what ties the spawned
+  creature's lifecycle to that toggling (an unparented `Instantiate` would sit at scene root
+  and stay active even after its chunk deactivates). This gives natural "repopulates on
+  revisit" behavior with no invented numeric cooldown, matching
+  `NumericalCalibration.md`'s "don't invent pending numbers" convention.
+- **Alternatives rejected:** A numeric respawn-cooldown timer — invents a pending balance
+  number with no design authority behind it.
+- **Date:** August 2026
+- **Revisit if:** Phase 3-4's real encounter system replaces this trigger model entirely.
+
+### [Creatures] No pooling for the wild encounter scaffold
+- **Decided:** `WildEncounterCreature` instances are plain `Instantiate`/`Destroy`, no object
+  pool.
+- **Why:** This fires once per spawn point per chunk-revisit cycle — a low-frequency event,
+  not a tight loop or per-frame path, so it isn't the case CLAUDE.md's "no
+  `Instantiate`/`Destroy` in a loop" rule is targeting. No pooling infrastructure exists
+  anywhere in the project yet, and this scaffold is superseded by Phase 3-4's real encounter
+  system regardless, so building pooling now would be throwaway work.
+- **Alternatives rejected:** Reusing `PartySystem.EnsureCompanionInstance()`'s
+  create-once-and-reskin pattern — not actually analogous, since that method never destroys
+  its instance; this scaffold's actual Destroy-then-Instantiate-per-visit pattern is a
+  different shape and needed its own justification.
+- **Date:** August 2026
+- **Revisit if:** A future pass adds many simultaneous spawn points such that
+  Instantiate/Destroy frequency becomes profiler-measurable.
+
+### [Creatures] Wild encounters set origin = OriginType.Wild directly, no roll
+- **Decided:** `WildSpawnSystem.CreateWildInstance()` sets `runtime.origin =
+  OriginType.Wild` directly — true by definition for a wild encounter, no random roll.
+- **Why:** Simplest correct behavior for this scaffold. Note: this doesn't resolve the
+  existing doc inconsistency between `PhasixEnums.cs`'s comment ("Lives on PhasixData... no
+  evidence found of per-individual variance") and `PhasixRuntimeData.cs`'s comment ("Rolled
+  per individual on capture... changeable via Origin Change") — flagged here, not fixed, per
+  this file's existing `[Creatures] Evolution_System_Directive_v1_1_0.md has internal
+  inconsistencies` precedent above.
+- **Alternatives rejected:** None considered — Wild origin for a wild encounter isn't a real
+  design choice.
+- **Date:** August 2026
+- **Revisit if:** The `OriginType` per-individual-vs-species doc inconsistency above gets
+  resolved — check whether that resolution changes how wild encounters should set origin.
+
+### [Encounter] Engage resolves identically to Flee (confirmed scaffold behavior)
+- **Decided:** Clicking Engage in the wild encounter prompt despawns the creature, hides the
+  prompt, and unfreezes the player — the exact same cleanup as Flee — plus a `// TODO` log
+  line and its own `EventBus.OnWildEncounterEngageRequested` event.
+- **Why:** No `BattleManager`/`BattleScene_Main` exists yet (Phase 3), so Engage can't do
+  anything real. Resolving identically to Flee guarantees the player is never left frozen
+  with a dead prompt on screen. Confirmed directly during planning rather than assumed.
+- **Alternatives rejected:** Leaving the creature in place (not destroyed) on Engage, since
+  no battle actually happened — rejected because it would let the player immediately
+  re-trigger the same creature by touching it again, needing its own re-show guard for no
+  real benefit at this scaffold stage.
+- **Date:** August 2026
+- **Revisit if:** Never for the stub itself — superseded once `BattleManager` exists and
+  Engage triggers the real Combat_Directive cinematic transition instead.
+
+### [Creatures] Debug-only sprite tint override on EncounterTrigger, separate from PrimalTypeColor
+- **Decided:** Added `PhasixPlaceholderVisual.SetColorOverride(Color)` + `EncounterTrigger`'s
+  `_overrideTintColor`/`_tintColorOverride` fields. If set, the spawned creature's in-world
+  sprite (Body + Underglow, same lighten/alpha math as the real underglow) uses the override
+  color instead of `PrimalTypeColor.GetColor(species.PrimalType)`. Used to give
+  `Test_WildSpawnPoint_TopLeft`/`_BottomRight` distinct pastel pink/vibrant purple test
+  coloring without touching the locked Primal palette.
+- **Why:** `PrimalTypeColor`'s 8 base + 28 duo-merge colors are locked GDD data (transcribed
+  verbatim, not inventable) — none of them are pastel pink or vibrant purple, and adding
+  arbitrary new entries to that dictionary would corrupt real design data for a one-off test
+  visual. An opt-in per-spawn-point override keeps the real pipeline untouched.
+- **Important limitation, by design:** this only overrides the in-world sprite. The encounter
+  prompt UI swatch (`EncounterPromptController.Show()`) is intentionally unaffected — it still
+  reads `PrimalTypeColor.GetColor(species.PrimalType)` directly, since that swatch/world-tint
+  agreement is itself a locked decision (see `[UI] UI Toolkit chosen...` above). Walking into
+  `Test_WildSpawnPoint_TopLeft` shows a pastel-pink creature but the prompt's color swatch
+  will still show Fire's real orange — this is expected, not a bug.
+- **Alternatives rejected:** Adding pastel pink/purple as new `PrimalTypeColor` entries —
+  rejected, would corrupt locked GDD-sourced design data for a debug-only need.
+- **Date:** August 2026
+- **Revisit if:** A real design need arises for per-individual (not per-species) color
+  variance — at that point this debug override might inform a real mechanic, but should be
+  redesigned deliberately rather than repurposed as-is.

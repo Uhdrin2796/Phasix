@@ -538,6 +538,32 @@ Issues that required significant investigation to resolve. Read before debugging
   4. None of this workaround is needed for an actual human playtesting the game in a focused Editor window or a build — standard Play Mode ticking works completely normally there. It's purely a constraint of driving Unity headlessly through this specific automation path.
 - **Date:** July 2026
 - **Key rule:** If `Time.frameCount` isn't advancing across separate MCP tool calls despite real wall-clock time passing, stop waiting longer — it will never tick on its own in this environment. Drive the specific subsystem synchronously instead (reflection-invoke your own `Update()`, and for A* Pathfinding Project specifically, `BlockUntilCalculated()` + manual `MovementUpdate`/`FinalizeMovement` stepping).
+- **Correction (August 2026, Wild Encounter session):** The "it will never tick on its own"
+  claim above is not universally true — in at least one later session, automatic ticking
+  (`OnTriggerEnter2D` firing from real physics, `EncounterPromptController.Awake()` running,
+  `AstarPath`'s `scanOnStartup` scan completing) all eventually happened correctly on their
+  own, with no manual reflection-stepping needed, once enough real wall-clock time had passed
+  after `manage_editor(action="play")`. The actual trap: querying state (`X.Instance`,
+  `AstarPath.active`, a `MonoBehaviour`'s private fields) **immediately** after entering Play
+  reliably returns nulls/defaults for the first several seconds — `mcpforunity://editor/state`
+  reports `play_mode.is_changing: true` and `activity.phase: "playmode_transition"` the whole
+  time this is settling. This produced a real false alarm: `AstarPath.active == null` and "no
+  graphs in the scene" errors immediately post-Play looked exactly like a missing/broken
+  `AstarPath` setup, but were purely this settle delay — the same scene's `AstarPath` GameObject
+  (see `[Pathfinding]` entries above) had a fully valid, previously-baked `GridGraph` the whole
+  time; re-checking a short while later (a few more MCP round-trips' worth of real time, no
+  manual stepping) found `AstarPath.active` populated with `graphCount=1` correctly. **Do not
+  manually reflection-invoke `Awake()` to "fix" an apparent null right after entering Play** —
+  doing so on `EncounterPromptController` in this same session caused a *second*, genuine bug:
+  the real automatic `Awake()` fired later anyway, re-running `Hide()` and wiping state that had
+  already been set correctly in between (a UI prompt showing then silently resetting to hidden
+  for no visible reason). The correct fix is patience, not forcing early initialization by hand.
+- **Revised key rule:** Before concluding any singleton/`.active`/static-initialized state is
+  genuinely broken immediately after entering Play, first re-check `mcpforunity://editor/state`
+  for `play_mode.is_changing == false` (or just retry the same read-only query once or twice
+  more with real time between calls) — don't manually force-run `Awake()`/initialization via
+  reflection as a workaround, and don't conclude "never ticks" from a check made in the first
+  few seconds after `play`.
 
 ### [Tooling] Unity MCP stdio connection doesn't survive Unity being closed/reopened mid-session
 - **Symptom:** After closing and reopening the Unity Editor while a Claude Code session kept running, `unity-mcp` tools either disappeared from the tool list entirely, or Unity's own "MCP for Unity" window showed a stale "No Session" (red) indicator even when the connection was actually working fine.

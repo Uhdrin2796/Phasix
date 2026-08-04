@@ -47,6 +47,21 @@ public class PhasixPlaceholderVisual : MonoBehaviour
     }
 
     /// <summary>
+    /// Debug-only override for a specific spawn point's visual tint, bypassing PrimalTypeColor
+    /// entirely. World-sprite tint only — does NOT affect the encounter prompt UI swatch, which
+    /// stays tied to the species' real PrimalType via PrimalTypeColor (see DECISIONS.md — the
+    /// swatch/tint pipeline is a deliberate single source of truth for real species). Intended
+    /// for one-off scene dressing on placeholder/test spawn points, not for real species content.
+    /// </summary>
+    public void SetColorOverride(Color color)
+    {
+        _bodyRenderer.color = color;
+        Color underglow = Color.Lerp(color, Color.white, _underglowLightenAmount);
+        underglow.a = _underglowAlpha;
+        _underglowRenderer.color = underglow;
+    }
+
+    /// <summary>
     /// Scales Body and Underglow's localScale.y by scaleYMultiplier, relative to each renderer's
     /// own original scale (not a hardcoded value — Underglow is intentionally a larger base
     /// scale than Body, per this class's own prefab structure). Caches each renderer's original
