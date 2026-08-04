@@ -18,6 +18,261 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Process — self-enforcing convention: every AIPath-bypassing pattern must have a gizmo
+- **User request:** wanted a standing rule so any future companion movement pattern built
+  outside standard AIPath-following always gets a gizmo, given how many rounds it took to get
+  Orbit/HiddenShadow/Blink's gizmos actually working correctly.
+- **Built:** `OnDrawGizmos()`'s `switch` now has a `default` case that logs a
+  `Debug.LogWarning` if the active pattern has `aiPath.canMove == false` (bypasses AIPath) but
+  didn't match any of the existing gizmo cases — a runtime safeguard, not just documentation,
+  so a missing gizmo surfaces the moment the new pattern is tested in the Editor.
+- **Documented:** the convention itself on `CompanionMovementPatternType`'s doc comment and at
+  the `_aiPath.canMove` exclusion list in `ApplyMovementPreset` (both point to each other and
+  to the warning), plus a full decision entry in `DECISIONS.md` → `[Creatures] Convention —
+  every AIPath-bypassing companion movement pattern must have a gizmo`.
+- **Verified:** simulated the gap via reflection (forced `canMove = false` with an unhandled
+  pattern, manually invoked `OnDrawGizmos()`) and confirmed the warning fires with a clear,
+  actionable message.
+- **Date:** 2026-08-04
+
+[2026-08-04] Tuning — Blink cycles faster
+- **User feedback:** wanted the Blink pattern to teleport more frequently; initial pass to
+  `0.4f/0.8f` was then dialed back slightly to `0.6f/1.2f`.
+- **Changed:** `BlinkIntervalMin`/`BlinkInterval` (`DebugMovementPresetCycler.cs`'s Blink
+  preset, and `CompanionAI`'s matching private-field defaults) `1.5f/3f` → `0.6f/1.2f`. Left
+  `BlinkVanishDuration` (0.12s) and flash timing untouched — still enough visible window
+  (~0.48-1.08s) between blinks to read the vanish/reappear beat clearly at this faster cadence.
+- **Date:** 2026-08-04
+
+[2026-08-04] Cleanup + Fix — removed leftover TestOrbit* scene objects; Blink's 2nd preview spot is now a real, visited commitment
+- **User feedback:** asked about two orphaned `TestOrbitTarget2`/`TestOrbitCompanion2`
+  GameObjects sitting in the scene; also reported the Blink pattern's 2nd preview reticle
+  "never gets moved to."
+- **Removed:** `TestOrbitTarget2` (bare Transform at origin) and `TestOrbitCompanion2`
+  (standalone `CompanionAI`/`AIPath`/`Seeker` rig, no visual, `_target` pointing at the other
+  object) — traced via `git log -S` to commit `bc112d7`, the original `CompanionAI`/Orbit
+  build, predating `DebugMovementPresetCycler`. Not referenced by `PartySystem` or any script;
+  fully superseded by testing patterns live on the real companion via the cycler. Deleted and
+  scene saved.
+- **Root cause (Blink preview never visited):** by design — `_blinkPreviewDestination` was an
+  independent random sample, re-rolled every cycle and never fed into the actual
+  `MovePosition` call. Confirmed this was working exactly as (mis-)designed, not a bug in the
+  literal sense, but a bad design: a marker that's shown as "upcoming" but never comes true is
+  actively misleading for a debug visualization.
+- **Fix:** converted to a real 2-deep destination queue. `_blinkNextDestination` and
+  `_blinkPreviewDestination` are both seeded together the moment Blink becomes active
+  (`ApplyMovementPreset`). Each time a teleport actually happens, the queue is promoted
+  (`_blinkNextDestination = _blinkPreviewDestination`) and the back is refilled with a fresh
+  sample — both slots are real, committed future stops at all times, never decorative.
+  `DrawBlinkGizmos()` no longer gates on `_blinkPhase == Vanished` — both are valid all the
+  time now, so it draws continuously while Blink is active (solid = imminent, faint = after
+  that).
+- **Verified** via `Time.timeScale = 0` + manual reflection-invoked `FixedUpdate()` stepping
+  (no natural ticking to race against): confirmed the promoted `_blinkNextDestination` exactly
+  equals the pre-teleport `_blinkPreviewDestination`, and the refilled `_blinkPreviewDestination`
+  is a fresh third value. Caught and corrected a false negative in this same test pass — see
+  `LESSONS_LEARNED.md` → `[Tooling]` addendum on `Rigidbody2D.MovePosition` deferring its
+  effect to the next physics step.
+- **Date:** 2026-08-04
+
+[2026-08-04] Fix + Feature — leftover Seeker path-line gizmo cleared on pattern switch; Blink now previews 2 upcoming spots
+- **User feedback:** old paths still visibly showing when swapping to Orbit/HiddenShadow/Blink;
+  requested Blink show the next TWO future blink locations, not just one.
+- **Root cause (leftover paths):** a third always-on gizmo, separate from both AIBase's
+  destination-circle (already fixed) and our own pattern gizmos — `Seeker.OnDrawGizmos()`
+  (`Pathfinding/Core/AI/Seeker.cs`) draws a solid green line along
+  `lastCompletedVectorPath`, gated only by its own public `drawGizmos` bool. Resetting
+  `aiPath.destination` does nothing to this — it isn't tied to destination, it's whatever path
+  was last actually calculated, and Orbit/HiddenShadow/Blink never calculate a new one to
+  replace it, so the last real path from before the switch just sat there.
+- **Fix:** `ApplyMovementPreset()` now also sets `_seeker.drawGizmos = _aiPath.canMove` —
+  suppressed for the three patterns that never path, restored for the ones that do. Verified
+  via reflection: forced a real path via `Seeker.StartPath` on Direct, confirmed
+  `lastCompletedVectorPath` had entries and `drawGizmos == true`, switched to Orbit, confirmed
+  `drawGizmos` flipped to `false` (the cached path list itself is untouched — `drawGizmos` is
+  what actually gates whether `Seeker.OnDrawGizmos` renders it at all).
+- **Built (2nd Blink preview):** `MoveAlongBlink()` now samples a second, independent candidate
+  (`_blinkPreviewDestination`) at the same moment it commits `_blinkNextDestination` — both
+  around the player's position at that instant. Only `_blinkNextDestination` is ever used for
+  the actual teleport; the preview is sampled fresh again next cycle and re-syncs naturally,
+  since the real second blink will resample around wherever the player actually is by then.
+  `DrawBlinkGizmos()` now draws both: the real target at full opacity/size, the preview at
+  reduced opacity/size, so the two are visually distinguishable — solid = happening, faint =
+  "roughly here next." Verified via Scene View screenshot with `Time.timeScale = 0`: both
+  reticles render, faint one further out, no leftover green path line anywhere in frame.
+- **Date:** 2026-08-04
+
+[2026-08-04] Fix — Blink's target reticle was the same color as AIPath's own always-on gizmo
+- **User feedback:** still looked "wrong" after the OnDrawGizmos + destination-reset fix;
+  reported the position/order looked inverted. Confirmed via rigorous testing (frozen
+  `Time.timeScale = 0`, temporary bright marker objects dropped at the exact
+  `_blinkNextDestination` and companion-current-position world coordinates, screenshotted with
+  a manually wide/clean `SceneView` framing instead of relying on `view_target` auto-zoom) that
+  the reticle's actual POSITION was already correct — it was pixel-exact on the marker placed
+  at `_blinkNextDestination`.
+- **Root cause:** `DrawBlinkGizmos()`'s reticle color, `(1, 0.85, 0.2)`, is nearly identical to
+  A* Pathfinding Project's own `AIBase.ShapeGizmoColor` (`(0.94, 0.84, 0.12)`) — a yellow-gold
+  circle AIBase draws unconditionally at the companion's CURRENT position, for every pattern,
+  always. With both gizmos being simple yellow-gold circles and thin crosshair lines easy to
+  miss at normal zoom, there were effectively two same-colored markers on screen at once — one
+  at the old position (AIBase's, permanent) and one at the new (this one) — trivially misread
+  as "showing the wrong position" or "the order is inverted."
+- **Fix:** changed the Blink reticle to bright magenta `(1, 0.1, 0.9)` — unmistakably distinct
+  from AIBase's yellow-gold at any zoom level. Orbit's blue and HiddenShadow's lavender were
+  already distinct and didn't need changing.
+- **Date:** 2026-08-04
+
+[2026-08-04] Fix — pattern gizmos were never actually rendering; wrong callback + stale AIPath destination gizmo mistaken for "still broken"
+- **User feedback:** "still not working" after the repaint fix — cycling presets via
+  `DebugMovementPresetCycler` (Default → ... → Blink) showed no correct paths for any of the
+  3 patterns, still looking like "the following pathing gizmo."
+- **Root cause (two compounding issues):**
+  1. Our gizmos used `OnDrawGizmosSelected` — requires the companion to be manually selected
+     in the Hierarchy. Normal testing (cycling presets with Tab, just watching the game) never
+     selects it, so our gizmos silently never rendered at all — not a repaint problem, they
+     just never ran in the first place.
+  2. What the user WAS actually seeing is AIPath's own base class gizmo
+     (`AstarPathfindingProject/Core/AI/AIBase.cs` → `OnDrawGizmos()`, unconditional, no
+     selection needed) — it draws a blue circle at `aiPath.destination` whenever that isn't its
+     positive-infinity "unset" sentinel. Orbit/HiddenShadow/Blink never write to `destination`
+     (they bypass AIPath entirely), so it just sat frozen at whatever the last Direct/Wavy/
+     DashThrough/StopAndGo pattern left it — reading exactly like "the following pathing gizmo
+     still showing," which is precisely how the user described it.
+- **Fix:** switched our gizmo methods from `OnDrawGizmosSelected` to `OnDrawGizmos` (always-on,
+  matching AIBase's own convention — safe here since PartySystem only ever has one companion
+  instance). `ApplyMovementPreset()` now also resets `aiPath.destination` to
+  `Vector3.positiveInfinity` whenever `canMove` is false (Orbit/HiddenShadow/Blink), which
+  suppresses AIBase's own stale destination-circle gizmo entirely. Also renamed the
+  repaint-driver method (`RequestSceneViewRepaintIfGizmoRelevant`) and dropped its Selection
+  check, since the gizmo itself no longer requires selection.
+- Verified end-to-end without ever touching `Selection` (confirmed via
+  `Selection.activeGameObject` reading an unrelated object throughout the test) — both Orbit's
+  circle and Blink's reticle rendered correctly, and `aiPath.destination` read back as
+  `(Infinity, Infinity, Infinity)` for both, confirming the stale marker is gone.
+- **Date:** 2026-08-04
+
+[2026-08-04] Fix — pattern gizmos still frozen; RepaintAll() from inside the gizmo draw itself doesn't chain into continuous repaints
+- **User feedback:** sent a screen recording (~8s) showing the Blink reticle sitting at its
+  very first drawn position the entire clip, while the companion visibly blinked to several
+  different spots in the Game View over that time. Reported all 3 pattern gizmos "still don't
+  look right."
+- **Root cause:** the previous fix called `SceneView.RepaintAll()` from inside
+  `OnDrawGizmosSelected()` itself, assuming that would chain into continuous repaints. It
+  doesn't — `OnDrawGizmosSelected` only re-runs as a RESULT of a repaint that already happened
+  through some other trigger; requesting one from within it is too weak/circular, and (likely
+  worsened by the Scene tab not being focused during Play testing) repaints happened rarely,
+  leaving the gizmo showing genuinely stale data for long stretches. A single still screenshot
+  from the previous verification pass couldn't have caught this — it only exposes staleness
+  across time, which is exactly why the user's video was the tool that actually found it.
+- **Fix:** drive the repaint from `EditorApplication.update` instead (subscribed in
+  `OnEnable`/unsubscribed in `OnDisable`, `#if UNITY_EDITOR`-guarded) — a genuine per-Editor-tick
+  callback, independent of whether a repaint happened to occur elsewhere. Only requests a
+  repaint while this companion is actually selected and the active pattern has a gizmo to draw
+  (Orbit/HiddenShadow/Blink), so it's not forcing repaints for nothing while other patterns are
+  active. Verified this time via a *sequence* of Scene View screenshots taken seconds apart
+  (not a single shot) — confirmed the Blink reticle's position visibly changes between
+  consecutive captures, proving live updates rather than a frozen snapshot.
+- **Date:** 2026-08-04
+
+[2026-08-03] Redesign — pattern gizmos simplified to purpose-built indicators per pattern
+- **User feedback:** the generic circle/sphere gizmos still weren't reading clearly — asked for
+  each pattern's gizmo to visualize exactly one thing specific to that pattern, not a bundle of
+  markers: Orbit → just the path the circle follows as the player moves; HiddenShadow → the
+  idle/sway target, but ONLY while actually swaying (nothing while Locked to the player's feet
+  — no separate "path" exists in that state); Blink → the next teleport target, decided and
+  shown *before* the move happens, not just where it already landed.
+- **Changed:** `DrawOrbitGizmos()` now draws only the wire circle (dropped the extra
+  ideal-angle-point marker). `DrawHiddenShadowGizmos()` early-returns unless `_shadowPhase ==
+  Emerged`. `DrawBlinkGizmos()` early-returns unless `_blinkPhase == Vanished`, and draws a
+  reticle (circle + crosshair) at a new `_blinkNextDestination` field instead of the old
+  min/max radius circles.
+- **Built:** `MoveAlongBlink()` now calls `PickBlinkDestination()` once, the moment Vanished
+  begins (caching the result in `_blinkNextDestination`), instead of at the end of the vanish
+  window — the actual teleport at the end just reuses that cached point. This both gives the
+  gizmo a committed target to show ahead of the move, and guarantees the gizmo and the actual
+  landing spot can never disagree (no second random roll).
+- Verified via Scene View screenshots during Play mode: Orbit's circle renders cleanly centered
+  on the player with no extra clutter; Blink's reticle renders at a point distinct from the
+  player, matching the pre-committed `_blinkNextDestination`. HiddenShadow's Emerged-only gate
+  confirmed via live reflection read of `_shadowPhase` (screenshot was inconclusive since the
+  gizmo necessarily overlaps the companion's own sprite at the idle anchor).
+- **Date:** 2026-08-03
+
+[2026-08-03] Fix — Blink still slid after the first fix; disabled Rigidbody2D interpolation for Blink
+- **User feedback (2nd pass):** even after hiding the sprite during the vanish window, the
+  companion still visibly "dashed"/eased between the old and new spot on reappearing.
+- **Root cause:** hiding the sprite doesn't actually prevent the slide — `SetVisible(true)`
+  and `Rigidbody2D.MovePosition` both happen in the same FixedUpdate tick, but Unity's
+  Rigidbody2D `Interpolate` mode (enabled on the companion prefab, used for normal-movement
+  smoothness) blends the RENDERED transform between last tick's recorded position and this
+  tick's over the next render frame(s), regardless of when the sprite became visible. This is
+  a well-known Rigidbody2D-interpolation teleport gotcha, not something the earlier
+  vanish-window fix could address on its own — `transform.position` reads the correct
+  instantaneous value the whole time (which is why the earlier position-polling verification
+  passed even though the rendered slide was still there); interpolation only affects the
+  hidden internal render transform Unity actually draws to screen.
+- **Fix:** `ApplyMovementPreset()` now sets `_rigidbody2D.interpolation =
+  RigidbodyInterpolation2D.None` whenever `Blink` is the active pattern, and restores
+  `.Interpolate` for every other pattern (which do rely on it for smooth motion). Blink's
+  motion is never meant to be smooth — it's either fully hidden or instantly correct — so
+  removing interpolation entirely for the duration Blink is active is the correct fix, not a
+  timing workaround. Verified with actual Game View screenshots across a blink cycle: companion
+  visible → fully hidden (no ghost/streak) → visible again at a new position, zero visible
+  travel between the two.
+
+[2026-08-03] Fix — Blink readability + pattern gizmos not tracking live in Play mode
+- **User feedback:** Blink looked like a sped-up version of the DashThrough ("Eager Runner")
+  dash rather than a teleport; Orbit/HiddenShadow/Blink's new Scene-view gizmos appeared stuck
+  at a fixed, wrong point instead of tracking the player.
+- **Root cause (Blink look):** `Phasix_Placeholder.prefab`'s `Rigidbody2D` has `Interpolate`
+  enabled — Unity smooths any `Rigidbody2D.MovePosition` jump across the following render
+  frames for normal-movement smoothness, so an instant teleport still visibly slid across the
+  gap instead of popping.
+- **Fix (Blink look):** Blink now fully hides the companion (`PhasixPlaceholderVisual.
+  SetVisible`, new — toggles `SpriteRenderer.enabled` on Body/Underglow) for a new
+  `BlinkVanishDuration` (default 0.12s — long enough for the Rigidbody2D's interpolation to
+  settle before anything renders again) before performing the actual teleport, then shows it
+  again with the existing pop-scale flash. New `BlinkPhase { Visible, Vanished }` runtime state
+  in `CompanionAI.cs`, same convention as `ShadowPhase`. Verified live in Play mode: forced a
+  long (2.5s) vanish window and confirmed both renderers report `enabled=false` for the full
+  duration, then `true` again at a new position.
+  **Note: this fix alone turned out to be insufficient — see the follow-up entry above.**
+- **Root cause (gizmo tracking):** not a math bug — the gizmo code already read the same
+  `_target.position` + offset fields the real movement methods use correctly. The Scene View
+  simply doesn't repaint every frame during Play Mode by default (only the Game View does), so
+  whatever `OnDrawGizmosSelected` drew at the last repaint stayed on screen inert.
+- **Fix (gizmo tracking):** `OnDrawGizmosSelected` now calls `UnityEditor.SceneView.
+  RepaintAll()` (guarded by `#if UNITY_EDITOR`, required since `CompanionAI` ships in builds)
+  after drawing, so the gizmo keeps re-triggering its own repaints continuously while the
+  object stays selected — no manual "Always Refresh" toolbar toggle needed. Verified via a
+  direct Scene View screenshot (`manage_camera`, `capture_source: scene_view`) during Play mode
+  with Orbit active: the wire circle is clearly centered on the player, not floating at an
+  unrelated point.
+- **Date:** 2026-08-03
+
+[2026-08-03] Creatures — Blink companion movement pattern + pattern gizmos
+- **Built:** `CompanionMovementPatternType.Blink` — a 7th companion follow style. Periodically
+  (randomized between `BlinkIntervalMin`/`BlinkInterval`) teleports the companion via
+  `Rigidbody2D.MovePosition` (an instant snap, not a lerp, is what reads as a blink rather than
+  a dash) to a random point in the `[BlinkMinRadius, BlinkRadius]` annulus around the player,
+  then waits before blinking again. Plays a brief pop-scale flash on arrival
+  (`PhasixPlaceholderVisual.SetBlinkFlashScale`) so the teleport reads as an event.
+- **Built:** `PickBlinkDestination()` validates every sampled point against the A* GridGraph
+  via `AstarPath.active.GetNearest` (rejects unwalkable nodes and points that snapped too far
+  from the sample, meaning it likely landed inside/beyond a wall), retrying up to 8 times before
+  falling back to the player's own position — a raw random point has no walkability guarantee,
+  unlike Orbit/HiddenShadow which always stay glued to the (necessarily walkable) player.
+- **Built:** `CompanionAI.OnDrawGizmosSelected()` — Orbit, HiddenShadow, and Blink all bypass
+  `AIPath.destination` entirely, so Seeker's built-in path gizmo has nothing to draw for any of
+  them. Added a stand-in Scene-view gizmo per pattern (orbit circle, HiddenShadow locked/idle
+  markers + sway range, Blink's min/max radius annulus), toggleable via a new
+  `_showPatternGizmos` field. Not Blink-specific — fixes the same gap for all three
+  non-pathfinding patterns while adding Blink.
+- **Added:** "Blink" entry to `DebugMovementPresetCycler.cs` for live comparison (Tab in Play mode).
+- **Decided:** not wired to Personality/species yet — matches how Orbit and HiddenShadow
+  shipped. See `DECISIONS.md` → `[Creatures] Blink pattern`.
+- **Date:** 2026-08-03
+
 [2026-08-03] Tuning/Fix — Hidden Shadow sway amount + companion render order
 - **User feedback:** wanted more left-right movement from the idle sway, and wanted the
   companion to render behind the player instead of in front.

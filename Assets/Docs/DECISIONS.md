@@ -929,6 +929,49 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Revisit:** once Hidden Shadow has been compared live via `DebugMovementPresetCycler` and
   either reads fine as-is or a concrete complaint surfaces.
 
+### [Creatures] Blink pattern — walkable-point sampling and flash-vs-telegraph timing
+- **Concept:** a 7th Tier 2 companion movement pattern (not one of the archetypes originally
+  sketched above) — periodically teleports the companion to a random point within a radius
+  band of the player instead of walking there. Built the same way Orbit/HiddenShadow were:
+  new `CompanionMovementPatternType` value, its own `MoveAlong…()` in `CompanionAI.cs`,
+  bypasses `AIPath` entirely. Not wired to Personality/species — same as Orbit/HiddenShadow,
+  selectable via `DebugMovementPresetCycler` only for now.
+- **Status:** Undecided on two points, implemented with a working default for now:
+  1. Invalid teleport targets (landed inside/beyond unwalkable geometry) — implemented as
+     retry-up-to-8-times-then-fall-back-to-the-player's-own-position via
+     `AstarPath.active.GetNearest`. Revisit if blinks visibly fail to escape a tight/cluttered
+     space (e.g. always landing back on the player because every retry failed).
+  2. Flash-after vs. a telegraph-before-blink — shipped as a pop-scale flash immediately after
+     arrival (simpler: no anticipation state to track). Revisit if playtesting wants a warning
+     tell before the teleport instead, closer to how real "blink" abilities in other games
+     often flash at the origin point first.
+- **Revisit:** once Blink has been compared live via `DebugMovementPresetCycler` and either
+  reads fine as-is or a concrete complaint surfaces.
+
+### [Creatures] Convention — every AIPath-bypassing companion movement pattern must have a gizmo
+- **Status:** Settled, enforced at runtime, not just documentation.
+- **Rule:** any `CompanionMovementPatternType` added to `ApplyMovementPreset()`'s
+  `_aiPath.canMove = false` exclusion list (i.e. any pattern that bypasses AIPath's own
+  pathfinding, the way Orbit/HiddenShadow/Blink do) MUST also get its own `Draw*Gizmos()` case
+  in `CompanionAI.OnDrawGizmos()`.
+- **Why:** for any pattern that bypasses AIPath, neither A* Pathfinding Project's own gizmos
+  (Seeker's path-line, AIBase's destination-circle — both suppressed for these patterns, see
+  the `seeker.drawGizmos`/destination-reset comments in `ApplyMovementPreset`) nor anything
+  else has anything to draw. Skipping a custom gizmo for a new bypass pattern doesn't just miss
+  a nice-to-have — it makes that pattern's movement completely invisible in the Scene view,
+  exactly the "why can't I see anything" class of report that took several rounds to fully
+  resolve for Orbit/HiddenShadow/Blink (see `CHANGELOG.md` → the August 2026 gizmo-fix entries,
+  and `LESSONS_LEARNED.md` → `[Tooling]` for the specific gotchas: `OnDrawGizmosSelected`
+  requiring manual selection, third-party always-on gizmos being mistaken for broken custom
+  ones, `SceneView.RepaintAll()` not chaining from inside a gizmo draw callback).
+- **Enforcement:** `OnDrawGizmos()`'s `switch` has a `default` case that logs a
+  `Debug.LogWarning` if `!_aiPath.canMove` and no case handled the current pattern — fires the
+  moment the new pattern is tested in the Editor, not discovered later. Verified working via a
+  simulated gap (forced `canMove = false` on an unhandled pattern via reflection, confirmed the
+  warning fires). This is a runtime safeguard, not just a comment — don't suppress or remove it
+  without adding an equivalent check elsewhere.
+- **Date:** August 2026
+
 ### [Creatures] Defuse / Infuse — creature release + Resonance investment (proposed)
 - **Status:** Designed, not implemented. Depends conceptually on the Resonance system above
   (reuses its keyword tags) — should not be built before Resonance is, and ideally not

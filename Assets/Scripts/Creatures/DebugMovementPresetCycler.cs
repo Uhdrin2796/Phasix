@@ -89,6 +89,19 @@ public class DebugMovementPresetCycler : MonoBehaviour
             ShadowIdleAnchorOffset = new Vector2(0f, 1.2f), // emerges above/behind the player's visible body, not their feet-pivot Transform position
             ShadowLockedOffset = new Vector2(0f, 0.65f), // lines the squashed shadow up directly under the player's visible feet, not their (lower) Transform pivot — tuned empirically against Mr_chimken's rig via screenshot + pixel analysis
         },
+        new CompanionMovementPreset
+        {
+            Name = "Blink (teleports to a random spot near you, then waits)",
+            Pattern = CompanionMovementPatternType.Blink,
+            TrailDistance = 1.2f, DirectionTurnSpeed = 180f,
+            WalkSpeed = 3f, RunSpeed = 6f,
+            IdleDistance = 1f, RunDistance = 5f,
+            RepelDistance = 0.7f, RepelStrength = 0.8f,
+            BlinkRadius = 3.5f, BlinkMinRadius = 1f,
+            BlinkIntervalMin = 0.6f, BlinkInterval = 1.2f,
+            BlinkVanishDuration = 0.12f,
+            BlinkFlashDuration = 0.2f, BlinkFlashScale = 1.4f,
+        },
     };
 
     private CompanionAI _companionAI;

@@ -1390,7 +1390,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AstarPathfindingProject::AstarPath
   version: 1
   data:
-    dataString: UEsDBBQAAAgIAACAn+vTB9K9FgIAALIEAAALACQAZ3JhcGgwLmpzb24KACAAAAAAAAEAGAAAgD7V3rGdAQCAPtXesZ0BAIA+1d6xnQF1U01v2zAM/SuBz8vgpOuG7LY5abpDmqBe0bNi07YQmTL0sXwU+e+jZDl2vdUXS+Qj+fhIvUUcdQOZkWqteL6ROUTfJ5E7R58mvfMRTqyUmPILdJhXnpvKgZjHPDPDJdlnLkzLGozi2Q8shQPHZLTIC6nqVV5CIrXRZC6Y0EAuJY2LRjK9TaIT/aYLF3Km0/ybO13otIgnVzpmgAZUD+2A8ef7AGxxFjPB6gZyR7qH33X42cLDkNoJiDZDJoXgOrCJzLnx3aZNBQpcuzln1JxnMKdrBbysTLjcYrdFocEEdoqdl1yRRm3S6KdshauZPrTE/jBhXZn5/VdPqk26+cc/nXl3oWT92NWdxa6GqXh2eGbnjGkzUHZoXvbEZ16fIxMHthfwWgE+ybWSFnNyGmVdqNUwX/bXW2tJBdmht7dUR0bb/Gc+YTquh6vv/pQIXu+98F9aQyqkl9tPHxSN5hcR9ruhQwqyOhYvGn6zcrhEwfHAlTbkCl2io7eXVjlotPKauW6sSaRCUMMMDSAT5ryjPGY8w5Hv46gH5t5LqB583TMYhXhzj4/jkWsnj7dp6UoeN6CrrTWCI/RSO8cTCZVIxHbFhi11YalVBcsGYaXl+fvdiuLRNx0bIr98HKlPJnYt0SAPjW2oCdKm0RWtEO7FKHZc80stdV+fYyHTTAHg9n2oBkXZ6UHmq5yTMikYw9FP2qW7/gVQSwMEFAAACAgAAICf60JGoGBSAAAAeAAAAAkAJABtZXRhLmpzb24KACAAAAAAAAEAGAAAgD7V3rGdAQCAPtXesZ0BAIA+1d6xnQGrVipLLSrOzM9TslIw0TPSMzTXUVBKL0osyCgGihiCOKWZKSB2tJIBGtBFF1CKBaovqSxI9UvMTYXoCUgsyUjLzEvJzEvXcy/KTHEHGa0UWwsAUEsBAi0AFAAACAgAAICf69MH0r0WAgAAsgQAAAsAJAAAAAAAAAAAAAAAAAAAAGdyYXBoMC5qc29uCgAgAAAAAAABABgAAIA+1d6xnQEAgD7V3rGdAQCAPtXesZ0BUEsBAi0AFAAACAgAAICf60JGoGBSAAAAeAAAAAkAJAAAAAAAAAAAAAAAYwIAAG1ldGEuanNvbgoAIAAAAAAAAQAYAACAPtXesZ0BAIA+1d6xnQEAgD7V3rGdAVBLBQYAAAAAAgACALgAAAAAAwAAAAA=
+    dataString: UEsDBBQAAAgIAACAn+uyUKGlWQIAAA8FAAALACQAZ3JhcGgwLmpzb24KACAAAAAAAAEAGAAAgD7V3rGdAQCAPtXesZ0BAIA+1d6xnQF1VE1z2jAQ/SuMzqVjQyBDby0hSQ8kTGgnF19kaY01yJJHHwGS4b93JdvYoe3J0tu3X29X/iBC2RqY0+bBCL7WHMi3EQln8mXUGx/hSHdabcU7dJxXwV0ZSDRyXqgTGvE0uFldgTOCfVc7GcgJgl6JQptqxXew1NZZhAsqLaDJaBe8FUIfI3LEz3gRXE54mtyG0zueFsnojEcGyoHpqR0x+TpriQ3PKyZpVQMPRff0acdPF5GmsJ2W0URgWkph22qIO9Wx221dgoHQLhcUm4sVTPBagtiVrr1cfJ+LwoJrqzP0dCcMatQEJT90I1xF7b4p7I1KH9JMZvNYVBN0/Zd9nEZzYXT12OVNk5DDlYLtX+iJUesGyg7hu77wNOpzoHJPcwmvJagn/WC0VxyNzvjg6i1M7vrrpbVlCWzf402pV6Cv/zGfdjqhh3Ps/riUosqj8DcNsJU6yh2nDwZH8xMLjrth2xCIhip+W/hFd8Mlag33wliHprZLFcrLtTeBSlZRs9CNd0ttFJhhhBoUle60wTjueoZXtv973dPwXtrsra17BlcuEe75SXJl2ujDZVq21Ic12PLZOykU9FIHwxMKtdRKNSs2bKlz23pTUDZw23nBP+8WYbeM3U75TQo8T+b5fJzM5imbFItFPsmn03lK4vIJhX1SuWkKbeXBsQ01UbhpeFVeyvBiDD08iPdK2z6/UIXeMgOgnj+7WjAYHR8kX3GBymzBOaHipMlHRqRme+DZJVAWW1wdnaFZHyUjtXjTLiAZWcYfRkYCfNnijYE3AYeQvAt2Juc/UEsDBBQAAAgIAACAn+vaWt+IbQAAAHgAAAAJACQAbWV0YS5qc29uCgAgAAAAAAABABgAAIA+1d6xnQEAgD7V3rGdAQCAPtXesZ0Bq1YqSy0qzszPU7JSMNEz0jM011FQSi9KLMgoBooYgjilmSkgdrRSsnlysrlxiolhakqSgVmSma6BqZlhslGapWWSUZKxsZmhUixQfUllQapfYm4qRE9AYklGWmZeSmZeup57UWaKO8hopdhaAFBLAQItABQAAAgIAACAn+uyUKGlWQIAAA8FAAALACQAAAAAAAAAAAAAAAAAAABncmFwaDAuanNvbgoAIAAAAAAAAQAYAACAPtXesZ0BAIA+1d6xnQEAgD7V3rGdAVBLAQItABQAAAgIAACAn+vaWt+IbQAAAHgAAAAJACQAAAAAAAAAAAAAAKYCAABtZXRhLmpzb24KACAAAAAAAAEAGAAAgD7V3rGdAQCAPtXesZ0BAIA+1d6xnQFQSwUGAAAAAAIAAgC4AAAAXgMAAAAA
     upgradeData: 
     file_cachedStartup: {fileID: 0}
     data_cachedStartup: 
@@ -2494,203 +2494,18 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1260338095}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.38758764, w: 0.9218329}
+  m_LocalRotation: {x: -0, y: -0, z: 0.38758776, w: 0.9218328}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1526064555}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1286295366
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1286295371}
-  - component: {fileID: 1286295370}
-  - component: {fileID: 1286295369}
-  - component: {fileID: 1286295368}
-  - component: {fileID: 1286295367}
-  m_Layer: 0
-  m_Name: TestOrbitCompanion2
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1286295367
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1286295366}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb7c30bde7aa4084a9ba64bcedb665f9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CompanionAI
-  _target: {fileID: 1549557358}
-  _idleDistance: 1
-  _runDistance: 5
-  _trailDistance: 1.2
-  _directionTurnSpeed: 180
-  _repelDistance: 0.7
-  _repelStrength: 0.8
-  _walkSpeed: 3
-  _runSpeed: 6
-  _animator: {fileID: 0}
---- !u!50 &1286295368
-Rigidbody2D:
-  serializedVersion: 5
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1286295366}
-  m_BodyType: 1
-  m_Simulated: 1
-  m_UseFullKinematicContacts: 0
-  m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_GravityScale: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_Interpolate: 0
-  m_SleepingMode: 1
-  m_CollisionDetection: 0
-  m_Constraints: 0
---- !u!114 &1286295369
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1286295366}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f6eb1402c17e84a9282a7f0f62eb584f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: AstarPathfindingProject::Pathfinding.AIPath
-  version: 5
-  radius: 0.5
-  height: 2
-  canMove: 1
-  maxSpeed: 1
-  gravity: {x: NaN, y: NaN, z: NaN}
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  centerOffsetCompatibility: NaN
-  repathRateCompatibility: NaN
-  canSearchCompability: 0
-  orientation: 0
-  enableRotation: 1
-  autoRepath:
-    mode: 2
-    interval: 0.5
-    sensitivity: 10
-    maximumInterval: 2
-    visualizeSensitivity: 0
-  targetCompatibility: {fileID: 0}
-  maxAcceleration: -2.5
-  rotationSpeed: 360
-  slowdownDistance: 0.6
-  pickNextWaypointDist: 2
-  endReachedDistance: 0.2
-  alwaysDrawGizmos: 0
-  slowWhenNotFacingTarget: 1
-  whenCloseToDestination: 0
-  constrainInsideGraph: 0
---- !u!114 &1286295370
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1286295366}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 373b52eb9bf8c40f785bb6947a1aee66, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: AstarPathfindingProject::Pathfinding.Seeker
-  version: 1
-  drawGizmos: 1
-  detailedGizmos: 0
-  startEndModifier:
-    addPoints: 0
-    exactStartPoint: 3
-    exactEndPoint: 3
-    useRaycasting: 0
-    mask:
-      serializedVersion: 2
-      m_Bits: 4294967295
-    useGraphRaycasting: 0
-  traversableTags: -1
-  tagPenalties: 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-  graphMask:
-    value: -1
---- !u!4 &1286295371
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1286295366}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2, y: 1.4, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1526064555 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -2155800567267245542, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
   m_PrefabInstance: {fileID: 1983783502}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1549557357
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1549557358}
-  m_Layer: 0
-  m_Name: TestOrbitTarget2
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1549557358
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1549557357}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1655330472
 GameObject:
   m_ObjectHideFlags: 0
@@ -4823,7 +4638,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.1669602
+      value: 0.16696005
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -4831,7 +4646,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.9859637
+      value: -0.98596364
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5186,5 +5001,3 @@ SceneRoots:
   - {fileID: 1351876111511071880}
   - {fileID: 480252711}
   - {fileID: 1090428280}
-  - {fileID: 1549557358}
-  - {fileID: 1286295371}

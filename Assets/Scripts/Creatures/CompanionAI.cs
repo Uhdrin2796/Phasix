@@ -17,6 +17,16 @@ public enum CompanionMovementState { Idle, Walk, Run }
 /// Shadow vs Eager Runner, and Wide Wanderer vs Steady Anchor, felt like the same thing at
 /// different speeds. This is the "Tier 2" half of DECISIONS.md's outline: different
 /// underlying movement logic, not just different numbers.
+///
+/// CONVENTION — any pattern added here that bypasses AIPath's own pathfinding (i.e. gets added
+/// to the "canMove = false" exclusion list in ApplyMovementPreset, alongside Orbit/
+/// HiddenShadow/Blink) MUST also get its own Draw*Gizmos() case in OnDrawGizmos() below. This
+/// isn't optional polish: for any pattern that bypasses AIPath, Seeker's own path-line gizmo
+/// and AIBase's own destination-circle gizmo have nothing to draw (see the destination-reset
+/// and seeker.drawGizmos comments in ApplyMovementPreset) — without a custom gizmo, that
+/// pattern's movement becomes completely invisible in the Scene view, with no debug feedback
+/// at all. OnDrawGizmos()'s switch has a runtime check that logs a warning if this is missed —
+/// don't ignore that warning; add the gizmo case instead of suppressing it.
 /// </summary>
 public enum CompanionMovementPatternType
 {
@@ -32,6 +42,8 @@ public enum CompanionMovementPatternType
     Orbit,
     /// <summary>Ignores the trailing point; locks onto the player's position with zero lag while they move, then drifts to a swaying idle spot when they stop.</summary>
     HiddenShadow,
+    /// <summary>Ignores the trailing point; periodically teleports to a random walkable point within a radius band around the player, then waits before teleporting again.</summary>
+    Blink,
 }
 
 /// <summary>
@@ -75,6 +87,15 @@ public struct CompanionMovementPreset
     public float ShadowReturnLerpDuration; // HiddenShadow: seconds to ease back onto the player when movement resumes, instead of snapping instantly
     public Vector2 ShadowIdleAnchorOffset; // HiddenShadow: offset from the target's raw Transform position where the companion emerges to sway while idle (same pivot-compensation role as OrbitCenterOffset, but also defines the emerge direction/distance since there's no separate radius)
     public Vector2 ShadowLockedOffset;     // HiddenShadow: offset from the target's raw Transform position while glued/moving — lines the squashed shadow up directly under the player's visible feet (same pivot-compensation role as OrbitCenterOffset)
+
+    // Blink
+    public float BlinkRadius;         // Blink: max distance from the player a teleport destination can land, world units
+    public float BlinkMinRadius;      // Blink: min distance from the player a teleport destination can land, world units — keeps it from blinking on top of them
+    public float BlinkIntervalMin;    // Blink: shortest possible time between blinks, seconds
+    public float BlinkInterval;       // Blink: longest possible time between blinks, seconds (randomized each cycle between Min and this)
+    public float BlinkVanishDuration; // Blink: seconds the companion is fully hidden mid-teleport — long enough for the Rigidbody2D's own interpolation to settle onto the new position before it's shown again, so the move never renders as a slide
+    public float BlinkFlashDuration;  // Blink: seconds for the post-teleport pop-scale flash to decay back to normal
+    public float BlinkFlashScale;     // Blink: peak scale multiplier immediately after teleporting, decaying to 1 over BlinkFlashDuration
 }
 
 /// <summary>
@@ -138,6 +159,10 @@ public class CompanionAI : MonoBehaviour
     [Tooltip("How flat the Body/Underglow scale.y goes while HiddenShadow is Locked onto the player. Low enough to read as a flattened ground shadow, high enough the shape doesn't vanish. Range: 0.3-0.6.")]
     [SerializeField] private float _shadowSquashScaleY = 0.45f;
 
+    [Header("Debug Gizmos")]
+    [Tooltip("Draws a Scene-view gizmo for the active pattern (Orbit/HiddenShadow/Blink) when this companion is selected. These three bypass AIPath entirely, so there's no destination for Seeker's own path gizmo to draw.")]
+    [SerializeField] private bool _showPatternGizmos = true;
+
     private Seeker _seeker;
     private AIPath _aiPath;
     private Rigidbody2D _rigidbody2D;
@@ -169,6 +194,13 @@ public class CompanionAI : MonoBehaviour
     private float _shadowReturnLerpDuration = 0.15f;
     private Vector2 _shadowIdleAnchorOffset = Vector2.zero;
     private Vector2 _shadowLockedOffset = Vector2.zero;
+    private float _blinkRadius = 3.5f;
+    private float _blinkMinRadius = 1f;
+    private float _blinkIntervalMin = 0.6f;
+    private float _blinkInterval = 1.2f;
+    private float _blinkVanishDuration = 0.12f;
+    private float _blinkFlashDuration = 0.2f;
+    private float _blinkFlashScale = 1.4f;
 
     private float _patternTimer;
     private float _dashAngleRadians;
@@ -176,6 +208,30 @@ public class CompanionAI : MonoBehaviour
     private float _currentDashOvershoot;
     private float _orbitAngleRadians;
     private bool _isPaused;
+    private float _currentBlinkInterval;
+    private float _blinkFlashTimer;
+
+    /// <summary>
+    /// Blink's own phase, tracked separately from CompanionMovementState for the same reason
+    /// ShadowPhase is — purely about whether the companion is currently rendered at all, not
+    /// about the distance-driven Idle/Walk/Run Animator state.
+    /// </summary>
+    private enum BlinkPhase { Visible, Vanished }
+    private BlinkPhase _blinkPhase = BlinkPhase.Visible;
+    private float _blinkVanishTimer;
+    private Vector3 _blinkNextDestination;
+
+    /// <summary>
+    /// The stop AFTER _blinkNextDestination — a real, committed second teleport, not just a
+    /// decorative preview. Both slots are kept filled at all times: whenever
+    /// _blinkNextDestination is consumed (the companion actually teleports there),
+    /// _blinkPreviewDestination is promoted into _blinkNextDestination and a fresh one is
+    /// rolled to refill this slot, sampled around wherever the player is at that moment. An
+    /// earlier version sampled this independently every cycle and discarded it without ever
+    /// visiting it — looked like a broken "next" marker that was never honored. Now it's
+    /// exactly what the next one will become once the current one is consumed.
+    /// </summary>
+    private Vector3 _blinkPreviewDestination;
 
     /// <summary>
     /// HiddenShadow's own player-velocity-driven state, tracked separately from
@@ -223,7 +279,40 @@ public class CompanionAI : MonoBehaviour
             _lastTargetPosition = _target.position;
             _targetRigidbody2D = _target.GetComponent<Rigidbody2D>();
         }
+
+#if UNITY_EDITOR
+        // Calling SceneView.RepaintAll() from inside the gizmo draw callback itself turned out
+        // NOT to chain into continuous repaints during Play Mode while the Scene tab isn't
+        // focused — confirmed via a screen recording showing the gizmo frozen at its very first
+        // drawn position for the entire ~8s clip while the companion visibly moved many times
+        // over in the Game View. The draw callback only re-runs as a RESULT of a repaint that
+        // already happened elsewhere; requesting one from within it is too weak/circular a
+        // trigger. EditorApplication.update fires every Editor tick regardless of focus, so
+        // driving the repaint from there instead is what actually keeps the gizmo live.
+        UnityEditor.EditorApplication.update += RequestSceneViewRepaintIfGizmoRelevant;
+#endif
     }
+
+#if UNITY_EDITOR
+    private void OnDisable()
+    {
+        UnityEditor.EditorApplication.update -= RequestSceneViewRepaintIfGizmoRelevant;
+    }
+
+    private void RequestSceneViewRepaintIfGizmoRelevant()
+    {
+        bool patternHasGizmo = _pattern == CompanionMovementPatternType.Orbit
+            || _pattern == CompanionMovementPatternType.HiddenShadow
+            || _pattern == CompanionMovementPatternType.Blink;
+
+        // No Selection check — see OnDrawGizmos below for why these switched from
+        // OnDrawGizmosSelected to always-on OnDrawGizmos.
+        if (_showPatternGizmos && patternHasGizmo)
+        {
+            UnityEditor.SceneView.RepaintAll();
+        }
+    }
+#endif
 
     /// <summary>Assigns the transform this companion follows. Called by PartySystem on activation.</summary>
     public void SetTarget(Transform target)
@@ -264,12 +353,64 @@ public class CompanionAI : MonoBehaviour
         _shadowReturnLerpDuration = preset.ShadowReturnLerpDuration;
         _shadowIdleAnchorOffset = preset.ShadowIdleAnchorOffset;
         _shadowLockedOffset = preset.ShadowLockedOffset;
+        _blinkRadius = preset.BlinkRadius;
+        _blinkMinRadius = preset.BlinkMinRadius;
+        _blinkIntervalMin = preset.BlinkIntervalMin;
+        _blinkInterval = preset.BlinkInterval;
+        _blinkVanishDuration = preset.BlinkVanishDuration;
+        _blinkFlashDuration = preset.BlinkFlashDuration;
+        _blinkFlashScale = preset.BlinkFlashScale;
 
-        // Orbit and HiddenShadow both bypass AIPath's own gradual pathfinding movement entirely
-        // (see FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow below) — AIPath must not also be
-        // trying to drive the same Rigidbody2D at the same time.
+        // Orbit, HiddenShadow, and Blink all bypass AIPath's own gradual pathfinding movement
+        // entirely (see FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow/MoveAlongBlink below) —
+        // AIPath must not also be trying to drive the same Rigidbody2D at the same time.
+        // Adding a pattern to this list? It also needs a Draw*Gizmos() case in OnDrawGizmos()
+        // below — see the CONVENTION on CompanionMovementPatternType and OnDrawGizmos()'s
+        // default-case warning, which will fire at runtime if this is missed.
         _aiPath.canMove = _pattern != CompanionMovementPatternType.Orbit
-            && _pattern != CompanionMovementPatternType.HiddenShadow;
+            && _pattern != CompanionMovementPatternType.HiddenShadow
+            && _pattern != CompanionMovementPatternType.Blink;
+
+        // AIBase's own OnDrawGizmos (Pathfinding/Core/AI/AIBase.cs) draws a blue circle at
+        // aiPath.destination UNCONDITIONALLY — no selection required, always on — whenever
+        // destination isn't its "never set" positive-infinity sentinel. Since Orbit/
+        // HiddenShadow/Blink never write to destination (see the Update()/ComputeDestination
+        // guard below), it was sitting frozen at whatever the last Direct/Wavy/DashThrough/
+        // StopAndGo pattern left it at, and being always-on (not OnDrawGizmosSelected like our
+        // own pattern gizmos), that stale marker was the ONLY gizmo actually visible without
+        // manually selecting the companion — easily mistaken for "the following pathing gizmo
+        // still showing" instead of our own gizmos genuinely not appearing at all. Explicitly
+        // resetting destination to the sentinel here suppresses AIBase's own marker for the
+        // three patterns that don't use it.
+        if (!_aiPath.canMove)
+        {
+            _aiPath.destination = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+        }
+
+        // Seeker.OnDrawGizmos (Pathfinding/Core/AI/Seeker.cs) is a SEPARATE always-on gizmo from
+        // AIBase's destination circle above — it draws a solid green line along the last
+        // successfully calculated path (lastCompletedVectorPath), gated only by its own public
+        // drawGizmos toggle. Resetting destination does nothing to clear it: it isn't tied to
+        // destination at all, it's whatever path was last actually calculated, and Orbit/
+        // HiddenShadow/Blink never calculate a new one to replace it. Left alone, it's exactly
+        // the "old path still showing" artifact — a real green line tracing wherever the
+        // companion was last actually pathfinding to, frozen from before the pattern switch.
+        // Explicitly toggling this off/on alongside canMove keeps it in sync: suppressed for
+        // the three patterns that never path, restored for the ones that do.
+        _seeker.drawGizmos = _aiPath.canMove;
+
+        // The companion prefab's Rigidbody2D normally has Interpolate enabled (smooths motion
+        // between physics ticks for every other pattern). That's exactly what still made Blink's
+        // teleport look like a fast slide even after hiding the sprite during the vanish window
+        // (SetVisible(true) and MovePosition happen in the same FixedUpdate tick — interpolation
+        // doesn't know it was a teleport, it just smooths the render between last tick's position
+        // and this tick's, regardless of when the sprite became visible again). Blink's motion is
+        // never meant to be smooth (it's either fully hidden or instantly correct), so interpolation
+        // is switched off entirely while Blink is active, and restored for every other pattern,
+        // which do rely on it for smooth Rigidbody2D.MovePosition-driven motion.
+        _rigidbody2D.interpolation = _pattern == CompanionMovementPatternType.Blink
+            ? RigidbodyInterpolation2D.None
+            : RigidbodyInterpolation2D.Interpolate;
 
         // Reset runtime state so switching patterns doesn't carry over a stale phase/angle
         // from whatever pattern was active before.
@@ -277,6 +418,30 @@ public class CompanionAI : MonoBehaviour
         _currentDashInterval = 0f; // forces DashThrough to pick a fresh angle/distance on the very next frame
         _isPaused = false;
         _dashAngleRadians = Mathf.Atan2(_smoothedTargetDirection.y, _smoothedTargetDirection.x);
+
+        // Forces the first blink to fire promptly instead of waiting a full interval, clears
+        // any in-progress flash from a pattern swap away from Blink mid-decay, and — most
+        // importantly — forces the companion visible again in case the preset was swapped away
+        // from Blink while it was mid-Vanished, which would otherwise leave it permanently
+        // invisible under a non-Blink pattern.
+        _currentBlinkInterval = 0f;
+        _blinkFlashTimer = 0f;
+        _blinkVanishTimer = 0f;
+        _blinkPhase = BlinkPhase.Visible;
+        _placeholderVisual?.SetBlinkFlashScale(1f);
+        _placeholderVisual?.SetVisible(true);
+
+        // Seed the 2-deep destination queue (see _blinkPreviewDestination's doc comment) so
+        // both slots are already valid the moment Blink becomes active — MoveAlongBlink only
+        // ever consumes/promotes/refills this queue, it never picks _blinkNextDestination
+        // itself, so it has to start non-empty. Harmless to reseed even when re-entering Blink
+        // after already having a queue — old commitments from a previous Blink session aren't
+        // worth preserving across an unrelated pattern in between.
+        if (_pattern == CompanionMovementPatternType.Blink)
+        {
+            _blinkNextDestination = PickBlinkDestination();
+            _blinkPreviewDestination = PickBlinkDestination();
+        }
 
         // Start orbiting from wherever the companion currently is relative to the player,
         // rather than snapping to angle 0 — avoids a visible jump the moment Orbit is selected.
@@ -340,12 +505,14 @@ public class CompanionAI : MonoBehaviour
         float distanceToPlayer = Vector2.Distance(transform.position, _target.position);
         UpdateMovementState(distanceToPlayer);
 
-        // Orbit and HiddenShadow are handled in FixedUpdate instead (see
-        // FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow below) — both bypass AIPath's
-        // destination-seeking entirely (canMove is disabled for these patterns in
-        // ApplyMovementPreset) and need to be driven on the physics tick, not the render tick,
-        // to track the player's own Rigidbody2D-driven movement tightly.
-        if (_pattern != CompanionMovementPatternType.Orbit && _pattern != CompanionMovementPatternType.HiddenShadow)
+        // Orbit, HiddenShadow, and Blink are handled in FixedUpdate instead (see
+        // FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow/MoveAlongBlink below) — all three
+        // bypass AIPath's destination-seeking entirely (canMove is disabled for these patterns
+        // in ApplyMovementPreset) and need to be driven on the physics tick, not the render
+        // tick, to track the player's own Rigidbody2D-driven movement tightly.
+        if (_pattern != CompanionMovementPatternType.Orbit
+            && _pattern != CompanionMovementPatternType.HiddenShadow
+            && _pattern != CompanionMovementPatternType.Blink)
         {
             _aiPath.destination = ComputeDestination(playerVelocity, distanceToPlayer);
         }
@@ -374,6 +541,9 @@ public class CompanionAI : MonoBehaviour
                 break;
             case CompanionMovementPatternType.HiddenShadow:
                 MoveAlongHiddenShadow();
+                break;
+            case CompanionMovementPatternType.Blink:
+                MoveAlongBlink();
                 break;
         }
     }
@@ -496,6 +666,104 @@ public class CompanionAI : MonoBehaviour
     private void ApplyShadowSquash(bool squashed)
     {
         _placeholderVisual?.SetShadowSquash(squashed ? _shadowSquashScaleY : 1f);
+    }
+
+    /// <summary>
+    /// Blink: waits _currentBlinkInterval seconds while Visible, then fully hides the companion
+    /// (SetVisible(false)) rather than moving it immediately — the companion prefab's
+    /// Rigidbody2D has Interpolate enabled (Phasix_Placeholder.prefab), which smooths any
+    /// MovePosition jump across the next few render frames for normal-movement smoothness, so
+    /// an instant teleport with the sprite still showing reads as a fast slide, not a blink.
+    /// Hiding first sidesteps that entirely — nothing renders during the position change, so
+    /// there's nothing to smooth.
+    /// While Vanished, waits _blinkVanishDuration (long enough for the interpolation to fully
+    /// settle onto the new position before anything is shown again), performs the actual
+    /// teleport, shows the companion, and starts the pop-scale flash. The flash's own decay is
+    /// tracked independently so it keeps playing out after the next Visible-phase countdown has
+    /// already resumed.
+    ///
+    /// The destination is picked once, the moment Vanished begins (not deferred to the end of
+    /// the vanish window) and cached in _blinkNextDestination — both so the actual teleport at
+    /// the end of the window lands exactly where it was decided (no second random roll that
+    /// could disagree), and so DrawBlinkGizmos below has something committed to show ahead of
+    /// the move, not just after it already happened. _blinkNextDestination and
+    /// _blinkPreviewDestination are both kept filled at all times (seeded together in
+    /// ApplyMovementPreset) — this method only ever CONSUMES the front of that 2-deep queue and
+    /// refills the back, it never picks _blinkNextDestination itself.
+    /// </summary>
+    private void MoveAlongBlink()
+    {
+        if (_blinkPhase == BlinkPhase.Visible)
+        {
+            _patternTimer += Time.fixedDeltaTime;
+            if (_patternTimer >= _currentBlinkInterval)
+            {
+                _patternTimer = 0f;
+                _blinkVanishTimer = 0f;
+                _blinkPhase = BlinkPhase.Vanished;
+                _placeholderVisual?.SetVisible(false);
+            }
+
+            if (_blinkFlashTimer > 0f)
+            {
+                _blinkFlashTimer -= Time.fixedDeltaTime;
+                float t = _blinkFlashDuration > 0f ? Mathf.Clamp01(_blinkFlashTimer / _blinkFlashDuration) : 0f;
+                _placeholderVisual?.SetBlinkFlashScale(Mathf.Lerp(1f, _blinkFlashScale, t));
+            }
+        }
+        else // Vanished
+        {
+            _blinkVanishTimer += Time.fixedDeltaTime;
+            if (_blinkVanishTimer >= _blinkVanishDuration)
+            {
+                _rigidbody2D.MovePosition(_blinkNextDestination);
+                _currentBlinkInterval = Random.Range(_blinkIntervalMin, Mathf.Max(_blinkInterval, _blinkIntervalMin));
+
+                // Promote the queue: the spot that was "after next" becomes the new immediate
+                // next, and a fresh one is rolled to refill the back — sampled around wherever
+                // the player actually is right now, the best information available at this
+                // decision point (same reasoning _blinkNextDestination itself always used).
+                _blinkNextDestination = _blinkPreviewDestination;
+                _blinkPreviewDestination = PickBlinkDestination();
+
+                _placeholderVisual?.SetVisible(true);
+                _blinkFlashTimer = _blinkFlashDuration;
+                _blinkPhase = BlinkPhase.Visible;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Samples a random point in the [_blinkMinRadius, _blinkRadius] annulus around the player
+    /// and validates it against the A* GridGraph (this project's mandated pathfinding backend,
+    /// CLAUDE.md → Hard Architecture Rules) via AstarPath.active.GetNearest — a raw random
+    /// point has no guarantee of landing somewhere walkable, unlike Orbit/HiddenShadow which
+    /// always stay glued to the (necessarily walkable) player. Rejects a candidate if the
+    /// nearest node isn't walkable, or if it's suspiciously far from the sampled point (a sign
+    /// the sample landed inside or beyond unwalkable geometry and snapped to a distant open
+    /// node instead). Retries a handful of times; if every attempt fails, falls back to the
+    /// player's own current position rather than ever teleporting into a wall.
+    /// </summary>
+    private Vector3 PickBlinkDestination()
+    {
+        const int maxAttempts = 8;
+        const float maxSnapDistance = 0.5f;
+
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            float distance = Random.Range(_blinkMinRadius, Mathf.Max(_blinkRadius, _blinkMinRadius));
+            Vector3 candidate = _target.position + new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * distance;
+
+            var nearest = AstarPath.active != null ? AstarPath.active.GetNearest(candidate, NNConstraint.Default) : default;
+            if (nearest.node != null && nearest.node.Walkable
+                && (FlattenToXY(nearest.position) - candidate).sqrMagnitude <= maxSnapDistance * maxSnapDistance)
+            {
+                return FlattenToXY(nearest.position);
+            }
+        }
+
+        return _target.position; // every sample was unwalkable/blocked — stay with the player rather than blink into geometry
     }
 
     /// <summary>
@@ -656,6 +924,138 @@ public class CompanionAI : MonoBehaviour
         {
             CurrentState = CompanionMovementState.Walk;
             _aiPath.maxSpeed = _walkSpeed;
+        }
+    }
+
+    /// <summary>
+    /// Orbit, HiddenShadow, and Blink all bypass AIPath.destination entirely (canMove is
+    /// disabled for these three in ApplyMovementPreset), so Seeker's own built-in path gizmo —
+    /// which only draws a calculated path — has nothing to show for any of them. Draws a
+    /// stand-in gizmo per pattern instead, reading straight from the same private fields each
+    /// pattern's own MoveAlong…() method already uses.
+    ///
+    /// Deliberately OnDrawGizmos, not OnDrawGizmosSelected — AIBase's own OnDrawGizmos (its
+    /// destination-circle gizmo, see the destination-reset comment in ApplyMovementPreset)
+    /// draws unconditionally, with no selection required, and normal Play-mode testing (cycling
+    /// presets via DebugMovementPresetCycler while just watching the game) never actually
+    /// selects the companion in the Hierarchy. OnDrawGizmosSelected would have meant these
+    /// pattern gizmos silently never appeared during exactly that workflow, while AIBase's own
+    /// always-on gizmo kept showing regardless — easy to mistake for "still showing the old
+    /// path gizmo" rather than "ours never rendered at all."
+    ///
+    /// Kept live during Play Mode by RequestSceneViewRepaintIfGizmoRelevant (see OnEnable)
+    /// driving repaints from EditorApplication.update, not from in here — see that method's
+    /// comment for why.
+    ///
+    /// The default case below is a deliberate self-enforcing guard for the CONVENTION documented
+    /// on CompanionMovementPatternType: any pattern that bypasses AIPath (canMove = false) has
+    /// no other gizmo drawing it at all (Seeker's and AIBase's own always-on gizmos both have
+    /// nothing to show for it — see ApplyMovementPreset's destination-reset/seeker.drawGizmos
+    /// comments), so skipping a gizmo case for a new one wouldn't just be a missing "nice to
+    /// have," it'd make that pattern's movement completely invisible in the Scene view. Logging
+    /// a warning here means that gap surfaces the moment the new pattern is actually tested in
+    /// the Editor, not discovered later by a confused "why can't I see anything" report.
+    /// </summary>
+    private void OnDrawGizmos()
+    {
+        if (!_showPatternGizmos || _target == null) return;
+
+        switch (_pattern)
+        {
+            case CompanionMovementPatternType.Orbit:
+                DrawOrbitGizmos();
+                break;
+            case CompanionMovementPatternType.HiddenShadow:
+                DrawHiddenShadowGizmos();
+                break;
+            case CompanionMovementPatternType.Blink:
+                DrawBlinkGizmos();
+                break;
+            default:
+                if (!_aiPath.canMove)
+                {
+                    Debug.LogWarning($"[CompanionAI] Pattern '{_pattern}' bypasses AIPath (canMove = false) but has no gizmo case in OnDrawGizmos() — its movement is completely invisible in the Scene view. Add a Draw{_pattern}Gizmos() case (see Orbit/HiddenShadow/Blink for the pattern), per the CONVENTION documented on CompanionMovementPatternType.", this);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Orbit has one thing worth visualizing: the path itself. Just the circle the companion
+    /// travels around the player, re-centering live as the player moves — no extra markers.
+    /// </summary>
+    private void DrawOrbitGizmos()
+    {
+        Vector3 center = _target.position + (Vector3)_orbitCenterOffset;
+        Gizmos.color = new Color(0.3f, 0.7f, 1f, 0.8f);
+        DrawWireCircleXY(center, _orbitRadius);
+    }
+
+    /// <summary>
+    /// HiddenShadow only has a meaningful "path" to show while Emerged (swaying at an idle
+    /// anchor away from the player) — while Locked, it's glued directly to the player's feet
+    /// with zero lag, so there's nothing separate to visualize; drawing anything then would
+    /// just be redundant with the player's own position. Draws the idle anchor and its sway
+    /// range only.
+    /// </summary>
+    private void DrawHiddenShadowGizmos()
+    {
+        if (_shadowPhase != ShadowPhase.Emerged) return;
+
+        Gizmos.color = new Color(0.6f, 0.6f, 1f, 0.8f);
+        Gizmos.DrawWireSphere(_shadowIdleAnchor, 0.12f);
+        Gizmos.DrawLine(_shadowIdleAnchor + Vector3.left * _shadowSwayAmplitude, _shadowIdleAnchor + Vector3.right * _shadowSwayAmplitude);
+    }
+
+    /// <summary>
+    /// Both _blinkNextDestination and _blinkPreviewDestination are real, committed teleport
+    /// targets at all times now (a 2-deep queue — see _blinkPreviewDestination's doc comment),
+    /// not just while Vanished, so this draws continuously whenever Blink is the active pattern
+    /// — no phase gate. Drawn as a reticle (circle + crosshair) rather than a plain sphere so it
+    /// clearly reads as "target," distinct from Orbit's path circle.
+    ///
+    /// _blinkNextDestination (the one the companion is about to actually teleport to) draws at
+    /// full opacity/size; _blinkPreviewDestination (the one after that) at reduced
+    /// opacity/size, so the two are visually distinguishable at a glance: solid = happening
+    /// imminently, faint = happening after that.
+    ///
+    /// Deliberately bright magenta, not yellow — A* Pathfinding Project's own AIBase.OnDrawGizmos
+    /// (unconditional, always on, completely unrelated to this pattern) draws its own yellow-gold
+    /// "ShapeGizmoColor" circle at the companion's CURRENT position for every pattern, all the
+    /// time. An earlier version of this reticle used a near-identical yellow-gold, which made it
+    /// look like there were two markers of the same kind — one at the old position (AIBase's,
+    /// always there) and one at the new (this one) — easy to misread as showing the wrong
+    /// position or the wrong order. Magenta can't be confused with AIBase's marker at any zoom.
+    /// </summary>
+    private void DrawBlinkGizmos()
+    {
+        Gizmos.color = new Color(1f, 0.1f, 0.9f, 0.95f);
+        Gizmos.DrawWireSphere(_blinkNextDestination, 0.2f);
+        Gizmos.DrawLine(_blinkNextDestination + Vector3.left * 0.3f, _blinkNextDestination + Vector3.right * 0.3f);
+        Gizmos.DrawLine(_blinkNextDestination + Vector3.up * 0.3f, _blinkNextDestination + Vector3.down * 0.3f);
+
+        Gizmos.color = new Color(1f, 0.1f, 0.9f, 0.4f);
+        Gizmos.DrawWireSphere(_blinkPreviewDestination, 0.14f);
+        Gizmos.DrawLine(_blinkPreviewDestination + Vector3.left * 0.2f, _blinkPreviewDestination + Vector3.right * 0.2f);
+        Gizmos.DrawLine(_blinkPreviewDestination + Vector3.up * 0.2f, _blinkPreviewDestination + Vector3.down * 0.2f);
+    }
+
+    /// <summary>
+    /// Gizmos has no built-in flat-circle primitive (Handles.DrawWireDisc would work, but
+    /// lives in UnityEditor, which a plain runtime MonoBehaviour can't reference without
+    /// #if UNITY_EDITOR guards) — draws one as a ring of line segments instead.
+    /// </summary>
+    private static void DrawWireCircleXY(Vector3 center, float radius, int segments = 32)
+    {
+        if (radius <= 0f) return;
+
+        Vector3 previousPoint = center + new Vector3(radius, 0f, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = i / (float)segments * Mathf.PI * 2f;
+            Vector3 point = center + new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
+            Gizmos.DrawLine(previousPoint, point);
+            previousPoint = point;
         }
     }
 }

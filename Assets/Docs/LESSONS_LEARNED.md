@@ -148,6 +148,37 @@ Issues that required significant investigation to resolve. Read before debugging
   than its own will — physics knockback, other scripts, cutscenes, etc. Position deltas
   conflate "moved on purpose" with "moved for any reason at all."
 
+### [Physics] Hiding a sprite around a Rigidbody2D.MovePosition teleport does not stop Rigidbody2D Interpolate from visibly smoothing the jump
+- **Symptom:** `CompanionAI`'s new Blink pattern was meant to instantly teleport the companion.
+  First fix attempt hid the sprite (`SpriteRenderer.enabled = false`) for a short window, moved
+  it via `Rigidbody2D.MovePosition`, then showed it again — but in live testing it still
+  visibly "dashed"/eased between the old and new position, indistinguishable from a fast
+  `DashThrough`. Polling `transform.position` during testing showed correct, discontinuous
+  values the whole time, giving false confidence the fix worked.
+- **Root cause:** the companion's `Rigidbody2D` has `Interpolate` enabled (needed for every
+  other movement pattern's smooth motion). Interpolation blends the RENDERED transform between
+  the position recorded at the previous `FixedUpdate` and the position recorded at the current
+  one, over the following render frame(s) — it has no concept of "this was a teleport, don't
+  smooth it." Making the sprite visible again in the *same* `FixedUpdate` tick as the
+  `MovePosition` call does nothing to prevent this, because the interpolation blend is a
+  property of the Rigidbody2D's internal render-transform bookkeeping, not of when the
+  `SpriteRenderer` happens to be enabled. Critically, `Transform.position` always reads the
+  true, instantaneous physics position — it is never the interpolated value Unity actually
+  draws to screen — so verifying via position polling alone cannot catch this class of bug at
+  all; only an actual rendered-frame capture (Game View screenshot) revealed it.
+- **Fix:** set `Rigidbody2D.interpolation = RigidbodyInterpolation2D.None` for the entire
+  duration the teleporting pattern is active (`ApplyMovementPreset()` toggles it based on
+  `_pattern`), restoring `.Interpolate` for every other pattern. Verified via actual Game View
+  screenshots across a blink cycle (not code reasoning, not position polling) — visible → fully
+  hidden with no ghost/streak → visible again at the new spot, zero travel in between.
+- **Date:** August 2026
+- **Key rule:** Any script that teleports (as opposed to smoothly moves) a Rigidbody2D must
+  explicitly manage `.interpolation` — set it to `None` for the teleport, restore
+  `.Interpolate` otherwise — rather than trying to hide the visual artifact around a
+  `MovePosition` call. And when verifying a rendering-smoothness fix, poll the actual rendered
+  frame (a screenshot), not `Transform.position` — interpolation is invisible to the latter by
+  design.
+
 ---
 
 ## Tilemap
@@ -359,6 +390,143 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Fix:** Ask the user to click into/focus the Unity Editor window (resolves issue 1). Create a trivial empty stub for any type still blocking full-assembly compilation, even if it's out of scope for the current task — the project's own "Stub rule" (in `Evolution_System_Directive_v1_1_0.md`) explicitly sanctions this: forward-referenced types only need to exist, not be fully implemented, for the rest of the assembly to compile.
 - **Date:** July 2026
 - **Key rule:** `read_console` showing "only N pre-existing errors" is not proof the rest of your new code loaded successfully — in a project with no assembly definition splitting, any error anywhere blocks domain reload for everything. Cross-check with `unity_reflect search` (or an actual asset-creation attempt) before trusting a clean-looking error diff. Also check `editor.is_focused` in `mcpforunity://editor/state` before assuming a stuck domain reload is a code problem.
+
+### [Tooling] SceneView.RepaintAll() called from inside OnDrawGizmosSelected does not chain into continuous repaints
+- **Symptom:** `CompanionAI`'s new per-pattern Scene-view gizmos (Orbit/HiddenShadow/Blink)
+  still looked "frozen at a fixed/wrong point" even after adding a `SceneView.RepaintAll()`
+  call at the end of `OnDrawGizmosSelected()` specifically to fix that. A single Play-mode
+  screenshot taken after the fix looked correct (gizmo centered on the player) — but a user
+  screen recording of a full ~8-second Play session showed the gizmo sitting at its very first
+  drawn position the entire clip, while the companion visibly moved to several different spots
+  in the Game View over that same time.
+- **Root cause:** `OnDrawGizmosSelected()` only runs as a *result* of some repaint already
+  happening — requesting another repaint from inside it is a weak, circular trigger, not a
+  driver of continuous updates. It depends entirely on how often an *external* repaint happens
+  to occur, which — unrelated to but compounding this — is itself throttled while the Scene
+  tab doesn't have focus (same underlying Editor-throttling theme as the domain-reload entry
+  above, but this manifests through the Gizmos/Handles draw pass specifically, and applies to
+  a real human developer working in another window too, not just MCP automation). A single
+  still screenshot can't distinguish "correctly positioned right now" from "frozen since the
+  last real repaint, which happened to be correct at that instant" — only a sequence of
+  captures over time, or a live recording, actually tests for staleness.
+- **Fix:** Subscribe a repaint-request method to `EditorApplication.update` instead (in
+  `OnEnable`, unsubscribed in `OnDisable`, both `#if UNITY_EDITOR`-guarded) — a genuine
+  per-Editor-tick callback independent of whether some other repaint happened to occur
+  elsewhere. Gate it (selected + relevant pattern) so it doesn't force needless repaints when
+  irrelevant. Verified via a *sequence* of Scene View screenshots taken seconds apart — confirmed
+  the gizmo's drawn position visibly changed between consecutive captures.
+- **Date:** August 2026
+- **Key rule:** Never assume `SceneView.RepaintAll()` called from within a gizmo-drawing
+  callback will keep that gizmo live — it won't, reliably. Drive continuous Editor-only visual
+  updates from `EditorApplication.update` instead. And when verifying "does this update live,"
+  a single screenshot only proves correctness at one instant — capture a sequence over real
+  time (or ask for/watch a recording) before trusting a live-update claim.
+
+### [Tooling] OnDrawGizmosSelected requires manual Hierarchy selection — normal Play testing never selects anything, so custom gizmos silently never ran, and a third-party base class's own always-on gizmo was mistaken for "still broken"
+- **Symptom:** Even after the repaint fix above, the user reported the pattern gizmos "still
+  not working" — cycling `DebugMovementPresetCycler` presets while just watching the game
+  showed no correct paths for Orbit/HiddenShadow/Blink, and it looked like "still showing the
+  following pathing gizmo."
+- **Root cause (two compounding issues, the second only visible once the first was ruled out):**
+  1. `CompanionAI`'s pattern gizmos were implemented as `OnDrawGizmosSelected` — Unity only
+     invokes this when the specific GameObject is selected in the Hierarchy. Normal Play-mode
+     testing (pressing Tab to cycle presets, watching the Game/Scene view) never does that, so
+     the gizmos weren't stale or mispositioned — they were never running at all. Every previous
+     verification pass in this session had manually set `Selection.activeGameObject` via
+     `execute_code` before screenshotting, which silently worked around this and never actually
+     tested the real user workflow.
+  2. What the user WAS seeing wasn't "our old gizmo" — it was A* Pathfinding Project's own
+     `AIBase.OnDrawGizmos()` (unconditional, no selection required), which draws a blue circle
+     at `aiPath.destination` whenever that field isn't its positive-infinity "unset" sentinel.
+     Since Orbit/HiddenShadow/Blink bypass `AIPath` entirely and never write to `destination`,
+     it stayed frozen at whatever the last trailing-point pattern (Direct/Wavy/DashThrough/
+     StopAndGo) had left it at — reading exactly like a leftover "following" path gizmo,
+     because that's precisely what it was, just from a different (third-party, always-on)
+     script than the one being debugged.
+- **Fix:** switched the custom gizmos to plain `OnDrawGizmos` (always-on) — safe here since
+  only one companion instance ever exists (`PartySystem.EnsureCompanionInstance()`), so there's
+  no multi-object clutter concern that `OnDrawGizmosSelected` normally guards against.
+  Additionally reset `aiPath.destination` to `Vector3.positiveInfinity` whenever a pattern
+  bypasses AIPath, suppressing the third-party gizmo's stale marker instead of leaving it to
+  confuse future debugging. Re-verified this time by deliberately leaving `Selection` pointed
+  at an unrelated object throughout the whole test.
+- **Date:** August 2026
+- **Key rule:** `OnDrawGizmosSelected` is invisible during any workflow that doesn't manually
+  select the object — verify custom gizmos with selection deliberately left elsewhere, not
+  just deliberately set to the object under test, or a verification pass can pass while the
+  real user-facing behavior is completely broken. Also: when a gizmo looks "stuck showing old
+  behavior" in a project using a third-party pathfinding/AI package, check whether that
+  package's own base class draws an unconditional gizmo of its own — it's easy to mistake a
+  well-behaved third-party debug visual for a broken one you just wrote.
+- **Addendum (found later, same session):** A* Pathfinding Project actually has a THIRD
+  always-on gizmo in this family, on a different component — `Seeker.OnDrawGizmos()`
+  (`Pathfinding/Core/AI/Seeker.cs`) draws a solid green line along `lastCompletedVectorPath`
+  (the last path it ever actually calculated), gated only by its own public `drawGizmos` bool.
+  It has nothing to do with `AIPath.destination` — resetting that field (the fix above) does
+  NOT clear this; the path list just sits there until a new path is calculated, which
+  Orbit/HiddenShadow/Blink never do. Also caused "old paths still showing" after switching to
+  one of them. Fix: also toggle `seeker.drawGizmos = aiPath.canMove` whenever `canMove` changes.
+  **Broader rule this confirms:** a single third-party AI/pathfinding package can have MULTIPLE
+  independent always-on gizmo sources across different components (here: two, on `AIBase` and
+  `Seeker`) — finding and silencing one doesn't mean you've found all of them; grep the
+  package's source for `OnDrawGizmos` (not just `OnDrawGizmosSelected`) broadly before
+  declaring "stale gizmo" issues fully resolved.
+
+### [Tooling] Custom gizmo color accidentally matched a third-party base class's own always-on gizmo color
+- **Symptom:** After fixing the two issues above (wrong callback, stale destination marker),
+  the user still reported the Blink target reticle "showing wrong" / "position inverted."
+  Every position-based check (reflection reads of `_blinkNextDestination` vs. the companion's
+  actual transform position, `HandleUtility.WorldToGUIPoint` math) said the reticle's
+  coordinates were correct.
+- **Root cause:** not a position bug at all — a color clash. The reticle's color
+  `(1, 0.85, 0.2)` was nearly identical to A* Pathfinding Project's own
+  `AIBase.ShapeGizmoColor` (`(0.94, 0.84, 0.12)`, `Pathfinding/Core/AI/AIBase.cs`), which that
+  base class draws unconditionally at the companion's CURRENT position for every pattern,
+  always (see the entry above). Two same-colored circular markers on screen — one permanently
+  at the old position, one at the new — is trivially misread as "wrong position" or "wrong
+  order" even though each one, individually, was exactly correct.
+- **Fix:** changed the reticle to bright magenta, unmistakably distinct from AIBase's
+  yellow-gold at any zoom level.
+- **Verification technique that finally nailed this down precisely** (worth reusing for any
+  future "is this gizmo actually in the right place" doubt): don't trust position-only
+  reflection reads or approximate pixel-counting against grid lines — both left room for doubt
+  here. Instead: (1) `Time.timeScale = 0f` after confirming the state of interest via
+  reflection, freezing the simulation so there's no risk of the state changing mid-screenshot
+  regardless of how much real wall-clock time verification takes; (2) drop temporary, brightly
+  colored marker GameObjects (`GameObject.CreatePrimitive(PrimitiveType.Sphere)`, oversized,
+  one distinct color per point of interest) at the exact world coordinates being compared
+  (e.g. one at `_blinkNextDestination`, one at the companion's actual current position); (3)
+  manually set `SceneView.lastActiveSceneView.pivot`/`.size` for a clean, wide, reproducible
+  framing instead of relying on `view_target` auto-zoom, which repeatedly produced
+  inconsistent, overly-tight crops that were hard to read; (4) screenshot and visually confirm
+  the gizmo aligns with the correct marker — this is unambiguous in a way no amount of
+  coordinate math or grid-line-counting was. Always destroy the temporary markers and restore
+  `Time.timeScale = 1f` afterward.
+- **Date:** August 2026
+- **Key rule:** When a custom Gizmos color is chosen, check it against colors any already-
+  imported third-party package's own gizmos use (especially ones that draw unconditionally, not
+  just on selection) — a near-identical color on an unrelated always-on marker can look
+  exactly like your own gizmo malfunctioning. And when position correctness is in doubt, drop
+  an actual colored marker object at the exact coordinate rather than reasoning about pixel
+  offsets against grid lines — freeze `Time.timeScale` first if there's any risk of state
+  drifting before the screenshot lands.
+- **Addendum — `Time.timeScale = 0` + manually reflection-invoking `FixedUpdate()` reveals
+  script-level state perfectly, but NOT `Rigidbody2D.MovePosition`'s effect:** while verifying
+  a later fix (Blink's 2-deep destination queue), the same freeze-and-manually-step technique
+  produced an apparent false negative — `transform.position` after a manually-invoked
+  `MoveAlongBlink()` teleport call did not match the expected destination at all. Root cause:
+  `Rigidbody2D.MovePosition()` only ever QUEUES a move to be applied on the next real physics
+  step — with `Time.timeScale = 0`, that step never runs, so `transform.position` never catches
+  up, even though the correct call already happened and every private field was already
+  correctly updated. Confirmed by manually stepping physics once
+  (`Physics2D.simulationMode = SimulationMode2D.Script; Physics2D.Simulate(0.02f);`) — the
+  Transform immediately snapped to the exact expected position. **Always restore
+  `Physics2D.simulationMode = SimulationMode2D.FixedUpdate` afterward** (see the earlier
+  "Physics2D.simulationMode is a global persistent PROJECT setting" entry above — same
+  footgun). When frozen-time verification involves anything that moves a Rigidbody2D via
+  `MovePosition`/`MovePositionAndRotation`, check the field-level state directly via reflection
+  first — that's unaffected by physics stepping — before trusting `transform.position` as proof
+  of anything.
 
 ### [Tooling] Play Mode doesn't tick frames at all while the Editor window is unfocused (MCP automation)
 - **Symptom:** Entered Play Mode via `manage_editor(action="play")`, added a party member, moved the player's Transform via `execute_code`, waited several real seconds (both `Bash sleep` between calls and `Thread.Sleep` inside a single call), then checked — `Time.frameCount` was still `1` or `2`. The companion GameObject never moved, `AIPath.destination` read back as `(Infinity, Infinity, Infinity)` (its "never been set" sentinel), and `AIPath.hasPath` stayed `false` even after manually calling `SearchPath()` and sleeping.

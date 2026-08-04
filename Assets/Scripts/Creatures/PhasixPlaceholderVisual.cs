@@ -30,6 +30,8 @@ public class PhasixPlaceholderVisual : MonoBehaviour
 
     private float _bodyBaseScaleY = float.NaN;
     private float _underglowBaseScaleY = float.NaN;
+    private Vector3 _bodyBaseScale = Vector3.zero;
+    private Vector3 _underglowBaseScale = Vector3.zero;
 
     /// <summary>Tints Body and Underglow from a PrimalType directly.</summary>
     public void SetPrimalType(PrimalType type)
@@ -68,5 +70,36 @@ public class PhasixPlaceholderVisual : MonoBehaviour
         Vector3 underglowScale = _underglowRenderer.transform.localScale;
         underglowScale.y = _underglowBaseScaleY * scaleYMultiplier;
         _underglowRenderer.transform.localScale = underglowScale;
+    }
+
+    /// <summary>
+    /// Scales Body and Underglow's full localScale (x and y uniformly) by scaleMultiplier,
+    /// relative to each renderer's own original scale — cached lazily on first call, same
+    /// convention as SetShadowSquash above, but tracked in its own fields since a "pop" needs
+    /// uniform scale rather than SetShadowSquash's deliberately y-only flatten. Used by
+    /// CompanionAI's Blink movement pattern for a brief post-teleport flash.
+    /// </summary>
+    public void SetBlinkFlashScale(float scaleMultiplier)
+    {
+        if (_bodyBaseScale == Vector3.zero)
+        {
+            _bodyBaseScale = _bodyRenderer.transform.localScale;
+            _underglowBaseScale = _underglowRenderer.transform.localScale;
+        }
+
+        _bodyRenderer.transform.localScale = _bodyBaseScale * scaleMultiplier;
+        _underglowRenderer.transform.localScale = _underglowBaseScale * scaleMultiplier;
+    }
+
+    /// <summary>
+    /// Toggles Body and Underglow's SpriteRenderer.enabled — the GameObject itself stays
+    /// active, so physics/colliders/scripts keep running, only the rendered sprites blink
+    /// off/on. Used by CompanionAI's Blink movement pattern to fully hide the companion for the
+    /// duration of a teleport, so the position change never renders as a visible slide.
+    /// </summary>
+    public void SetVisible(bool visible)
+    {
+        _bodyRenderer.enabled = visible;
+        _underglowRenderer.enabled = visible;
     }
 }
