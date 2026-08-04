@@ -52,22 +52,25 @@ Assets/
     Core/        ← GameManager, EventBus, SaveManager
     Player/      ← PlayerController, CameraFollow
     Creatures/   ← PhasixData, BondSystem, EvolutionManager, CompanionAI
-    Evolution/   ← EvolutionEvaluator, EvolutionExecutor, EvolutionPathfinder, EvolutionWebController
-    Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator
+    Evolution/   ← EvolutionEvaluator, EvolutionExecutor, EvolutionPathfinder, EvolutionWebController ← Phase 3, not yet created
+    Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator ← Phase 3, not yet created
     World/       ← WorldChunkManager, EncounterTrigger, ZoneManager
     UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay
-    Audio/       ← AudioManager
-    Save/        ← SaveSystem, SaveData
+    Audio/       ← AudioManager ← Phase 3, not yet created
+    Save/        ← SaveSystem, SaveData ← Phase 3, not yet created
   Prefabs/
     Creatures/   ← Phasix placeholder/visual prefabs (Phasix_Placeholder, etc.)
   Data/
     Species/     ← PhasixData SOs (placeholder until roster designed)
-    Skills/      ← SkillData SOs (placeholder until species designed)
-    Items/       ← ItemData SOs (pending §22)
-    EvolutionBranches/ ← EvolutionBranchData SOs
-    TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table)
-    Aura/        ← AuraTypeData SOs (Common, Specific, RareVariant)
+    Skills/      ← SkillData SOs (placeholder until species designed) ← Phase 3, not yet created
+    Items/       ← ItemData SOs (pending §22) ← Phase 3, not yet created
+    EvolutionBranches/ ← EvolutionBranchData SOs ← Phase 3, not yet created
+    TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table) ← Phase 3, not yet created
+    Aura/        ← AuraTypeData SOs (Common, Specific, RareVariant) ← Phase 3, not yet created
 ```
+Directories marked `← Phase 3, not yet created` are documented as the intended structure but do not
+exist on disk yet (only stray `.meta` files, no real folder/content) — confirmed by repo audit
+`AUDIT_202608.md` AUD-009. Everything else in this block exists and is populated.
 
 ---
 

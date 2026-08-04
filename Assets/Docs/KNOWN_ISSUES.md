@@ -7,7 +7,73 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-*(none currently — MCP-001 below was closed when the Unity MCP bridge migrated from AnkleBreaker to CoplayDev, and AST-001 below turned out to be a misdiagnosis; see CHANGELOG.md)*
+Open items from the external repo audit (`AUDIT_202608.md`) that need a live Unity Editor/MCP
+session to fix safely — see `CHANGELOG.md` → "Repo audit triage" (2026-08-04) for what was
+already fixed blind this pass.
+
+### [AUD-005] — Overworld has one verb and nothing to avoid
+**Status:** Active — the audit's own highest-priority finding
+**Affects:** `WildEncounterCreature.cs`, `EncounterTrigger.cs`, `PlayerTopDownController.cs`,
+`Combat_Directive_v0_1_0.md` Part 3
+**Description:** Player has no verb beyond walk (no dash/sprint/interact); wild creatures are
+stationary contact-triggers with no patrol, vision cone, or detection radius. `Combat_Directive`
+Part 3's lane-avoidance mechanic is unimplementable as written until patrol + overworld lanes
+exist. Recommendation: one design session (second overworld verb, patrol + detection radius,
+decide whether overworld lanes are a real spatial concept) before Phase 3's `BattleScene_Main`.
+**Workaround:** None — this is a design gap, not a bug.
+
+### [AUD-003] — No ground shadows on any character
+**Status:** Active
+**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab`, player object
+**Description:** No shadow sprite/prefab exists anywhere in the project (confirmed — no
+`Assets/Sprites` directory at all). Needs a new sprite asset + child `SpriteRenderer` wired into
+prefab hierarchies with the correct sorting layer — held for an Editor/MCP session
+(`unity-mcp`'s prefab/GameObject tools) rather than hand-written prefab YAML, which is easy to
+corrupt.
+**Workaround:** None.
+
+### [AUD-002] — Colliders are sprite-centered, not foot-anchored
+**Status:** Active
+**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab` (`CircleCollider2D`,
+`m_Offset: {0,0}`)
+**Description:** Creature colliders are centered on the sprite instead of foot-anchored, which
+in 3/4 perspective reads as sticky/imprecise movement. The player's own `CapsuleCollider2D`
+already uses a non-zero offset (`{0,14}`, size `{9,15}`) — worth an Editor look at why before
+treating it as the model to copy. Footprint sizing is inherently a "look at it against the
+sprite" tuning pass.
+**Workaround:** None.
+
+### [AUD-006] — No camera lookahead or movement bias
+**Status:** Active — audit's suggested fix does not apply to this project, see note
+**Affects:** `CinemachineCamera` in `SampleScene.unity`
+**Description:** No lookahead/dead-zone bias toward movement direction. **Correction to the
+original audit:** its suggested fix (`m_LookaheadTime` on a Cinemachine Composer) is a
+Cinemachine 2.x API — this project uses Cinemachine 3.x (`CinemachineFollow`), which has no
+lookahead field at all. Needs a custom velocity-based follow-offset script instead, and camera
+feel is fundamentally a "watch it move" tuning task.
+**Workaround:** None.
+
+---
+
+## Pending Editor Verification
+
+Fixed via direct file edit this session (no live Unity Editor attached) — the edits are believed
+correct but haven't been confirmed visually or via compile/Test Runner. Not bugs; remove each
+line once confirmed.
+
+- **AUD-001** (transparency sort mode/axis) — confirm two overlapping sprites at different Y
+  actually draw in correct depth order, and confirm which pipeline asset (`Renderer2D.asset` vs
+  `GraphicsSettings.asset`) is the one actually live for this project's URP renderer.
+- **AUD-004** (player controller rename) — open `SampleScene.unity` and confirm no "missing
+  script" warning on the player object (script GUID was preserved via `git mv`, so it should
+  resolve fine, but this hasn't been opened in the Editor to check).
+- **AUD-007** (corner correction) — confirm `PlayerTopDownController.ComputeCornerCorrection`'s
+  *mechanism* actually helps at a real doorway/corner, not just that the placeholder threshold
+  value needs calibration. Written and reasoned through, never played.
+- **AUD-012** (EditMode tests) — `Assets/Tests/EditMode/BondSystemTests.cs`'s 7 assertions were
+  hand-traced against `BondSystem.cs`'s source but never actually executed under Unity Test
+  Runner. Run them (Editor or `unity-mcp`'s `run_tests` tool) and fix anything that doesn't
+  actually pass.
 
 ---
 

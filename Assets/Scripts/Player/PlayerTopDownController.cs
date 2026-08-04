@@ -1,6 +1,6 @@
 // ============================================================
-// PlayerController_SideScroll.cs
-// Path: Assets/Scripts/Player/PlayerController.cs
+// PlayerTopDownController.cs
+// Path: Assets/Scripts/Player/PlayerTopDownController.cs
 //
 // 4-directional top-down movement with left/right sprite flip.
 // Input is read via the Unity new Input System (InputActionAsset).
@@ -31,7 +31,7 @@ using UnityEngine.InputSystem;
 /// to mirror the bone-rigged sprite when moving left vs right.
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
-public class PlayerController_SideScroll : MonoBehaviour
+public class PlayerTopDownController : MonoBehaviour
 {
     // ── Movement ──────────────────────────────────────────────────────────────
 
@@ -89,6 +89,25 @@ public class PlayerController_SideScroll : MonoBehaviour
              "Set to 0 to disable and control scale manually via the Transform component.\n" +
              "Requires a CapsuleCollider2D on this GameObject sized to the art's true bounds.")]
     [SerializeField] private float _targetHeightPixels = 0f;
+
+    // ── Corner Correction ────────────────────────────────────────────────────
+    // AUD-007 (repo audit, 2026-08): direct linearVelocity assignment gives correct wall-sliding
+    // for free, but nothing nudges the player through when a doorway/corner edge is clipped by a
+    // few pixels. This adds that nudge. UNVERIFIED — written without a live Unity Editor; needs
+    // an in-Editor pass against real interior/doorway geometry before it's trusted. See
+    // KNOWN_ISSUES.md and NumericalCalibration.md → Overworld Movement.
+
+    [Header("Corner Correction")]
+    [Tooltip("Max distance (world units) checked ahead for a corner clip, and the max nudge " +
+             "applied to clear it. PENDING calibration — placeholder is 3px at 16 PPU. " +
+             "See NumericalCalibration.md → Overworld Movement.")]
+    [SerializeField] private float _cornerCorrectionThreshold = 0.1875f;
+
+    [Tooltip("Layers treated as solid walls for the corner-correction raycasts. Defaults to " +
+             "the 'Obstacles' layer — see DECISIONS.md → [Pathfinding] Grid Graph: Walls/" +
+             "Decorations tilemap colliders live there, off Default, specifically so they don't " +
+             "collide-match the player's own collider.")]
+    [SerializeField] private LayerMask _cornerCorrectionWallMask = 1 << 8; // Obstacles
 
     // ── Private State ─────────────────────────────────────────────────────────
 
@@ -254,7 +273,13 @@ public class PlayerController_SideScroll : MonoBehaviour
         // Normalise here: handles both digital (WASD composite) and analog (joystick).
         // WASD diagonal is already magnitude 1.0 from the composite binder.
         // Analog stick diagonal can be up to 1.41 — normalising clamps it to _moveSpeed.
-        Vector2 targetVelocity = _inputVector.normalized * _moveSpeed;
+        Vector2 inputDir = _inputVector.normalized;
+        Vector2 targetVelocity = inputDir * _moveSpeed;
+
+        // Corner correction: only relevant for diagonal input clipping a doorway/corner edge.
+        // Adds a small nudge along whichever axis isn't blocked, so the intended diagonal
+        // movement isn't read as a full stop over a few pixels of overlap.
+        targetVelocity += ComputeCornerCorrection(inputDir) * _moveSpeed;
 
         // Choose acceleration or deceleration rate.
         // sqrMagnitude avoids a sqrt call — we only care about zero vs non-zero.
@@ -273,6 +298,31 @@ public class PlayerController_SideScroll : MonoBehaviour
         // Assign to linearVelocity (Unity 6 API — renamed from legacy rb.velocity).
         // The Rigidbody integrates position from velocity automatically.
         _rb.linearVelocity = _currentVelocity;
+    }
+
+    /// <summary>
+    /// Detects a corner clip and returns a unit-length nudge direction to clear it, or
+    /// Vector2.zero if none applies. UNVERIFIED — see AUD-007 note at the top of this file.
+    ///
+    /// Only fires on diagonal input (pure axis movement has nothing to correct into) where
+    /// exactly ONE of the two axis directions is blocked within _cornerCorrectionThreshold:
+    /// both clear means no wall is near; both blocked means it's a real dead-end, not a corner.
+    /// The single free axis is the one nudged, toward the input direction — the same axis the
+    /// player was already trying to move along.
+    /// </summary>
+    private Vector2 ComputeCornerCorrection(Vector2 inputDir)
+    {
+        if (Mathf.Abs(inputDir.x) < 0.01f || Mathf.Abs(inputDir.y) < 0.01f) return Vector2.zero;
+
+        Vector2 origin = _rb.position;
+        Vector2 xAxis = new Vector2(Mathf.Sign(inputDir.x), 0f);
+        Vector2 yAxis = new Vector2(0f, Mathf.Sign(inputDir.y));
+
+        bool xBlocked = Physics2D.Raycast(origin, xAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
+        bool yBlocked = Physics2D.Raycast(origin, yAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
+
+        if (xBlocked == yBlocked) return Vector2.zero; // neither near a wall, or a real dead-end
+        return xBlocked ? yAxis : xAxis;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

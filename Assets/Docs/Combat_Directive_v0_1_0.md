@@ -2,6 +2,8 @@
 **Version:** 0.1.0  
 **Date:** April 2026  
 **Status:** New — supplements GDD combat sections  
+**Errata (2026-08-04):** Part 3 corrected "5-lane logic" → "7-lane logic" to match the canonical
+7-lane system defined in Part 2 (see `AUDIT_202608.md` AUD-008). Wording fix only — no version bump.
 **GDD Refs:** §18 (Battle System), §18.5 (Wild Creature Behavior), §18.6 (Enemy AI Design)
 
 ---
@@ -83,7 +85,9 @@ Players and enemies can move **up and down between lanes** as a combat action or
 Whether lane movement costs an action turn or is a free reaction is **pending combat system design**.
 
 ### Lane Avoidance — Overworld Carry-Over
-On the overworld, players can avoid visible enemy Phasix by choosing a lane far from the creature's patrol path. This stealth/avoidance mechanic carries the 5-lane logic into exploration — players who understand lane depth can skip encounters they don't want.
+On the overworld, players can avoid visible enemy Phasix by choosing a lane far from the creature's patrol path. This stealth/avoidance mechanic carries the 7-lane logic into exploration — players who understand lane depth can skip encounters they don't want.
+
+**Note (pending, see AUD-005):** this mechanic requires overworld "lanes" and enemy patrol paths, neither of which exist in the overworld yet — the current wild-creature scaffold is stationary and contact-only. This section describes the intended design; it is not yet implemented.
 
 ---
 

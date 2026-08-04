@@ -261,7 +261,7 @@ public class CompanionAI : MonoBehaviour
         _rigidbody2D = GetComponent<Rigidbody2D>();
         _placeholderVisual = GetComponent<PhasixPlaceholderVisual>();
 
-        // We drive the sprite ourselves (same flip approach as PlayerController_SideScroll)
+        // We drive the sprite ourselves (same flip approach as PlayerTopDownController)
         // — AIPath must never touch our transform's rotation.
         _aiPath.orientation = OrientationMode.YAxisForward;
         _aiPath.updateRotation = false;
@@ -491,7 +491,7 @@ public class CompanionAI : MonoBehaviour
         // created a self-sustaining loop with zero player input: companion nudges player →
         // player's position shifts slightly → this script reads that shift as "the player
         // moved" → reacts and nudges again. linearVelocity reflects the player's OWN control
-        // script's intent (PlayerController_SideScroll re-asserts it every FixedUpdate,
+        // script's intent (PlayerTopDownController re-asserts it every FixedUpdate,
         // overwriting any collision-induced change), so it isn't susceptible to this feedback
         // loop. Falls back to a flattened position delta if the target has no Rigidbody2D
         // (e.g. a non-physics test target).
@@ -526,7 +526,7 @@ public class CompanionAI : MonoBehaviour
 
     /// <summary>
     /// Drives Orbit and HiddenShadow on the physics tick, matching how the player's own
-    /// Rigidbody2D moves (PlayerController_SideScroll applies velocity in FixedUpdate) —
+    /// Rigidbody2D moves (PlayerTopDownController applies velocity in FixedUpdate) —
     /// running these in Update() instead caused a render/physics cadence mismatch that read as
     /// lag once the player started moving, on top of the reactive-chase lag fixed below.
     /// </summary>

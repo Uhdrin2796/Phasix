@@ -1166,3 +1166,26 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Revisit if:** A real design need arises for per-individual (not per-species) color
   variance — at that point this debug override might inform a real mechanic, but should be
   redesigned deliberately rather than repurposed as-is.
+
+### [Player] Deleted the orphaned 8-directional PlayerController, renamed the live 4-directional one to PlayerTopDownController
+- **Decided:** Deleted `PlayerController.cs` (239 lines, 8-directional, `MoveX`/`MoveY` Animator
+  params) — it was not attached to anything in `SampleScene.unity` and had been dead since
+  whichever commit added `PlayerController_SideScroll.cs` alongside it. Renamed
+  `PlayerController_SideScroll.cs` (400 lines, actually attached to the player, 4-directional
+  top-down with root scale-flip for bone-rigged sprites) to `PlayerTopDownController.cs` — the
+  old name described a movement model ("SideScroll") the class doc-comment itself contradicted
+  ("4-directional top-down movement"). Renamed via `git mv` so the script's `.meta` GUID —
+  and therefore the scene's serialized `MonoBehaviour` reference — survived the rename intact.
+  Updated the 4 hardcoded `PlayerController_SideScroll` type references in
+  `WildEncounterCreature.cs` and the 3 comment references in `CompanionAI.cs` to match, and
+  fixed the renamed file's header comment (it incorrectly said its own path was
+  `PlayerController.cs`).
+- **Why:** External repo audit (`AUDIT_202608.md` AUD-004) flagged the dual controllers as a
+  correctness trap — tuning the dead file produces no in-game change and no error, and the
+  wrong-named live file makes intent unclear to a cold reader.
+- **Alternatives rejected:** Keeping the 8-directional controller and porting the bone-rig
+  scale-flip logic to it — rejected for scope; no design requirement for 8-directional movement
+  exists, and the live 4-directional controller already works and is tuned.
+- **Date:** 2026-08-04
+- **Revisit if:** Never confirmed with the Unity Editor open — flagged in `KNOWN_ISSUES.md` to
+  open the scene once available and confirm no "missing script" warning on the player object.

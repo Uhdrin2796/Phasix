@@ -25,7 +25,7 @@ public class WildEncounterCreature : MonoBehaviour
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (_contacted) return;
-        if (!other.TryGetComponent<PlayerController_SideScroll>(out var player)) return;
+        if (!other.TryGetComponent<PlayerTopDownController>(out var player)) return;
 
         // Guards against two encounters resolving in the same physics step and clobbering
         // each other's Show() callbacks — only one spawn point exists today so this can't
@@ -40,13 +40,13 @@ public class WildEncounterCreature : MonoBehaviour
         EncounterPromptController.Instance.Show(_runtimeData.speciesData, () => HandleFlee(player), () => HandleEngage(player));
     }
 
-    private void HandleFlee(PlayerController_SideScroll player)
+    private void HandleFlee(PlayerTopDownController player)
     {
         EventBus.Raise_WildEncounterFled(_runtimeData);
         Resolve(player);
     }
 
-    private void HandleEngage(PlayerController_SideScroll player)
+    private void HandleEngage(PlayerTopDownController player)
     {
         // TODO: no BattleManager exists yet (Phase 3) — real Engage will trigger the
         // Combat_Directive cinematic transition into an additively-loaded BattleScene_Main
@@ -56,7 +56,7 @@ public class WildEncounterCreature : MonoBehaviour
         Resolve(player);
     }
 
-    private void Resolve(PlayerController_SideScroll player)
+    private void Resolve(PlayerTopDownController player)
     {
         EncounterPromptController.Instance.Hide();
         player.UnfreezeMovement();

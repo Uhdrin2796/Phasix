@@ -18,6 +18,49 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Repo audit triage — fixed everything that doesn't need a live Unity Editor
+- **Context:** Received an external repo audit (`AUDIT_202608.md`, 12 findings AUD-001–AUD-012,
+  reviewed against commit `c07b6cc`). No Unity Editor was attached this session
+  (`mcpforunity://instances` confirmed `instance_count: 0`), so findings were triaged into what's
+  safe to fix via direct file edits vs. what needs Editor/MCP visual verification or scene/prefab
+  surgery. Two Explore passes verified every audit claim against the actual repo before acting on
+  it — two corrections came out of that: AUD-006's suggested fix assumes a Cinemachine 2.x API
+  (`m_LookaheadTime`) that doesn't exist on this project's Cinemachine 3.x `CinemachineFollow`;
+  and AUD-004's "wrong header path" bug is in `PlayerController_SideScroll.cs`, not the reverse.
+- **Built:** `Assets/Tests/EditMode/Phasix.Tests.EditMode.asmdef` + `BondSystemTests.cs` — first
+  test assembly in the project, 7 tests covering `BondSystem.cs`'s floor logic, session loss cap,
+  60%/80% damping, 100% immunity, milestone-driven floor raises, and gain clamping (AUD-012).
+- **Fixed:**
+  - AUD-008: `Combat_Directive_v0_1_0.md` Part 3 said "5-lane logic"; Part 2's 7-lane system is
+    canonical. Corrected + added an errata note (no version bump — filename is version-pinned).
+  - AUD-009: marked the 9 not-yet-built directories in `CLAUDE.md`'s Folder Structure with
+    `← Phase 3, not yet created` so a cold reader doesn't assume they exist.
+  - AUD-011: wrote a real `README.md` (was 8 bytes, `# Phasix` only, on a public repo).
+  - AUD-001: `Renderer2D.asset` and `GraphicsSettings.asset` disagreed with each other on
+    `m_TransparencySortAxis` and both had `m_TransparencySortMode: 0` (Default, ignores the axis
+    entirely). Set both to `CustomAxis` (3) with axis `(0,1,0)`.
+  - AUD-004: deleted the orphaned 8-directional `PlayerController.cs` (not referenced anywhere in
+    `SampleScene.unity`); renamed the live 4-directional `PlayerController_SideScroll.cs` →
+    `PlayerTopDownController.cs` via `git mv` (preserves the script GUID / scene reference);
+    fixed its mis-pathed header comment; updated `WildEncounterCreature.cs` (4 refs) and
+    `CompanionAI.cs` (3 comment refs). See `DECISIONS.md`.
+  - AUD-007: added a raycast-gated corner-correction nudge to `PlayerTopDownController.cs`
+    (`ComputeCornerCorrection`) — only fires when exactly one of two perpendicular directions is
+    blocked within a placeholder threshold (a real corner clip, not a flat wall or a dead-end).
+    Threshold + wall mask logged in `NumericalCalibration.md` → new "Overworld Movement" section.
+- **Blocked (needs a live Unity Editor/MCP session — logged as open in `KNOWN_ISSUES.md`):**
+  AUD-002 (collider re-anchoring), AUD-003 (ground shadows), AUD-005 (overworld dash + wild
+  creature patrol/detection — audit's own top-priority item), AUD-006 (camera lookahead, and
+  needs a different technical approach than the audit describes).
+- **Verify once Editor/MCP is available:** AUD-001's visual sort-order result; AUD-004's scene
+  opens with no "missing script" warning on the player object; AUD-007's corner-correction
+  mechanism (not just its threshold value) actually behaves as intended; AUD-012's tests
+  actually pass under Test Runner (hand-traced against `BondSystem.cs` source, not yet executed).
+- **Not actioned this pass:** AUD-010 (`Assets/_Recovery/0.unity` — real autosave scene, still
+  git-tracked despite already being gitignored) — holding for explicit user confirmation before
+  untracking, since it looks like real recovered editor work rather than junk.
+- **Date:** 2026-08-04
+
 [2026-08-04] Scene dressing — two more wild spawn points, pastel pink + vibrant purple
 - **User request:** two more spawn points, different species, one top-left corner and one
   bottom-right corner of the room; then asked for pastel pink and vibrant purple coloring.

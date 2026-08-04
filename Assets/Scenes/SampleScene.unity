@@ -5023,7 +5023,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d7fa10561e6395f46a4446f6b788854a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerController_SideScroll
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerTopDownController
   _moveSpeed: 5
   _acceleration: 50
   _deceleration: 40

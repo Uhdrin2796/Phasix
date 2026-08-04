@@ -300,6 +300,15 @@ Note: Scaling is smooth and continuous between lanes — not stepped.
 
 ---
 
+## Overworld Movement (PlayerTopDownController.cs)
+
+### Corner correction nudge
+| Value | Amount | Notes |
+|---|---|---|
+| Corner correction threshold | 3px (0.1875 world units at 16 PPU) — **PLACEHOLDER, unverified** | Max lateral clip distance from a wall corner that gets auto-nudged through. Added per `AUDIT_202608.md` AUD-007; needs calibration against real doorway/interior geometry once the map-expansion backlog lands — see `PlayerTopDownController._cornerCorrectionThreshold` tooltip. |
+
+---
+
 ## SUPERSEDED — Reference Only
 
 ### Old XP & Levelling (superseded by Aura system)
