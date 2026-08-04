@@ -18,6 +18,71 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-03] Tuning/Fix — Hidden Shadow sway amount + companion render order
+- **User feedback:** wanted more left-right movement from the idle sway, and wanted the
+  companion to render behind the player instead of in front.
+- **Sway:** `ShadowSwayAmplitude` in the "Hidden Shadow" `DebugMovementPresetCycler` preset
+  raised 0.2 → 0.5 (world units) — confirmed applied live via reflection read-back in Play mode.
+- **Render order (general, not HiddenShadow-specific):** `Phasix_Placeholder.prefab`'s `Body`/
+  `Underglow` `m_SortingOrder` were `1`/`0` — both above `Mr_chimken`'s `SortingGroup`
+  (`sortingOrder: 0`), so the companion always drew in front of the player regardless of relative
+  position. Checked the camera first (`Main Camera`'s `transparencySortMode` is `0`/Default, not
+  Y-axis) — confirmed this is a plain static order issue, not something a Y-sort would already be
+  handling. Changed to `-1`/`-2` (Underglow still behind Body, both now behind the player).
+  Verified with a Play-mode screenshot forcing an overlap between the companion and the player's
+  body: the player's sprite now visibly occludes the companion. See `DECISIONS.md` → `[Art]
+  Placeholder Phasix visual` (Update, August 2026).
+- **Date:** 2026-08-03
+
+[2026-08-03] Tuning — Hidden Shadow's Locked position was offset from Mr_chimken's visible feet
+- **User feedback (screenshot):** the squashed shadow sat a visible gap away from the character's
+  feet instead of directly under them.
+- **Root cause:** `MoveAlongHiddenShadow()`'s Locked-state position had no offset at all — it
+  matched the player's raw Transform position exactly, which is not where the visible feet render
+  (same pivot mismatch `OrbitCenterOffset` already compensates for on the Orbit pattern).
+- **Fix:** added `ShadowLockedOffset` (`Vector2`) to `CompanionMovementPreset`, applied to both
+  Locked-state position writes in `MoveAlongHiddenShadow()`. Also fixed a bug found in the same
+  pass: the "still within debounce" branch was still using `_target.position` directly instead of
+  the offset-adjusted position, so the offset had no effect until the debounce window elapsed.
+- **Tuned empirically** against `Mr_chimken`'s actual rig, not guessed: took Play-mode screenshots
+  at candidate offsets via `manage_camera` (Unity MCP), then measured the exact pixel gap between
+  the visible foot and the shadow with a Python/PIL pixel-color scan (cross-checked independently
+  against `Camera.main.WorldToScreenPoint`/`ScreenToWorldPoint`, which agreed within ~0.01 units).
+  Landed on `ShadowLockedOffset = (0, 0.65)` — shadow now starts almost exactly where the foot
+  sprite ends (~5px gap in a 4320px-tall capture, negligible).
+- **Date:** 2026-08-03
+
+[2026-08-03] Fix — Hidden Shadow's squashed shape appeared far from the player on return
+- **User feedback:** the squashed shadow's position looked too far from the player.
+- **Root cause:** `MoveAlongHiddenShadow()` called `ApplyShadowSquash(true)` the instant the
+  player resumed moving — before the return-lerp (`ShadowReturnLerpDuration`) had actually closed
+  the gap from the idle anchor. For that whole lerp window, a flat squashed shape was visible
+  sitting apart from the player instead of the full companion visibly returning to them.
+- **Fix:** squash is now applied only once `_shadowReturning` clears (the lerp has actually
+  landed on the player), verified deterministically via reflection-driven ticks in Play mode —
+  `bodyScaleY` stays 1 for every tick while `returning == true` and flips to the squashed value
+  on the exact tick `returning` clears.
+- **Date:** 2026-08-03
+
+[2026-08-03] Creatures — Hidden Shadow companion movement pattern
+- Built: `CompanionMovementPatternType.HiddenShadow` in `CompanionAI.cs` — bypasses AIPath
+  entirely (same approach as `Orbit`), locking onto the player's position every physics tick
+  while they move, then drifting to a swaying idle anchor (`ShadowIdleAnchorOffset`) after
+  `ShadowStationaryDebounce` seconds stationary, and lerping back onto the player over
+  `ShadowReturnLerpDuration` once movement resumes. Internal phase tracked via a private
+  `ShadowPhase { Locked, Emerged }` enum, kept separate from `CompanionMovementState` (that one
+  is distance-driven and Animator-facing; this one is player-velocity-driven).
+- Built: `PhasixPlaceholderVisual.SetShadowSquash(float)` — flattens Body/Underglow scale.y
+  relative to each renderer's own cached original scale, restoring exactly on `1f`. `CompanionAI`
+  now holds an optional `PhasixPlaceholderVisual` reference (`GetComponent` in `Awake`) to drive
+  this, same nullable convention as the existing `_animator` field.
+- Built: new "Hidden Shadow" entry in `DebugMovementPresetCycler.cs` for live Tab-cycle
+  comparison.
+- Decided: two open questions (snap-vs-lerp on return, idle-anchor re-lock on player
+  displacement) left undecided on purpose — see `DECISIONS.md` → `[Creatures] Hidden Shadow
+  pattern — snap-vs-lerp and displacement re-lock`.
+- **Date:** 2026-08-03
+
 [2026-07-31] Tuning — reference companion resized to half scale
 - `Phasix_Placeholder.prefab` root `localScale` 1→0.5. `CircleCollider2D`'s world-space
   bounds shrink automatically with transform scale (no manual radius change needed,

@@ -30,6 +30,8 @@ public enum CompanionMovementPatternType
     StopAndGo,
     /// <summary>Ignores the trailing point; continuously circles the player at a fixed radius, like a moon orbiting a planet.</summary>
     Orbit,
+    /// <summary>Ignores the trailing point; locks onto the player's position with zero lag while they move, then drifts to a swaying idle spot when they stop.</summary>
+    HiddenShadow,
 }
 
 /// <summary>
@@ -65,6 +67,14 @@ public struct CompanionMovementPreset
     public float OrbitAngularSpeed;  // Orbit: degrees/second — positive = counterclockwise, negative = clockwise
     public Vector2 OrbitCenterOffset; // Orbit: offset from the target's raw Transform position — compensates for a visual/collider pivot that isn't at the sprite's center (e.g. a feet-pivot rig)
     public float OrbitCatchUpSpeed;  // Orbit: how fast the companion's actual position chases its ideal orbit point, world units/sec. High (30+) = near-zero lag; low (3-8) = a looser, visibly trailing orbit.
+
+    // HiddenShadow
+    public float ShadowSwayAmplitude;      // HiddenShadow: how far the idle sway drifts side to side, in world units
+    public float ShadowSwayFrequency;      // HiddenShadow: how fast the idle sway oscillates, roughly radians/sec
+    public float ShadowStationaryDebounce; // HiddenShadow: seconds the player must stay below the movement threshold before the companion leaves Shadow for the swaying idle spot
+    public float ShadowReturnLerpDuration; // HiddenShadow: seconds to ease back onto the player when movement resumes, instead of snapping instantly
+    public Vector2 ShadowIdleAnchorOffset; // HiddenShadow: offset from the target's raw Transform position where the companion emerges to sway while idle (same pivot-compensation role as OrbitCenterOffset, but also defines the emerge direction/distance since there's no separate radius)
+    public Vector2 ShadowLockedOffset;     // HiddenShadow: offset from the target's raw Transform position while glued/moving — lines the squashed shadow up directly under the player's visible feet (same pivot-compensation role as OrbitCenterOffset)
 }
 
 /// <summary>
@@ -124,12 +134,20 @@ public class CompanionAI : MonoBehaviour
     [Tooltip("Animator driving the companion's visual. Optional — safe to leave empty during early dev.")]
     [SerializeField] private Animator _animator;
 
+    [Header("Hidden Shadow Visual")]
+    [Tooltip("How flat the Body/Underglow scale.y goes while HiddenShadow is Locked onto the player. Low enough to read as a flattened ground shadow, high enough the shape doesn't vanish. Range: 0.3-0.6.")]
+    [SerializeField] private float _shadowSquashScaleY = 0.45f;
+
     private Seeker _seeker;
     private AIPath _aiPath;
     private Rigidbody2D _rigidbody2D;
     private Rigidbody2D _targetRigidbody2D;
     private Vector3 _lastTargetPosition;
     private Vector3 _smoothedTargetDirection = Vector2.down;
+
+    // Optional — same convention as _animator above. Only PartySystem held a reference before
+    // HiddenShadow needed to squash/restore the Body/Underglow scale from CompanionAI itself.
+    private PhasixPlaceholderVisual _placeholderVisual;
 
     // Movement pattern (see CompanionMovementPatternType) and its own tuning + runtime state.
     private CompanionMovementPatternType _pattern = CompanionMovementPatternType.Direct;
@@ -145,6 +163,12 @@ public class CompanionAI : MonoBehaviour
     private float _orbitAngularSpeed = 60f;
     private Vector2 _orbitCenterOffset = Vector2.zero;
     private float _orbitCatchUpSpeed = 30f;
+    private float _shadowSwayAmplitude = 0.2f;
+    private float _shadowSwayFrequency = 0.75f;
+    private float _shadowStationaryDebounce = 0.4f;
+    private float _shadowReturnLerpDuration = 0.15f;
+    private Vector2 _shadowIdleAnchorOffset = Vector2.zero;
+    private Vector2 _shadowLockedOffset = Vector2.zero;
 
     private float _patternTimer;
     private float _dashAngleRadians;
@@ -152,6 +176,22 @@ public class CompanionAI : MonoBehaviour
     private float _currentDashOvershoot;
     private float _orbitAngleRadians;
     private bool _isPaused;
+
+    /// <summary>
+    /// HiddenShadow's own player-velocity-driven state, tracked separately from
+    /// CompanionMovementState — that one is distance-driven and Animator-facing; this one is
+    /// purely about which of HiddenShadow's two behaviors (locked to the player vs. swaying at
+    /// an idle anchor) is currently active. Deliberately not named "Idle" to avoid confusion
+    /// with CompanionMovementState.Idle, which means something unrelated.
+    /// </summary>
+    private enum ShadowPhase { Locked, Emerged }
+    private ShadowPhase _shadowPhase = ShadowPhase.Locked;
+    private float _shadowStationaryTimer;
+    private float _shadowSwayTimer;
+    private Vector3 _shadowIdleAnchor;
+    private bool _shadowReturning;
+    private Vector3 _shadowReturnStartPosition;
+    private float _shadowReturnTimer;
 
     public CompanionMovementState CurrentState { get; private set; } = CompanionMovementState.Idle;
 
@@ -163,6 +203,7 @@ public class CompanionAI : MonoBehaviour
         _seeker = GetComponent<Seeker>();
         _aiPath = GetComponent<AIPath>();
         _rigidbody2D = GetComponent<Rigidbody2D>();
+        _placeholderVisual = GetComponent<PhasixPlaceholderVisual>();
 
         // We drive the sprite ourselves (same flip approach as PlayerController_SideScroll)
         // — AIPath must never touch our transform's rotation.
@@ -217,11 +258,18 @@ public class CompanionAI : MonoBehaviour
         _orbitAngularSpeed = preset.OrbitAngularSpeed;
         _orbitCenterOffset = preset.OrbitCenterOffset;
         _orbitCatchUpSpeed = preset.OrbitCatchUpSpeed;
+        _shadowSwayAmplitude = preset.ShadowSwayAmplitude;
+        _shadowSwayFrequency = preset.ShadowSwayFrequency;
+        _shadowStationaryDebounce = preset.ShadowStationaryDebounce;
+        _shadowReturnLerpDuration = preset.ShadowReturnLerpDuration;
+        _shadowIdleAnchorOffset = preset.ShadowIdleAnchorOffset;
+        _shadowLockedOffset = preset.ShadowLockedOffset;
 
-        // Orbit bypasses AIPath's own gradual pathfinding movement entirely (see
-        // FixedUpdate/MoveAlongOrbit below) — its lag was exactly what read as "delayed."
-        // AIPath must not also be trying to drive the same Rigidbody2D at the same time.
-        _aiPath.canMove = _pattern != CompanionMovementPatternType.Orbit;
+        // Orbit and HiddenShadow both bypass AIPath's own gradual pathfinding movement entirely
+        // (see FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow below) — AIPath must not also be
+        // trying to drive the same Rigidbody2D at the same time.
+        _aiPath.canMove = _pattern != CompanionMovementPatternType.Orbit
+            && _pattern != CompanionMovementPatternType.HiddenShadow;
 
         // Reset runtime state so switching patterns doesn't carry over a stale phase/angle
         // from whatever pattern was active before.
@@ -236,6 +284,35 @@ public class CompanionAI : MonoBehaviour
         _orbitAngleRadians = currentOffset.sqrMagnitude > 0.0001f
             ? Mathf.Atan2(currentOffset.y, currentOffset.x)
             : 0f;
+
+        if (_pattern == CompanionMovementPatternType.HiddenShadow)
+        {
+            // Seed HiddenShadow's starting phase from the player's CURRENT velocity rather than
+            // always starting Locked — otherwise switching into this pattern while the player
+            // already happens to be stationary would snap to the player first and only reach
+            // Emerged once the debounce elapses, a visible pop-then-drift that Orbit's own
+            // angle-seeding above avoids for the same reason.
+            _shadowStationaryTimer = 0f;
+            _shadowReturning = false;
+            Vector3 initialPlayerVelocity = _targetRigidbody2D != null ? (Vector3)_targetRigidbody2D.linearVelocity : Vector3.zero;
+            if (initialPlayerVelocity.sqrMagnitude > 0.01f)
+            {
+                _shadowPhase = ShadowPhase.Locked;
+            }
+            else
+            {
+                _shadowPhase = ShadowPhase.Emerged;
+                _shadowIdleAnchor = _target.position + (Vector3)_shadowIdleAnchorOffset;
+                _shadowSwayTimer = 0f;
+            }
+            ApplyShadowSquash(_shadowPhase == ShadowPhase.Locked);
+        }
+        else
+        {
+            // Switching away from HiddenShadow (or never having been in it) — make sure the
+            // visual isn't left squashed from a previous HiddenShadow session.
+            ApplyShadowSquash(false);
+        }
     }
 
     private void Update()
@@ -263,11 +340,12 @@ public class CompanionAI : MonoBehaviour
         float distanceToPlayer = Vector2.Distance(transform.position, _target.position);
         UpdateMovementState(distanceToPlayer);
 
-        // Orbit is handled in FixedUpdate instead (see FixedUpdate/MoveAlongOrbit below) —
-        // it bypasses AIPath's destination-seeking entirely (canMove is disabled for this
-        // pattern in ApplyMovementPreset) and needs to be driven on the physics tick, not
-        // the render tick, to track the player's own Rigidbody2D-driven movement tightly.
-        if (_pattern != CompanionMovementPatternType.Orbit)
+        // Orbit and HiddenShadow are handled in FixedUpdate instead (see
+        // FixedUpdate/MoveAlongOrbit/MoveAlongHiddenShadow below) — both bypass AIPath's
+        // destination-seeking entirely (canMove is disabled for these patterns in
+        // ApplyMovementPreset) and need to be driven on the physics tick, not the render tick,
+        // to track the player's own Rigidbody2D-driven movement tightly.
+        if (_pattern != CompanionMovementPatternType.Orbit && _pattern != CompanionMovementPatternType.HiddenShadow)
         {
             _aiPath.destination = ComputeDestination(playerVelocity, distanceToPlayer);
         }
@@ -280,15 +358,24 @@ public class CompanionAI : MonoBehaviour
     }
 
     /// <summary>
-    /// Drives Orbit on the physics tick, matching how the player's own Rigidbody2D moves
-    /// (PlayerController_SideScroll applies velocity in FixedUpdate) — running this in
-    /// Update() instead caused a render/physics cadence mismatch that read as lag once the
-    /// player started moving, on top of the reactive-chase lag fixed below.
+    /// Drives Orbit and HiddenShadow on the physics tick, matching how the player's own
+    /// Rigidbody2D moves (PlayerController_SideScroll applies velocity in FixedUpdate) —
+    /// running these in Update() instead caused a render/physics cadence mismatch that read as
+    /// lag once the player started moving, on top of the reactive-chase lag fixed below.
     /// </summary>
     private void FixedUpdate()
     {
-        if (_target == null || _pattern != CompanionMovementPatternType.Orbit) return;
-        MoveAlongOrbit();
+        if (_target == null) return;
+
+        switch (_pattern)
+        {
+            case CompanionMovementPatternType.Orbit:
+                MoveAlongOrbit();
+                break;
+            case CompanionMovementPatternType.HiddenShadow:
+                MoveAlongHiddenShadow();
+                break;
+        }
     }
 
     /// <summary>
@@ -313,6 +400,102 @@ public class CompanionAI : MonoBehaviour
         Vector3 newPosition = Vector3.MoveTowards(predictedPosition, idealPosition, _orbitCatchUpSpeed * Time.fixedDeltaTime);
 
         _rigidbody2D.MovePosition(newPosition);
+    }
+
+    /// <summary>
+    /// HiddenShadow: while the player is moving, locks directly onto their position every
+    /// physics tick — a true zero-lag glued shadow, no feedforward/catch-up needed since it's
+    /// just a straight position copy. Once the player has been below the movement threshold for
+    /// ShadowStationaryDebounce seconds, drifts to an idle anchor behind/above the player and
+    /// sways side to side on its own until the player moves again, at which point it eases back
+    /// onto the player over ShadowReturnLerpDuration rather than snapping (DECISIONS.md →
+    /// [Creatures] Hidden Shadow pattern — open decision, leaning lerp over snap for now).
+    /// Uses Rigidbody2D.MovePosition, not a raw transform.position write, for the same reason
+    /// MoveAlongOrbit above does — the companion's Rigidbody2D is kinematic with a trigger
+    /// collider (DECISIONS.md → [Pathfinding] Companion uses Rigidbody2D (Kinematic)), and
+    /// MovePosition is what keeps that collider's physics updates correct.
+    /// </summary>
+    private void MoveAlongHiddenShadow()
+    {
+        Vector3 playerVelocity = _targetRigidbody2D != null ? (Vector3)_targetRigidbody2D.linearVelocity : Vector3.zero;
+        bool playerIsMoving = playerVelocity.sqrMagnitude > 0.01f; // same threshold as UpdateTrailDirection/ComputeRepelOffset above
+        // Where the glued/squashed shadow actually sits — offset from the player's raw Transform
+        // position (same pivot-compensation role as OrbitCenterOffset) so it lines up directly
+        // under the player's visible feet instead of wherever their Transform pivot happens to be.
+        Vector3 lockedPosition = _target.position + (Vector3)_shadowLockedOffset;
+
+        if (playerIsMoving)
+        {
+            _shadowStationaryTimer = 0f;
+
+            if (_shadowPhase == ShadowPhase.Emerged)
+            {
+                // Just started moving again after swaying at the idle anchor — begin easing
+                // back onto the player from wherever the sway left the companion, rather than
+                // snapping straight there. Squash is deliberately NOT applied yet here — see
+                // below, it waits until the lerp actually lands on the player.
+                _shadowPhase = ShadowPhase.Locked;
+                _shadowReturning = true;
+                _shadowReturnStartPosition = transform.position;
+                _shadowReturnTimer = 0f;
+            }
+
+            if (_shadowReturning)
+            {
+                _shadowReturnTimer += Time.fixedDeltaTime;
+                float t = _shadowReturnLerpDuration > 0f ? Mathf.Clamp01(_shadowReturnTimer / _shadowReturnLerpDuration) : 1f;
+                _rigidbody2D.MovePosition(Vector3.Lerp(_shadowReturnStartPosition, lockedPosition, t));
+                if (t >= 1f)
+                {
+                    // Only flatten into the squashed shadow once actually coincident with the
+                    // player — squashing immediately on the way back (at the old idle anchor,
+                    // still some distance out) is what made the squashed shape look "too far
+                    // from the player": it read as a flat shadow floating apart from them for
+                    // the whole lerp instead of the full companion visibly returning to them.
+                    _shadowReturning = false;
+                    ApplyShadowSquash(true);
+                }
+            }
+            else
+            {
+                _rigidbody2D.MovePosition(lockedPosition);
+            }
+        }
+        else
+        {
+            if (_shadowPhase == ShadowPhase.Locked)
+            {
+                _shadowStationaryTimer += Time.fixedDeltaTime;
+                if (_shadowStationaryTimer >= _shadowStationaryDebounce)
+                {
+                    _shadowPhase = ShadowPhase.Emerged;
+                    _shadowIdleAnchor = _target.position + (Vector3)_shadowIdleAnchorOffset;
+                    _shadowSwayTimer = 0f;
+                    ApplyShadowSquash(false);
+                }
+                else
+                {
+                    // Still within the debounce window — keep locking, no visible change yet.
+                    _rigidbody2D.MovePosition(lockedPosition);
+                    return;
+                }
+            }
+
+            _shadowSwayTimer += Time.fixedDeltaTime;
+            float sway = Mathf.Sin(_shadowSwayTimer * _shadowSwayFrequency) * _shadowSwayAmplitude;
+            _rigidbody2D.MovePosition(_shadowIdleAnchor + new Vector3(sway, 0f, 0f));
+        }
+    }
+
+    /// <summary>
+    /// Flattens the companion's visual to read as a ground shadow while Locked, restores it
+    /// while Emerged. Reuses the existing Body/Underglow structure via PhasixPlaceholderVisual
+    /// (placeholder-first art pipeline, DECISIONS.md → [Art]) — no new sprite. _placeholderVisual
+    /// is optional (same convention as _animator), so this is a no-op if it's absent.
+    /// </summary>
+    private void ApplyShadowSquash(bool squashed)
+    {
+        _placeholderVisual?.SetShadowSquash(squashed ? _shadowSquashScaleY : 1f);
     }
 
     /// <summary>

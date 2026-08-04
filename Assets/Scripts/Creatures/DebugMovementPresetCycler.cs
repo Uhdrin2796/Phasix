@@ -76,6 +76,19 @@ public class DebugMovementPresetCycler : MonoBehaviour
             OrbitCenterOffset = new Vector2(0f, 1.4f), // shifts the orbit center up to the player's visible body, not their feet-pivot Transform position
             OrbitCatchUpSpeed = 40f, // very high — near-instant tracking, almost no lag between the orbit and the player's current position
         },
+        new CompanionMovementPreset
+        {
+            Name = "Hidden Shadow (glued underneath while moving, floats and sways when still)",
+            Pattern = CompanionMovementPatternType.HiddenShadow,
+            TrailDistance = 1.2f, DirectionTurnSpeed = 180f,
+            WalkSpeed = 3f, RunSpeed = 6f,
+            IdleDistance = 1f, RunDistance = 5f,
+            RepelDistance = 0.7f, RepelStrength = 0.8f,
+            ShadowSwayAmplitude = 0.5f, ShadowSwayFrequency = 0.75f,
+            ShadowStationaryDebounce = 0.4f, ShadowReturnLerpDuration = 0.15f,
+            ShadowIdleAnchorOffset = new Vector2(0f, 1.2f), // emerges above/behind the player's visible body, not their feet-pivot Transform position
+            ShadowLockedOffset = new Vector2(0f, 0.65f), // lines the squashed shadow up directly under the player's visible feet, not their (lower) Transform pivot — tuned empirically against Mr_chimken's rig via screenshot + pixel analysis
+        },
     };
 
     private CompanionAI _companionAI;

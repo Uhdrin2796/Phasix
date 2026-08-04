@@ -150,6 +150,12 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Revisit if:** A species roster eventually wants per-species shape distinction, or the
   underglow tuning values (0.35 lighten / 0.4 alpha) look wrong once real creature
   silhouettes replace the circle.
+- **Update (August 2026):** `Body`/`Underglow` `m_SortingOrder` changed from `1`/`0` to
+  `-1`/`-2` — both were sitting above `Mr_chimken`'s `SortingGroup` (`sortingOrder: 0`),
+  so the companion always rendered in front of the player regardless of Y-position (the
+  camera's `Transparency Sort Mode` is `Default`, not Y-axis, so this is a plain numeric
+  order, not something Y-sort would resolve on its own). Now both sit below 0 — companion
+  renders behind the player — while keeping Underglow behind Body.
 
 ---
 
@@ -911,6 +917,17 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Try it now:** `CompanionAI.ApplyMovementPreset()` + `DebugMovementPresetCycler.cs`
   (temporary, press Tab in Play mode) let all 5 Tier 1 presets above be compared live on the
   existing placeholder companion, before committing to Personality or any other hook.
+
+### [Creatures] Hidden Shadow pattern — snap-vs-lerp and displacement re-lock
+- **Status:** Undecided on two points, implemented with a working default for now:
+  1. Snap vs. lerp on return-to-shadow — implemented as lerp (`ShadowReturnLerpDuration`) per
+     a lean toward smoother transitions; revisit if it reads mushy/laggy in practice.
+  2. Whether the idle anchor should re-lock if the player is displaced (knockback, etc.) while
+     Emerged — currently it does not; the anchor stays fixed until the next natural
+     Locked→Emerged transition, so a knockback mid-sway could leave the companion swaying at a
+     stale position until the player moves again.
+- **Revisit:** once Hidden Shadow has been compared live via `DebugMovementPresetCycler` and
+  either reads fine as-is or a concrete complaint surfaces.
 
 ### [Creatures] Defuse / Infuse — creature release + Resonance investment (proposed)
 - **Status:** Designed, not implemented. Depends conceptually on the Resonance system above

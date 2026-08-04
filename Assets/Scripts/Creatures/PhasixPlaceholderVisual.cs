@@ -28,6 +28,9 @@ public class PhasixPlaceholderVisual : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] private float _underglowAlpha = 0.4f;
 
+    private float _bodyBaseScaleY = float.NaN;
+    private float _underglowBaseScaleY = float.NaN;
+
     /// <summary>Tints Body and Underglow from a PrimalType directly.</summary>
     public void SetPrimalType(PrimalType type)
     {
@@ -39,5 +42,31 @@ public class PhasixPlaceholderVisual : MonoBehaviour
     public void ApplyFromSpeciesData(PhasixData data)
     {
         SetPrimalType(data.PrimalType);
+    }
+
+    /// <summary>
+    /// Scales Body and Underglow's localScale.y by scaleYMultiplier, relative to each renderer's
+    /// own original scale (not a hardcoded value — Underglow is intentionally a larger base
+    /// scale than Body, per this class's own prefab structure). Caches each renderer's original
+    /// scale.y on first call so 1f always restores exactly, no matter how many times this is
+    /// called or in which order. Used by CompanionAI's HiddenShadow movement pattern to flatten
+    /// the companion into a ground-shadow read while locked onto the player, and restore it once
+    /// idle.
+    /// </summary>
+    public void SetShadowSquash(float scaleYMultiplier)
+    {
+        if (float.IsNaN(_bodyBaseScaleY))
+        {
+            _bodyBaseScaleY = _bodyRenderer.transform.localScale.y;
+            _underglowBaseScaleY = _underglowRenderer.transform.localScale.y;
+        }
+
+        Vector3 bodyScale = _bodyRenderer.transform.localScale;
+        bodyScale.y = _bodyBaseScaleY * scaleYMultiplier;
+        _bodyRenderer.transform.localScale = bodyScale;
+
+        Vector3 underglowScale = _underglowRenderer.transform.localScale;
+        underglowScale.y = _underglowBaseScaleY * scaleYMultiplier;
+        _underglowRenderer.transform.localScale = underglowScale;
     }
 }
