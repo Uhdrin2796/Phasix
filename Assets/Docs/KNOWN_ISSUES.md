@@ -11,38 +11,6 @@ Open items from the external repo audit (`AUDIT_202608.md`) that need a live Uni
 session to fix safely — see `CHANGELOG.md` → "Repo audit triage" (2026-08-04) for what was
 already fixed blind this pass.
 
-### [AUD-005] — Overworld has one verb and nothing to avoid
-**Status:** Active — the audit's own highest-priority finding
-**Affects:** `WildEncounterCreature.cs`, `EncounterTrigger.cs`, `PlayerTopDownController.cs`,
-`Combat_Directive_v0_1_0.md` Part 3
-**Description:** Player has no verb beyond walk (no dash/sprint/interact); wild creatures are
-stationary contact-triggers with no patrol, vision cone, or detection radius. `Combat_Directive`
-Part 3's lane-avoidance mechanic is unimplementable as written until patrol + overworld lanes
-exist. Recommendation: one design session (second overworld verb, patrol + detection radius,
-decide whether overworld lanes are a real spatial concept) before Phase 3's `BattleScene_Main`.
-**Workaround:** None — this is a design gap, not a bug.
-
-### [AUD-003] — No ground shadows on any character
-**Status:** Active
-**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab`, player object
-**Description:** No shadow sprite/prefab exists anywhere in the project (confirmed — no
-`Assets/Sprites` directory at all). Needs a new sprite asset + child `SpriteRenderer` wired into
-prefab hierarchies with the correct sorting layer — held for an Editor/MCP session
-(`unity-mcp`'s prefab/GameObject tools) rather than hand-written prefab YAML, which is easy to
-corrupt.
-**Workaround:** None.
-
-### [AUD-002] — Colliders are sprite-centered, not foot-anchored
-**Status:** Active
-**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab` (`CircleCollider2D`,
-`m_Offset: {0,0}`)
-**Description:** Creature colliders are centered on the sprite instead of foot-anchored, which
-in 3/4 perspective reads as sticky/imprecise movement. The player's own `CapsuleCollider2D`
-already uses a non-zero offset (`{0,14}`, size `{9,15}`) — worth an Editor look at why before
-treating it as the model to copy. Footprint sizing is inherently a "look at it against the
-sprite" tuning pass.
-**Workaround:** None.
-
 ### [AUD-006] — No camera lookahead or movement bias
 **Status:** Active — audit's suggested fix does not apply to this project, see note
 **Affects:** `CinemachineCamera` in `SampleScene.unity`
@@ -56,6 +24,99 @@ feel is fundamentally a "watch it move" tuning task.
 ---
 
 ## Closed Issues
+
+### [AUD-005] — Overworld has one verb and nothing to avoid — CLOSED (fixed)
+**Status:** Closed — fixed, confirmed via live playtest
+**Affects:** `PlayerTopDownController.cs`, `WildEncounterCreature.cs`, `Phasix_WildEncounter.prefab`
+**Design decision (confirmed with user before implementing):** built the simple vision-cone/
+detection-radius version, NOT formal overworld "lanes." `Combat_Directive_v0_1_0.md` Part 3's
+"Lane Avoidance — Overworld Carry-Over" section reads as a narrative/thematic bridge to the
+battle stage's 7-lane system, not a technical spec — nothing else in the GDD, World Design
+Directive, or Technical Directive references overworld lanes, and the overworld controller is
+free 2D movement, not gridded. That section's "not yet implemented" note stays exactly as-is;
+this pass doesn't resolve it, by design.
+**Built:**
+- **Sprint** on `PlayerTopDownController.cs` — hold-while-held `_sprintMultiplier` (1.6x) on the
+  existing, previously-unused "Sprint" action already defined in `InputSystem_Actions.inputactions`
+  (Left Shift / left-stick-press). No stamina system — not specified anywhere in the docs.
+- **Patrol/Alert state machine** on `WildEncounterCreature.cs` — back-and-forth patrol along the
+  local X axis via a new Kinematic `Rigidbody2D` + `MovePosition` (no AIPath/Seeker, unlike
+  CompanionAI); a throttled (0.15s interval, not per-frame — CLAUDE.md's no-heavy-logic-in-
+  Update() rule) radius + facing-cone + `Physics2D.Linecast` line-of-sight check switches it to
+  Alert, chasing the player in a straight line at `_alertSpeed` (2, always below the player's base
+  5) until contact or `_loseInterestDelay` (2s) without sight. A temporary `AlertIndicator` child
+  (tinted circle, placeholder-first — no real "!" icon exists yet) toggles on/off with state, per
+  user request mid-session so detection has *some* visible feedback.
+- Procedurally generated `Assets/Sprites/AlertIcon.png` (soft circle, 100 PPU) for the indicator.
+**Bug found and fixed during playtest (not caught until a live human watched it):** after wiring
+patrol/chase, the creature would visibly reach the player but never trigger the encounter prompt
+— "goes underneath the player" per live observation. Root cause: AUD-002's foot-anchoring fix
+(same session) moved `Phasix_WildEncounter`'s `CircleCollider2D` down near its own pivot, but the
+player's `CapsuleCollider2D` sits offset ~1.4 world units *above* the player's pivot (torso-only,
+by design — see closed `[AUD-007]`). With both fixes applied, the two colliders no longer share
+any vertical band, so `OnTriggerEnter2D` never fired despite visual overlap. AUD-002's
+foot-anchoring rationale doesn't actually apply to this prefab's collider — it's a pure
+`isTrigger` encounter-detection volume with a Kinematic body, never a solid wall/movement
+collider, so there was no "sticky movement" reason to shrink and foot-anchor it in the first
+place. Fixed by resizing it back up to `offset: {0,2}, radius: 1.2` (local; world offset ~1.0,
+radius ~0.6) — sized to reliably overlap the player's actual collision band regardless of the two
+prefabs' very different pivot conventions, not to visually match the creature's small placeholder
+sprite. Re-verified live: teleporting the player directly onto a creature now reliably shows the
+Flee/Engage prompt, and invoking Flee correctly unfreezes the player, hides the prompt, and
+destroys the creature.
+**Verified live (Play mode, `execute_code` driving positions/input directly since no real input
+device is available in this session):** patrol movement advances over real time; a controlled
+single-axis-blocked graze test (temporary pillar, since deleted) showed the creature correctly
+enter Alert and chase in a straight line; contact reliably triggers the prompt; Flee resolves the
+full cycle (unfreeze, hide, destroy); Sprint moved the player at the expected ~8u/s and stopped
+correctly at a wall (no tunneling).
+**Known limitations, out of scope for this pass:** Alert-state chase is a straight line with no
+obstacle avoidance (Kinematic bodies aren't stopped by collisions) — acceptable since chase speed
+is always below the player's own move speed, but would look wrong in a level with more interior
+geometry between the creature and player. Patrol is a fixed local-X back-and-forth, not a
+waypoint list — tune `_patrolHalfRange` per spawn point so the path doesn't clip walls/decorations.
+**Closed:** 2026-08-04, same session.
+
+### [AUD-003] — No ground shadows on any character — CLOSED (fixed)
+**Status:** Closed — fixed
+**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab`
+**Description:** Procedurally generated a soft radial-gradient shadow sprite
+(`Assets/Sprites/Shadow_Ellipse.png`, 64x32px, 100 PPU, black-to-transparent falloff) since no
+`Assets/Sprites` directory or shadow art existed. Added a `Shadow` child `SpriteRenderer` to both
+creature prefabs: `sortingLayerName: "Ground"`, `sortingOrder: 2` (draws above the floor tilemap's
+`sortingOrder: 1` but is still layer-ordered before everything on the `"Characters"` layer,
+regardless of position — no new Sorting Layer needed), `color.a: 0.4`. Positioned at local
+`(0, -0.35)`, scale `1.2`, so it visibly peeks out past the placeholder circle's silhouette.
+**Caveat found during verification:** the existing `Underglow` sibling sprite (a separate,
+pre-existing placeholder — not part of this fix) is fully opaque and 1.6x the size of `Body`, so
+it currently hides the shadow entirely in normal play. Confirmed the shadow itself renders
+correctly (soft edges, correct position/opacity) by disabling `Underglow` on a scratch test
+instance only (not the prefab). Not fixing `Underglow`'s opacity here — out of scope for a
+shadow-only audit item — but flagging it so a future session doesn't wonder why the shadow isn't
+visible in the current scene. Player object intentionally not touched — the audit's list was
+scoped to the two creature prefabs.
+**Closed:** 2026-08-04, same session.
+
+### [AUD-002] — Colliders were sprite-centered, not foot-anchored — CLOSED (fixed)
+**Status:** Closed — fixed
+**Affects:** `Phasix_Placeholder.prefab`, `Phasix_WildEncounter.prefab` (`CircleCollider2D`)
+**Description:** The audit asked to look at why the player's own `CapsuleCollider2D` uses a
+non-zero offset (`{0,14}`, size `{9,15}`) before copying it as the model for creatures. Answer,
+learned while playtesting AUD-007 against the player's real collider: the offset lifts the
+capsule up so it covers the character's main round body mass and deliberately excludes the thin
+decorative leg/foot stalk below it from collision (see the reference art — `Mr_chimken` is a
+round blob body on a single thin bone-leg; including the leg in collision would make the
+footprint asymmetric and janky). The creature prefabs don't have that same "thin leg" shape
+(placeholder circle sprites), so the applicable lesson isn't the exact offset, just the
+principle: anchor the collider to the lower portion of the sprite, not the geometric center.
+Applied `m_Offset: {0,-0.2}` (local) and shrunk `m_Radius` from `0.4` to `0.25` on both prefabs'
+`CircleCollider2D`. Verified numerically (not just by eye, since Scene View gizmos don't render
+in headless MCP screenshots): the collider's world bounds now span the sprite's lower half
+(y from -0.225 to 0.025 against a full sprite span of -0.25 to 0.25), with a small margin so the
+collision edge doesn't poke out below the visible sprite. Revisit once the real species roster
+and art exist (GDD §25, pending) — these values are tuned against the Unity default circle
+placeholder, not final art.
+**Workaround:** None needed — fixed.
 
 ### [AUD-012 asmdef] — EditMode test assembly didn't compile — CLOSED (fixed)
 **Status:** Closed — fixed

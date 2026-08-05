@@ -90,6 +90,22 @@ public class PlayerTopDownController : MonoBehaviour
              "Requires a CapsuleCollider2D on this GameObject sized to the art's true bounds.")]
     [SerializeField] private float _targetHeightPixels = 0f;
 
+    // ── Sprint ────────────────────────────────────────────────────────────────
+    // AUD-005 (repo audit, 2026-08): the overworld had no verb beyond walk. Uses the "Sprint"
+    // action already defined (unused) in InputSystem_Actions.inputactions — a hold-while-held
+    // speed multiplier rather than a cooldown-gated burst dash, since that's what the existing
+    // binding (Left Shift / left-stick-press) already implies and it needs zero new input
+    // wiring. No stamina system — not specified anywhere in the design docs, and inventing one
+    // is out of scope for this pass.
+
+    [Header("Sprint")]
+    [Tooltip("Multiplier applied to _moveSpeed while the Sprint action is held. Range: 1.3–2. " +
+             "Kept for player-only use — wild creature Alert-state chase speed " +
+             "(WildEncounterCreature._alertSpeed) is deliberately set below the player's base " +
+             "_moveSpeed even before this multiplier, so sprinting only widens an already-safe " +
+             "margin, never creates risk.")]
+    [SerializeField] private float _sprintMultiplier = 1.6f;
+
     // ── Corner Correction ────────────────────────────────────────────────────
     // AUD-007 (repo audit, 2026-08): direct linearVelocity assignment gives correct wall-sliding
     // for free, but nothing nudges the player through when a doorway/corner edge is clipped by a
@@ -127,11 +143,15 @@ public class PlayerTopDownController : MonoBehaviour
     // by repeated OnValidate calls while _targetHeightPixels is non-zero.
     [HideInInspector] [SerializeField] private bool _autoScaleActive = false;
 
-    // The resolved Move action from the Player action map
+    // The resolved Move and Sprint actions from the Player action map
     private InputAction _moveAction;
+    private InputAction _sprintAction;
 
     // Raw input vector written by Input System callback, consumed in FixedUpdate
     private Vector2 _inputVector;
+
+    // True while the Sprint action is held
+    private bool _isSprinting;
 
     // Smoothed velocity applied to the Rigidbody (persists between FixedUpdate calls)
     private Vector2 _currentVelocity;
@@ -192,6 +212,9 @@ public class PlayerTopDownController : MonoBehaviour
         _moveAction = _inputActions
             .FindActionMap("Player", throwIfNotFound: true)
             .FindAction("Move",      throwIfNotFound: true);
+        _sprintAction = _inputActions
+            .FindActionMap("Player", throwIfNotFound: true)
+            .FindAction("Sprint",    throwIfNotFound: true);
     }
 
     private void OnEnable()
@@ -202,6 +225,10 @@ public class PlayerTopDownController : MonoBehaviour
         _moveAction.performed += HandleMoveInput;
         _moveAction.canceled  += HandleMoveInput;
         _moveAction.Enable();
+
+        _sprintAction.performed += HandleSprintInput;
+        _sprintAction.canceled  += HandleSprintInput;
+        _sprintAction.Enable();
     }
 
     private void OnDisable()
@@ -211,6 +238,10 @@ public class PlayerTopDownController : MonoBehaviour
         _moveAction.performed -= HandleMoveInput;
         _moveAction.canceled  -= HandleMoveInput;
         _moveAction.Disable();
+
+        _sprintAction.performed -= HandleSprintInput;
+        _sprintAction.canceled  -= HandleSprintInput;
+        _sprintAction.Disable();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -224,6 +255,12 @@ public class PlayerTopDownController : MonoBehaviour
     private void HandleMoveInput(InputAction.CallbackContext context)
     {
         _inputVector = context.ReadValue<Vector2>();
+    }
+
+    /// <summary>Tracks whether Sprint is currently held — true on performed, false on canceled.</summary>
+    private void HandleSprintInput(InputAction.CallbackContext context)
+    {
+        _isSprinting = context.ReadValueAsButton();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -279,12 +316,13 @@ public class PlayerTopDownController : MonoBehaviour
         // WASD diagonal is already magnitude 1.0 from the composite binder.
         // Analog stick diagonal can be up to 1.41 — normalising clamps it to _moveSpeed.
         Vector2 inputDir = _inputVector.normalized;
-        Vector2 targetVelocity = inputDir * _moveSpeed;
+        float currentMoveSpeed = _isSprinting ? _moveSpeed * _sprintMultiplier : _moveSpeed;
+        Vector2 targetVelocity = inputDir * currentMoveSpeed;
 
         // Corner correction: only relevant for diagonal input clipping a doorway/corner edge.
         // Adds a small nudge along whichever axis isn't blocked, so the intended diagonal
         // movement isn't read as a full stop over a few pixels of overlap.
-        targetVelocity += ComputeCornerCorrection(inputDir) * _moveSpeed;
+        targetVelocity += ComputeCornerCorrection(inputDir) * currentMoveSpeed;
 
         // Choose acceleration or deceleration rate.
         // sqrMagnitude avoids a sqrt call — we only care about zero vs non-zero.

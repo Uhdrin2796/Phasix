@@ -18,6 +18,38 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Repo audit — AUD-005: overworld Sprint + wild creature patrol/detection
+- **Design decision (confirmed with user before implementing):** simple vision-cone/detection-
+  radius system, not formal overworld "lanes" — Combat_Directive Part 3's lane-carry-over section
+  is a thematic bridge to the battle stage's 7-lane system, not a technical spec; nothing else in
+  the design docs references overworld lanes. That section stays unresolved/not-implemented by
+  design, not by omission.
+- **Built:** Sprint (hold-while-held 1.6x multiplier) on `PlayerTopDownController.cs`, using the
+  existing unused "Sprint" InputSystem action. Patrol/Alert state machine on
+  `WildEncounterCreature.cs` (Kinematic Rigidbody2D + MovePosition, throttled detection check —
+  radius + facing cone + line-of-sight raycast). Temporary `AlertIndicator` child (tinted circle)
+  toggles on Alert — added mid-session per user request, since nothing signaled detection to the
+  player otherwise. New `Assets/Sprites/AlertIcon.png`.
+- **Bug found via live playtest, not caught blind:** wired patrol/chase, but a human watching the
+  Editor reported the creature reaches the player and "goes underneath" without ever triggering
+  the encounter prompt. Root cause: this same session's AUD-002 foot-anchoring fix moved
+  `Phasix_WildEncounter`'s trigger collider down near its own pivot, but the player's collider
+  sits ~1.4 world units *above* its pivot (torso-only, by design) — the two colliders stopped
+  sharing any vertical band. AUD-002's rationale never actually applied to this prefab (a pure
+  `isTrigger` volume, never a solid movement collider), so fixed by resizing the trigger back up
+  (`offset: {0,2}, radius: 1.2` local) to reliably overlap the player's real collision band
+  instead of matching the creature's small placeholder sprite. Re-verified live.
+- **Verified live (Play mode, via `execute_code` driving position/input — no real input device in
+  this session):** patrol advances over real time; a controlled single-axis-blocked corner-graze
+  test showed correct Alert transition and straight-line chase; contact now reliably shows the
+  Flee/Engage prompt; Flee resolves the full cycle; Sprint moved the player at the expected speed
+  and stopped correctly at a wall.
+- **Known limitations:** Alert-state chase has no obstacle avoidance (Kinematic bodies aren't
+  physically stopped by collisions) — acceptable since chase speed stays below the player's own,
+  but would look wrong with more interior geometry between creature and player. Patrol is a fixed
+  local-X back-and-forth, not a waypoint list.
+- **Date:** 2026-08-04
+
 [2026-08-04] Repo audit — live Editor verification pass (AUD-001/004/007/012)
 - **Context:** Continuation of the prior no-Editor audit triage session, now with `unity-mcp`
   attached (`instance_count: 1`, Unity 6000.3.11f1). Worked through `KNOWN_ISSUES.md` →

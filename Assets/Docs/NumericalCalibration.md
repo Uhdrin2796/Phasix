@@ -305,7 +305,29 @@ Note: Scaling is smooth and continuous between lanes — not stepped.
 ### Corner correction nudge
 | Value | Amount | Notes |
 |---|---|---|
-| Corner correction threshold | 3px (0.1875 world units at 16 PPU) — **PLACEHOLDER, unverified** | Max lateral clip distance from a wall corner that gets auto-nudged through. Added per `AUDIT_202608.md` AUD-007; needs calibration against real doorway/interior geometry once the map-expansion backlog lands — see `PlayerTopDownController._cornerCorrectionThreshold` tooltip. |
+| Corner correction threshold | 3px (0.1875 world units at 16 PPU) — **placeholder, mechanism verified 2026-08-04** | Max lateral clip distance from a wall corner that gets auto-nudged through. Added per `AUDIT_202608.md` AUD-007. The threshold value itself is still an unverified placeholder, but the mechanism was fixed (raycast origin bug) and confirmed working live against real `SampleScene` wall geometry — see `KNOWN_ISSUES.md` closed `[AUD-007]`. Still needs numeric calibration against real doorway/interior geometry once the map-expansion backlog lands. |
+
+### Sprint
+| Value | Amount | Notes |
+|---|---|---|
+| Sprint speed multiplier | 1.6x — **placeholder, playtested 2026-08-04** | Applied to `_moveSpeed` while the "Sprint" action is held. AUD-005. No stamina system. |
+
+---
+
+## Wild Creature Patrol/Detection (WildEncounterCreature.cs)
+Added per `AUDIT_202608.md` AUD-005, playtested live 2026-08-04 — see `KNOWN_ISSUES.md` closed
+`[AUD-005]` for the full design rationale and a collider bug found during playtest.
+
+| Value | Amount | Notes |
+|---|---|---|
+| Patrol speed | 1 u/s — **placeholder** | Well below player base move speed (5). |
+| Patrol half-range | 1.5 world units — **placeholder, placement-dependent** | Straight-line back-and-forth only; tune per spawn point so the path stays clear of walls/decorations. |
+| Detection radius | 3 world units — **placeholder** | |
+| Detection cone angle | 100° — **placeholder** | Full cone width, centered on current facing/movement direction. |
+| Detection check interval | 0.15s — **placeholder** | Throttled, not per-frame. |
+| Alert (chase) speed | 2 u/s — **placeholder** | Deliberately kept below player base move speed (5) so a detected creature is never inescapable. |
+| Lose-interest delay | 2s — **placeholder** | Seconds without line-of-sight before an alerted creature resumes patrol. |
+| Encounter trigger collider (`Phasix_WildEncounter.prefab` `CircleCollider2D`) | offset `{0,2}`, radius `1.2` (local; world ≈ offset `1.0`, radius `0.6`) — **verified live, not a placeholder** | Sized to reliably overlap the player's `CapsuleCollider2D`'s actual world collision band (offset ~1.4 world units above the player's own pivot — see AUD-007), not to visually match the creature's small placeholder sprite. Deliberately generous, since this is a pure trigger with no "sticky movement" downside. |
 
 ---
 
