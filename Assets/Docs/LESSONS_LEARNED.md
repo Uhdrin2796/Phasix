@@ -179,6 +179,36 @@ Issues that required significant investigation to resolve. Read before debugging
   frame (a screenshot), not `Transform.position` — interpolation is invisible to the latter by
   design.
 
+### [Physics] Foot-anchoring a fix in isolation broke a different collider's cross-object role
+- **Symptom:** After patrol/detection movement was added to `WildEncounterCreature`, a live human
+  playtester reported the creature would chase down and visibly reach the player but never
+  trigger the Flee/Engage encounter prompt — "it just goes underneath the player."
+- **Root cause:** An earlier fix in the *same session* (AUD-002, re-anchoring
+  `Phasix_WildEncounter.prefab`'s `CircleCollider2D` from sprite-centered to foot-anchored, offset
+  down near the creature's own pivot) was correct in isolation, but this collider's actual job is
+  the encounter-detection trigger against the *player's* `CapsuleCollider2D` — which sits offset
+  ~1.4 world units *above* the player's own pivot (torso-only, matching the sprite's actual bone
+  rig — see the entry above this one for the same class of mismatch, discovered independently in
+  July on a different pair of objects). Once foot-anchored, the two colliders' vertical bands
+  stopped overlapping at all whenever both objects sat at the same apparent ground height, so
+  `OnTriggerEnter2D` never fired despite the sprites visually touching.
+- **Fix:** Resized the trigger collider back up (`offset: {0,2}, radius: 1.2` local) to reliably
+  overlap the player's actual collision band, instead of matching the creature's own small
+  placeholder sprite. The foot-anchoring principle from AUD-002 never actually applied to this
+  particular collider in the first place — it's a pure `isTrigger` detection volume on a Kinematic
+  body, never a solid wall/movement collider, so there was no "sticky movement" reason to shrink
+  it to begin with.
+- **Date:** August 2026
+- **Key rule:** Before applying a "make this match the sprite" collider fix uniformly across
+  multiple prefabs, check what each individual collider's *functional role* actually is — a
+  trigger volume that needs to reach a specific other object's (mismatched) collision geometry
+  has different sizing requirements than a solid movement collider that just needs to look right.
+  And per the entry above: any two characters with different pivot conventions (feet-anchored vs.
+  bone-rig-torso-anchored) need their cross-object collision geometry checked explicitly — it
+  won't naturally line up just because both objects "stand on the same floor." A live human
+  watching Play mode caught this in one sentence; it would have been very slow to find by staring
+  at prefab YAML.
+
 ---
 
 ## Tilemap
@@ -571,3 +601,59 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Fix:** If Unity gets closed and reopened mid-session, restart the Claude Code app too (fully quit, reopen) — don't just retry tool calls and expect it to reconnect. Best practice: open Unity first, before starting the Claude Code session, and leave it running for the whole session — then this never comes up. To check connection state, trust a live tool call (e.g. `read_console`, `manage_scene get_active`) over Unity's own Session indicator.
 - **Date:** July 2026
 - **Key rule:** Unity closing/reopening mid-session always means restart Claude Code too, not just Unity. Never trust the "MCP for Unity" window's Session indicator alone — verify with an actual tool call before concluding the connection is up or down.
+
+### [Tooling] Assembly Definition files can't reference the implicit "Assembly-CSharp" by name
+- **Symptom:** First compile of a new `Phasix.Tests.EditMode.asmdef` (added blind, no live
+  Unity, per `AUDIT_202608.md` AUD-012) failed once a live Editor session finally ran it:
+  `CS0246: The type or namespace name 'PhasixRuntimeData' could not be found`, even though the
+  type unambiguously exists in `Assets/Scripts/Creatures/PhasixRuntimeData.cs` and the test
+  asmdef's `references` array explicitly listed `"Assembly-CSharp"`.
+- **Root cause:** `Assembly-CSharp` is Unity's *implicit* catch-all assembly for any script not
+  covered by an asmdef — it has no `.asmdef` asset of its own, and referencing it by name from a
+  real asmdef simply doesn't resolve, even though the same project's non-asmdef scripts compile
+  into it just fine on their own. An asmdef can only reference *other asmdefs*.
+- **Fix:** Split runtime scripts into a real asmdef (`Assets/Scripts/Phasix.Runtime.asmdef`,
+  covering everything under `Assets/Scripts/` except the `Editor/` subfolder) plus a matching
+  Editor-only one (`Assets/Scripts/Editor/Phasix.Editor.asmdef`, `includePlatforms: ["Editor"]`,
+  needed its own explicit reference to `Unity.2D.Sprite.Editor` since `PhasixSpriteSetup.cs` uses
+  `UnityEditor.U2D.Sprites`, which stopped being implicitly available once pulled out of the
+  default assembly). Pointed the test asmdef at `Phasix.Runtime` instead of `Assembly-CSharp`.
+  Also needed an explicit `Unity.InputSystem` reference on the new runtime asmdef — same "implicit
+  access disappears once you're inside a real asmdef" trap, this time for a package assembly
+  rather than the default one.
+- **Date:** August 2026
+- **Key rule:** If a project has never had any asmdef files under its main `Scripts/` folder and
+  you need to add one (e.g. for a test assembly to reference runtime types), don't just add
+  `"Assembly-CSharp"` to the new asmdef's `references` — it silently doesn't work. Give the
+  runtime scripts their own real asmdef first, and expect any package/module the code uses
+  (Input System, 2D Sprite Editor APIs, etc.) that were previously implicitly available to need
+  an explicit reference once they're inside a real asmdef.
+
+### [Tooling] MCP tool round-trip latency in this session was ~5+ seconds per call — long enough to invalidate naive "set state, sleep N, check" Play Mode tests
+- **Symptom:** While playtesting `CameraFollow`'s velocity-based lookahead (AUD-006), repeated
+  attempts to "set player input, `Bash sleep 1.5`, then check position/offset" all showed the
+  player already stopped dead against a wall with zero velocity and zero lookahead offset — even
+  immediately after re-asserting input with no sleep at all.
+- **Root cause:** Measuring `Time.realtimeSinceStartup` across two back-to-back `execute_code`
+  calls with no sleep between them at all showed ~5.5 seconds of real elapsed time — this
+  session's actual per-tool-call round-trip overhead, independent of and larger than any
+  requested `sleep` duration. At the player's 8 u/s sprint speed, 5+ seconds covers 40+ world
+  units — enough to cross this project's entire test room and hit a wall between literally any
+  two tool calls, making every "brief sustained motion" check land on a stopped, zero-velocity
+  player by the time it actually executed.
+- **Fix:** Don't rely on `sleep` duration to bound a Play Mode test's timing. Install an
+  `EditorApplication.update` callback (a "treadmill") that keeps re-asserting the desired input
+  state and teleports the player back to a safe starting position whenever it drifts near a wall,
+  for a generous real-time window (e.g. 30s) tracked via its own `Time.realtimeSinceStartup`
+  marker — this guarantees a query landing at an unpredictable later real time still catches
+  genuine sustained motion, regardless of how long that particular round-trip actually took.
+  Also: reflection-invoking a `MonoBehaviour`'s `LateUpdate()`/`Update()` method directly *outside*
+  Unity's real per-frame loop context is a separate trap — `Time.deltaTime` in that context can
+  read as stale/zero, silently making `SmoothDamp`-style easing math a no-op even though the
+  method "ran" successfully.
+- **Date:** August 2026
+- **Key rule:** Before trusting any "sleep N seconds, then check" Play Mode test result in this
+  environment, consider measuring actual round-trip latency via two back-to-back
+  `Time.realtimeSinceStartup` reads first — it's frequently much larger than the requested sleep,
+  and for any test involving sustained velocity/movement, an `EditorApplication.update`-driven
+  treadmill is more reliable than tuning sleep durations against an unknown, variable latency.

@@ -1189,3 +1189,47 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Date:** 2026-08-04
 - **Revisit if:** Never confirmed with the Unity Editor open — flagged in `KNOWN_ISSUES.md` to
   open the scene once available and confirm no "missing script" warning on the player object.
+
+---
+
+## New Entries — August 2026 Repo Audit Fix Session (Editor-attached pass)
+
+### [World] Overworld "lanes" stay a deferred idea, not implemented alongside AUD-005
+- **Decided:** `WildEncounterCreature`'s new patrol/detection system (AUD-005) uses a plain
+  radius + facing-cone + line-of-sight check, not discrete overworld "lanes" carrying the battle
+  stage's 7-lane depth system into exploration. Confirmed this direction with the user before
+  writing any code.
+- **Why:** `Combat_Directive_v0_1_0.md` Part 3's "Lane Avoidance — Overworld Carry-Over" section
+  sits inside a Part that's otherwise entirely about the *battle stage's* literal lanes (dodge
+  AoE, protect a Phasix, positional skills) — it reads as a narrative/thematic bridge ("the
+  depth-reading skill you build in battle also helps you read overworld space"), not a technical
+  spec for a gridded lane overlay on the overworld. Nothing else in the GDD, World Design
+  Directive, or Technical Directive references overworld lanes, and the overworld controller
+  (`PlayerTopDownController`) is free 2D movement, not gridded — retrofitting discrete lanes onto
+  it would be a substantial, unscoped world-design change with no other support in the docs.
+- **Alternatives rejected:** Building a literal overworld lane grid (creatures patrol along a
+  lane, player avoidance is "pick a different lane") — rejected as a much bigger, riskier scope
+  than a single audit-fix session, and not clearly what the Directive actually intends.
+- **Date:** 2026-08-04
+- **Revisit if:** A future dedicated world-design session decides overworld lanes should be a
+  real spatial concept — at that point `Combat_Directive_v0_1_0.md`'s carry-over section stops
+  being aspirational and this decision should be revisited alongside it.
+
+### [Player] Sprint is a hold-while-held multiplier, not a cooldown-gated burst dash
+- **Decided:** `PlayerTopDownController`'s new movement verb (AUD-005) is Sprint — hold to move
+  at `_moveSpeed * _sprintMultiplier` (1.6x) — using the "Sprint" action already defined (but
+  unused) in `InputSystem_Actions.inputactions` (Left Shift / left-stick-press). No stamina
+  system, no cooldown, no fixed-duration burst.
+- **Why:** The existing input binding is literally named "Sprint" with a plain Button-type action
+  (not a Hold interaction), which already implies "faster while held," not "press to burst." Using
+  it as-is needed zero new input wiring. A stamina system isn't specified anywhere in the design
+  docs, and inventing one for this audit-fix pass would be scope creep beyond "give the player a
+  second overworld verb."
+- **Alternatives rejected:** Cooldown-gated burst dash (fixed distance/duration, then a recovery
+  window) — rejected as needing new input bindings and new tunable state (duration, cooldown) for
+  no documented design requirement; the existing "Sprint" action and its name already pointed at
+  the simpler model.
+- **Date:** 2026-08-04
+- **Revisit if:** A future combat/traversal design pass calls for a dash specifically (e.g. an
+  i-frame dodge, or a lane-avoidance-style burst) — that would be a different, additional verb,
+  not a replacement for Sprint.

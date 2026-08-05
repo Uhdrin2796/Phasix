@@ -40,7 +40,8 @@
 ## What's Already Built
 | System | Script | Location | Status |
 |---|---|---|---|
-| Player movement (side-scroll variant) | `PlayerController_SideScroll.cs` | `Assets/Scripts/Player/` | ✅ Done |
+| Player movement (top-down, Sprint + corner correction) | `PlayerTopDownController.cs` | `Assets/Scripts/Player/` | ✅ Done |
+| Camera lookahead proxy | `CameraFollow.cs` | `Assets/Scripts/Player/` | ✅ Done (AUD-006) |
 | World chunk management | `WorldChunkManager.cs` | `Assets/Scripts/World/` | ✅ Done |
 | Tilemap world | Ground/Walls/Decorations tilemaps | SampleScene → Grid | ✅ Done |
 | Cinemachine follow camera | CinemachineCamera + Confiner2D | SampleScene | ✅ Done |
