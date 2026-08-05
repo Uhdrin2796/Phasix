@@ -7,23 +7,38 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-Open items from the external repo audit (`AUDIT_202608.md`) that need a live Unity Editor/MCP
-session to fix safely — see `CHANGELOG.md` → "Repo audit triage" (2026-08-04) for what was
-already fixed blind this pass.
-
-### [AUD-006] — No camera lookahead or movement bias
-**Status:** Active — audit's suggested fix does not apply to this project, see note
-**Affects:** `CinemachineCamera` in `SampleScene.unity`
-**Description:** No lookahead/dead-zone bias toward movement direction. **Correction to the
-original audit:** its suggested fix (`m_LookaheadTime` on a Cinemachine Composer) is a
-Cinemachine 2.x API — this project uses Cinemachine 3.x (`CinemachineFollow`), which has no
-lookahead field at all. Needs a custom velocity-based follow-offset script instead, and camera
-feel is fundamentally a "watch it move" tuning task.
-**Workaround:** None.
+None open from the external repo audit (`AUDIT_202608.md`) — see `CHANGELOG.md` → "Repo audit
+triage" (2026-08-04) and the Closed Issues section below for the full trail.
 
 ---
 
 ## Closed Issues
+
+### [AUD-006] — No camera lookahead or movement bias — CLOSED (fixed)
+**Status:** Closed — fixed, confirmed via live playtest
+**Affects:** `CinemachineCamera`/`CinemachineFollow` in `SampleScene.unity`, new
+`Assets/Scripts/Player/CameraFollow.cs`, new `CameraLookaheadTarget` GameObject
+**Description:** The audit's suggested fix (`m_LookaheadTime` on a Cinemachine Composer) doesn't
+apply — this project's Cinemachine 3.x `CinemachineFollow` (Body component) has no lookahead
+field at all; that's a Cinemachine 2.x API. Standard 3.x workaround: don't point the camera's
+Follow at the player directly — point it at a proxy Transform that eases toward "player position
++ an offset in the player's current movement direction, scaled by speed." Built `CameraFollow.cs`
+(velocity-read + `Vector2.SmoothDamp`-eased offset) on a new `CameraLookaheadTarget` GameObject,
+and reassigned `CinemachineCamera.Follow`/`LookAt` from `Mr_chimken` to that proxy.
+**Verified live:** at rest, offset correctly eases to zero (camera centers exactly on the player).
+Sustained sprint-speed (8 u/s) movement correctly drove the offset to its configured max (1.5
+world units) in the direction of travel, and the actual Cinemachine-driven camera visibly leads
+ahead of the player on screen (confirmed via Game View screenshot) — Cinemachine's own
+`TrackerSettings` damping still applies on top, giving a smooth compound feel rather than the
+proxy snapping the camera around.
+**Testing note:** this session's MCP round-trip latency (~5s+ per tool call, confirmed via
+`Time.realtimeSinceStartup` deltas) made simple "set input, sleep N, check position" playtesting
+unreliable — the player would already be stopped against a wall by query time regardless of the
+requested sleep duration. Worked around it with an `EditorApplication.update` hook driving a
+"treadmill" (re-centers the player before it reaches a wall, continuously re-asserts velocity)
+so a query landing at an arbitrary, uncontrolled real time later is still guaranteed to catch
+genuine sustained motion.
+**Closed:** 2026-08-04, same session.
 
 ### [AUD-005] — Overworld has one verb and nothing to avoid — CLOSED (fixed)
 **Status:** Closed — fixed, confirmed via live playtest

@@ -314,6 +314,18 @@ Note: Scaling is smooth and continuous between lanes — not stepped.
 
 ---
 
+## Camera Lookahead (CameraFollow.cs)
+Added per `AUDIT_202608.md` AUD-006, playtested live 2026-08-04 — see `KNOWN_ISSUES.md` closed
+`[AUD-006]`.
+
+| Value | Amount | Notes |
+|---|---|---|
+| Max lookahead distance | 1.5 world units — **placeholder, playtested** | Confirmed the offset reaches exactly this value at/above `_velocityForMaxLookahead`. |
+| Velocity for max lookahead | 8 u/s — **matches player's Sprint top speed exactly** | 5 base move speed x 1.6 sprint multiplier. Update this if either value changes. |
+| Smooth time | 0.25s — **placeholder** | `Vector2.SmoothDamp` easing, on top of `CinemachineFollow`'s own `TrackerSettings` damping. |
+
+---
+
 ## Wild Creature Patrol/Detection (WildEncounterCreature.cs)
 Added per `AUDIT_202608.md` AUD-005, playtested live 2026-08-04 — see `KNOWN_ISSUES.md` closed
 `[AUD-005]` for the full design rationale and a collider bug found during playtest.

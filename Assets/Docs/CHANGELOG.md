@@ -18,6 +18,30 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Repo audit — AUD-006: camera lookahead, closing out the audit
+- **Context:** Last open item from `AUDIT_202608.md`. The audit's suggested fix
+  (`m_LookaheadTime` on a Cinemachine Composer) is a Cinemachine 2.x API this project's
+  Cinemachine 3.x `CinemachineFollow` doesn't have.
+- **Built:** `Assets/Scripts/Player/CameraFollow.cs` — reads a target Rigidbody2D's velocity,
+  eases a `Vector2.SmoothDamp`'d offset in the movement direction (scaled 0→1 by speed up to a
+  max at the player's Sprint top speed, 8 u/s). New `CameraLookaheadTarget` GameObject in
+  `SampleScene.unity` carries this script; `CinemachineCamera.Follow`/`LookAt` (previously the
+  player directly) now point at this proxy instead.
+- **Verified live:** offset eases to zero at rest; a sustained sprint-speed treadmill test (see
+  below) drove the offset to its configured max in the direction of travel, and a Game View
+  screenshot confirms the camera visibly leads ahead of the player on screen.
+- **Testing methodology note:** this session's MCP tool round-trip latency measured at ~5s+ per
+  call (via `Time.realtimeSinceStartup`), making naive "set input → sleep N → check" playtesting
+  unreliable for anything faster than that — the player would already be stopped against a wall
+  by query time regardless of requested sleep duration. Worked around it with an
+  `EditorApplication.update` hook running a "treadmill" (recenters the player before it reaches a
+  wall, continuously re-asserts velocity) so a query landing at an unpredictable later real time
+  still reliably catches genuine sustained motion. Worth reusing this pattern for any future
+  Play-mode velocity/timing playtest in this environment.
+- **This closes every finding from `AUDIT_202608.md`** — see `KNOWN_ISSUES.md`'s Closed Issues
+  section for the full AUD-001 through AUD-012 trail.
+- **Date:** 2026-08-04
+
 [2026-08-04] Repo audit — AUD-005: overworld Sprint + wild creature patrol/detection
 - **Design decision (confirmed with user before implementing):** simple vision-cone/detection-
   radius system, not formal overworld "lanes" — Combat_Directive Part 3's lane-carry-over section
