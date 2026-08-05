@@ -18,6 +18,36 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-04] Repo audit — live Editor verification pass (AUD-001/004/007/012)
+- **Context:** Continuation of the prior no-Editor audit triage session, now with `unity-mcp`
+  attached (`instance_count: 1`, Unity 6000.3.11f1). Worked through `KNOWN_ISSUES.md` →
+  "Pending Editor Verification" before starting Tier C.
+- **Found and fixed (not just verified):**
+  - First compile after checking out the branch failed: `Phasix.Tests.EditMode.asmdef` referenced
+    `"Assembly-CSharp"` by name, which doesn't work for Unity's implicit default assembly. Added
+    `Assets/Scripts/Phasix.Runtime.asmdef` (all runtime scripts, references
+    `AstarPathfindingProject` + `Unity.InputSystem`) and `Assets/Scripts/Editor/Phasix.Editor.asmdef`
+    (Editor-only, references `Unity.2D.Sprite.Editor`), then pointed the test asmdef at
+    `Phasix.Runtime`. See `KNOWN_ISSUES.md` → closed `[AUD-012 asmdef]`.
+  - AUD-007's corner correction was actually broken, not just uncalibrated: live playtest at a
+    real wall corner showed the player getting stuck instead of nudged through, because
+    `ComputeCornerCorrection` cast its rays from the transform pivot while the player's
+    `CapsuleCollider2D` sits ~0.67 world units above it. Fixed by casting from the collider's
+    bounds edge instead. Re-verified live against both a true dead-end (correctly no-ops) and an
+    isolated test obstacle (correctly nudges the player through). See `KNOWN_ISSUES.md` → closed
+    `[AUD-007]`.
+- **Verified correct, no change needed:** AUD-001 (screenshotted two overlapping test sprites in
+  `SampleScene` — lower-Y sprite draws in front, confirming `CustomAxis (0,1,0)` is live), AUD-004
+  (player GameObject resolves `PlayerTopDownController` cleanly, no missing-script warning),
+  AUD-012 (all 7 `BondSystemTests` pass under Test Runner, once the asmdef fix above let them
+  compile).
+- **Process note:** teleporting the player around the scene via `execute_code` during testing
+  crossed the `Test_WildSpawnPoint*` trigger zones and spawned real `WildEncounterCreature`
+  instances, which called `FreezeMovement()` on contact and silently stalled later test
+  measurements until diagnosed. Corner-correction tests after that point disabled the
+  `EncounterTrigger` GameObjects for the duration of the test and re-enabled them after.
+- **Date:** 2026-08-04
+
 [2026-08-04] Repo audit triage — fixed everything that doesn't need a live Unity Editor
 - **Context:** Received an external repo audit (`AUDIT_202608.md`, 12 findings AUD-001–AUD-012,
   reviewed against commit `c07b6cc`). No Unity Editor was attached this session

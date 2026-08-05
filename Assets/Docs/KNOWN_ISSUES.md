@@ -55,29 +55,53 @@ feel is fundamentally a "watch it move" tuning task.
 
 ---
 
-## Pending Editor Verification
-
-Fixed via direct file edit this session (no live Unity Editor attached) — the edits are believed
-correct but haven't been confirmed visually or via compile/Test Runner. Not bugs; remove each
-line once confirmed.
-
-- **AUD-001** (transparency sort mode/axis) — confirm two overlapping sprites at different Y
-  actually draw in correct depth order, and confirm which pipeline asset (`Renderer2D.asset` vs
-  `GraphicsSettings.asset`) is the one actually live for this project's URP renderer.
-- **AUD-004** (player controller rename) — open `SampleScene.unity` and confirm no "missing
-  script" warning on the player object (script GUID was preserved via `git mv`, so it should
-  resolve fine, but this hasn't been opened in the Editor to check).
-- **AUD-007** (corner correction) — confirm `PlayerTopDownController.ComputeCornerCorrection`'s
-  *mechanism* actually helps at a real doorway/corner, not just that the placeholder threshold
-  value needs calibration. Written and reasoned through, never played.
-- **AUD-012** (EditMode tests) — `Assets/Tests/EditMode/BondSystemTests.cs`'s 7 assertions were
-  hand-traced against `BondSystem.cs`'s source but never actually executed under Unity Test
-  Runner. Run them (Editor or `unity-mcp`'s `run_tests` tool) and fix anything that doesn't
-  actually pass.
-
----
-
 ## Closed Issues
+
+### [AUD-012 asmdef] — EditMode test assembly didn't compile — CLOSED (fixed)
+**Status:** Closed — fixed
+**Affects:** `Assets/Tests/EditMode/Phasix.Tests.EditMode.asmdef`, `Assets/Scripts/**`
+**Description:** First live compile of the `BondSystemTests.cs` test assembly (added blind, no
+Editor attached) failed with `CS0246: The type or namespace name 'PhasixRuntimeData' could not
+be found`. Root cause: the test asmdef referenced the string `"Assembly-CSharp"`, but Unity's
+implicit default assembly can't be referenced by name from a custom asmdef — it's only reachable
+by moving the referenced code into its own asmdef. Fixed by adding `Assets/Scripts/Phasix.Runtime.asmdef`
+(covering all runtime scripts, referencing `AstarPathfindingProject` and `Unity.InputSystem`) and
+`Assets/Scripts/Editor/Phasix.Editor.asmdef` (Editor-only, referencing `Unity.2D.Sprite.Editor`
+for `PhasixSpriteSetup.cs`'s sprite-editor APIs), then pointed the test asmdef at `Phasix.Runtime`
+instead of `Assembly-CSharp`. All 7 `BondSystemTests` pass under Test Runner after the fix.
+**Closed:** 2026-08-04, same session.
+
+### [AUD-007] — Corner-correction raycast origin was measured from the wrong point — CLOSED (fixed)
+**Status:** Closed — fixed, confirmed via live playtest
+**Affects:** `PlayerTopDownController.cs` → `ComputeCornerCorrection`
+**Description:** The audit's own note said this mechanism was written blind and never played;
+verifying it in-Editor found it was actually broken. `ComputeCornerCorrection` cast its proximity
+rays from `_rb.position` (the transform pivot), but the player's `CapsuleCollider2D` is offset
+`{0,14}` local (~0.67 world units) above that pivot — more than 3x the correction threshold. Live
+playtest against the real `SampleScene` wall corner showed the player getting stuck (0.02 units
+of movement over 1.5s of continuous diagonal input) instead of being nudged through, because once
+the collider physically stopped against a wall, the pivot ended up on the far side of the
+collision line and the ray never crossed back over it. A first fix attempt (casting from the
+collider's center) also failed the same live test, since the center-to-edge distance exceeds the
+threshold too. Fixed by casting from `CapsuleCollider2D.bounds`, offset by `bounds.extents` along
+whichever axis is being tested — i.e. the collider's actual leading edge. Re-verified live: at
+the real room corner (both axes genuinely blocked) it correctly returns no correction; against an
+isolated test obstacle with one axis blocked, it returns the expected single-axis nudge and the
+player visibly slides through instead of stalling.
+**Closed:** 2026-08-04, same session.
+
+### [AUD-001/004/012 verification] — Confirmed correct in-Editor, no changes needed — CLOSED
+**Status:** Closed — verified, no fix required
+**Affects:** `Renderer2D.asset`/`GraphicsSettings.asset` (AUD-001), `PlayerTopDownController.cs`
+rename (AUD-004), `BondSystemTests.cs` (AUD-012)
+**Description:** Three items fixed blind in the prior no-Editor session, confirmed correct now
+that Unity is attached. AUD-001: spawned two overlapping test sprites at different Y in
+`SampleScene`, screenshotted the Scene View — the lower-Y sprite correctly draws in front,
+confirming `CustomAxis (0,1,0)` sort mode is live in both pipeline assets. AUD-004: the player
+GameObject resolves `PlayerTopDownController` cleanly via `find_gameobjects(by_component)` and
+its full component list — no missing-script entry. AUD-012: all 7 `BondSystemTests` pass under
+Test Runner (see the asmdef fix above — needed for this to even compile first).
+**Closed:** 2026-08-04, same session.
 
 ### [AST-001] — "Missing AstarPath graph" + missing-script errors on Play — CLOSED (misdiagnosis)
 **Status:** Closed — misdiagnosis, not a real bug

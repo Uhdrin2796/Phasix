@@ -93,9 +93,12 @@ public class PlayerTopDownController : MonoBehaviour
     // ── Corner Correction ────────────────────────────────────────────────────
     // AUD-007 (repo audit, 2026-08): direct linearVelocity assignment gives correct wall-sliding
     // for free, but nothing nudges the player through when a doorway/corner edge is clipped by a
-    // few pixels. This adds that nudge. UNVERIFIED — written without a live Unity Editor; needs
-    // an in-Editor pass against real interior/doorway geometry before it's trusted. See
-    // KNOWN_ISSUES.md and NumericalCalibration.md → Overworld Movement.
+    // few pixels. This adds that nudge. Playtested 2026-08-04 against the real SampleScene wall
+    // geometry — the initial pivot-origin raycast version failed to engage once the player's
+    // offset collider had already come to rest against a wall (see ComputeCornerCorrection's
+    // doc comment); fixed by casting from the collider's world center instead. Threshold value
+    // itself is still a placeholder pending calibration — see NumericalCalibration.md →
+    // Overworld Movement.
 
     [Header("Corner Correction")]
     [Tooltip("Max distance (world units) checked ahead for a corner clip, and the max nudge " +
@@ -113,6 +116,7 @@ public class PlayerTopDownController : MonoBehaviour
 
     // Cached component references — set in Awake(), never in Update()
     private Rigidbody2D _rb;
+    private CapsuleCollider2D _collider;
 
     // Stores the manual Transform scale set before any auto-scale was applied.
     // HideInInspector + SerializeField so it persists across domain reloads in Edit mode
@@ -159,6 +163,7 @@ public class PlayerTopDownController : MonoBehaviour
     {
         // Cache Rigidbody2D — never call GetComponent in Update
         _rb = GetComponent<Rigidbody2D>();
+        _collider = GetComponent<CapsuleCollider2D>();
 
         // Top-down: no gravity, no rotation from physics collisions
         _rb.gravityScale   = 0f;
@@ -302,24 +307,45 @@ public class PlayerTopDownController : MonoBehaviour
 
     /// <summary>
     /// Detects a corner clip and returns a unit-length nudge direction to clear it, or
-    /// Vector2.zero if none applies. UNVERIFIED — see AUD-007 note at the top of this file.
+    /// Vector2.zero if none applies.
     ///
     /// Only fires on diagonal input (pure axis movement has nothing to correct into) where
     /// exactly ONE of the two axis directions is blocked within _cornerCorrectionThreshold:
     /// both clear means no wall is near; both blocked means it's a real dead-end, not a corner.
     /// The single free axis is the one nudged, toward the input direction — the same axis the
     /// player was already trying to move along.
+    ///
+    /// Raycast origin is per-axis: the CapsuleCollider2D's world bounds edge in the direction
+    /// being tested, not the raw transform pivot and not the collider's center either. Two bad
+    /// versions were tried and disproven by live playtest (2026-08-04) before landing here:
+    ///   1. _rb.position (the pivot) — this player's collider is offset well above the pivot
+    ///      ({0,14} local, ~0.67 world units), so once the capsule physically stopped against a
+    ///      wall the pivot ended up on the far side of the collision line, and a ray continuing
+    ///      in the same direction never crossed back over it. Blocked-detection silently
+    ///      returned false exactly when it was needed, and the player just got stuck.
+    ///   2. The collider's center — closer, but the center-to-edge distance (~0.46-0.77 world
+    ///      units, i.e. the capsule's own half-extents) is itself larger than
+    ///      _cornerCorrectionThreshold, so a ray that short still never reaches the actual
+    ///      collision surface from the center.
+    /// Casting from bounds.center offset by bounds.extents along each tested axis starts the
+    /// ray at the collider's actual leading edge, matching where collision really happens.
     /// </summary>
     private Vector2 ComputeCornerCorrection(Vector2 inputDir)
     {
         if (Mathf.Abs(inputDir.x) < 0.01f || Mathf.Abs(inputDir.y) < 0.01f) return Vector2.zero;
 
-        Vector2 origin = _rb.position;
+        Bounds bounds = _collider.bounds;
+        Vector2 center = bounds.center;
+        Vector2 extents = bounds.extents;
+
         Vector2 xAxis = new Vector2(Mathf.Sign(inputDir.x), 0f);
         Vector2 yAxis = new Vector2(0f, Mathf.Sign(inputDir.y));
 
-        bool xBlocked = Physics2D.Raycast(origin, xAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
-        bool yBlocked = Physics2D.Raycast(origin, yAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
+        Vector2 xOrigin = center + new Vector2(xAxis.x * extents.x, 0f);
+        Vector2 yOrigin = center + new Vector2(0f, yAxis.y * extents.y);
+
+        bool xBlocked = Physics2D.Raycast(xOrigin, xAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
+        bool yBlocked = Physics2D.Raycast(yOrigin, yAxis, _cornerCorrectionThreshold, _cornerCorrectionWallMask);
 
         if (xBlocked == yBlocked) return Vector2.zero; // neither near a wall, or a real dead-end
         return xBlocked ? yAxis : xAxis;
