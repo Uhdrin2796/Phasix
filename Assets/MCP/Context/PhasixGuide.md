@@ -1,5 +1,5 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.3.0 · July 2026
+**Version:** 1.4.0 · 2026-08-04
 
 > Unity MCP bridge is CoplayDev/unity-mcp (migrated from AnkleBreaker July 2026 — see
 > DECISIONS.md → [Tooling]). Load this file by reading it directly (Claude Code has
@@ -40,23 +40,38 @@
 ## What's Already Built
 | System | Script | Location | Status |
 |---|---|---|---|
-| Player movement (top-down, Sprint + corner correction) | `PlayerTopDownController.cs` | `Assets/Scripts/Player/` | ✅ Done |
+| Player movement (top-down, Sprint + corner correction) | `PlayerTopDownController.cs` | `Assets/Scripts/Player/` | ✅ Done (Sprint/corner correction: AUD-005/007) |
 | Camera lookahead proxy | `CameraFollow.cs` | `Assets/Scripts/Player/` | ✅ Done (AUD-006) |
 | World chunk management | `WorldChunkManager.cs` | `Assets/Scripts/World/` | ✅ Done |
+| Wild spawn point marker | `EncounterTrigger.cs` | `Assets/Scripts/World/` | ✅ Done (Wk 14-16) |
 | Tilemap world | Ground/Walls/Decorations tilemaps | SampleScene → Grid | ✅ Done |
-| Cinemachine follow camera | CinemachineCamera + Confiner2D | SampleScene | ✅ Done |
+| A* GridGraph (60×38 nodes, `Obstacles` layer, `scanOnStartup`) | `AstarPath` MonoBehaviour | SampleScene → `A* Pathfinding` | ✅ Baked |
+| Cinemachine follow camera (via `CameraFollow` lookahead proxy) | CinemachineCamera + Confiner2D | SampleScene | ✅ Done |
 | Pixel Perfect Camera | 320×180 PPU on Main Camera | SampleScene | ✅ Done |
 | Sprite setup editor tool | `PhasixSpriteSetup.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | Animator generator tool | `PhasixAnimatorGenerator.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | 2D IK foundation (arms) | `IKManager2D` + 2× `LimbSolver2D` | SampleScene → Mr_chimken/IK | ✅ Done |
-| EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
+| EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Done — includes `OnWildEncounterTriggered`/`Fled`/`EngageRequested` |
 | GameManager skeleton | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | GameStrings constants | `GameStrings.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | BattleResult stub | `BattleResult.cs` | `Assets/Scripts/Core/` | ✅ Stub (Phase 3 pending) |
 | PhasixData SO (species/form template) | `PhasixData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
 | PhasixRuntimeData (per-individual state) | `PhasixRuntimeData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
+| BondSystem (floor logic, session loss cap, 60/80% damping, 100% immunity) | `BondSystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done — 7 EditMode tests, `Assets/Tests/EditMode/` |
+| PersonalitySystem (capture-time roll + item-based swap) | `PersonalitySystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done |
+| PersonalityStatModifier (18-trait → StatType nudge table, GDD §7.3) | `PersonalityStatModifier.cs` | `Assets/Scripts/Creatures/` | ✅ Done |
+| PrimalTypeColor (8 base + 28 duo-merge placeholder colors) | `PrimalTypeColor.cs` | `Assets/Scripts/Creatures/` | ✅ Done |
+| PhasixPlaceholderVisual (placeholder-first Body/Underglow tint + effects) | `PhasixPlaceholderVisual.cs` | `Assets/Scripts/Creatures/` | ✅ Done |
+| CompanionAI (7 movement patterns: Direct/Wavy/DashThrough/StopAndGo/Orbit/HiddenShadow/Blink) | `CompanionAI.cs` | `Assets/Scripts/Creatures/` | ✅ Done |
+| PartySystem (up to 3 slots, single re-skinned active companion instance) | `PartySystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Wk 12-13) |
+| WildSpawnSystem (builds `PhasixRuntimeData` for a wild encounter) | `WildSpawnSystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Wk 14-16) |
+| WildEncounterCreature (contact detection, Flee/Engage; Patrol/Alert state machine) | `WildEncounterCreature.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Patrol/Alert: AUD-005) |
+| DebugPartyBootstrap (adds a test Phasix to the party on Play) | `DebugPartyBootstrap.cs` | `Assets/Scripts/Creatures/` | ⚠️ Temporary — delete once real capture exists |
+| DebugMovementPresetCycler (Tab-cycle companion movement presets in Play mode) | `DebugMovementPresetCycler.cs` | `Assets/Scripts/Creatures/` | ⚠️ Debug tool, keep for now |
 | Supporting types (StatType, BondZone, Temper, OriginType, TempoType, SignalType, Personality, SkillTreeType, PrimalType, StatBlock, EvolutionHistoryEntry) | `PhasixEnums.cs`, `PrimalType.cs`, `StatType.cs`, `BondZone.cs`, `StatBlock.cs`, `EvolutionHistoryEntry.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
 | SkillData stub | `SkillData.cs` | `Assets/Scripts/Creatures/` | ✅ Stub (full skill content pending roster) |
+| EncounterPromptController (first UI Toolkit screen — Flee/Engage prompt) | `EncounterPromptController.cs` | `Assets/Scripts/UI/` | ✅ Done (Wk 14-16) |
+| EditMode test assembly (7 `BondSystem` tests) | `BondSystemTests.cs` + `Phasix.Tests.EditMode.asmdef` | `Assets/Tests/EditMode/` | ✅ Done (AUD-012) — first test assembly in the project |
 
 **Active scene:** SampleScene
 **Player object:** `Mr_chimken` (placeholder character, bone rig, left-facing → `_rigFacesRight = false`)
@@ -80,25 +95,52 @@
 ```
 Assets/
   Scripts/
-    Core/        ← GameManager, EventBus, BattleResult (stub); SaveManager (pending)
-    Player/      ← PlayerController, PlayerController_SideScroll
-    Creatures/   ← PhasixData, PhasixRuntimeData, StatBlock, EvolutionHistoryEntry,
-                   PhasixEnums, PrimalType, StatType, BondZone, SkillData (stub) — done;
-                   BondSystem, EvolutionManager, CompanionAI (pending)
-    Evolution/   ← EvolutionEvaluator, Executor, Pathfinder, WebController (pending)
-    Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator (pending)
-    World/       ← WorldChunkManager, EncounterTrigger, ZoneManager (pending)
-    UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay (pending)
-    Audio/       ← AudioManager (pending)
-    Save/        ← SaveSystem, SaveData (pending)
-    Editor/      ← PhasixSpriteSetup, PhasixAnimatorGenerator
+    Phasix.Runtime.asmdef  ← covers everything below except Editor/ (added AUD-012 fix —
+                              references AstarPathfindingProject + Unity.InputSystem; a custom
+                              asmdef CANNOT reference "Assembly-CSharp" by name, see
+                              LESSONS_LEARNED.md → [Tooling])
+    Core/        ← GameManager, EventBus (+ wild-encounter events), GameStrings, BattleResult
+                   (stub); SaveManager (pending)
+    Player/      ← PlayerTopDownController (Sprint, corner correction), CameraFollow
+                   (lookahead proxy)
+    Creatures/   ← PhasixData, PhasixRuntimeData, BondSystem, PersonalitySystem,
+                   PersonalityStatModifier, PrimalTypeColor, PhasixPlaceholderVisual,
+                   CompanionAI, PartySystem, WildSpawnSystem, WildEncounterCreature,
+                   DebugPartyBootstrap (temp), DebugMovementPresetCycler (debug tool),
+                   StatBlock, EvolutionHistoryEntry, PhasixEnums, PrimalType, StatType,
+                   BondZone, SkillData (stub) — all done; EvolutionManager (pending)
+    Evolution/   ← EvolutionEvaluator, Executor, Pathfinder, WebController ← Phase 3, not yet created
+    Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator ← Phase 3, not yet created
+    World/       ← WorldChunkManager, EncounterTrigger; ZoneManager (pending)
+    UI/          ← EncounterPromptController (first UI Toolkit screen); HUD, PartyScreen,
+                   SkillTreeUI, BondDisplay (pending)
+    Audio/       ← AudioManager ← Phase 3, not yet created
+    Save/        ← SaveSystem, SaveData ← Phase 3, not yet created
+    Editor/      ← PhasixSpriteSetup, PhasixAnimatorGenerator; own
+                   Phasix.Editor.asmdef (Editor-only, references Unity.2D.Sprite.Editor —
+                   needed once split out of the implicit default assembly)
+  Tests/
+    EditMode/    ← Phasix.Tests.EditMode.asmdef (references Phasix.Runtime, not
+                   Assembly-CSharp) + BondSystemTests.cs (7 tests)
+  Prefabs/
+    Creatures/   ← Phasix_Placeholder.prefab (companion — Rigidbody2D/Seeker/AIPath/
+                   CompanionAI), Phasix_WildEncounter.prefab (stationary-spawn variant, now
+                   with a Kinematic Rigidbody2D for Patrol/Alert movement — AUD-005). Both:
+                   Body/Underglow sprites (foot-anchored CircleCollider2D — AUD-002) + Shadow
+                   child (AUD-003)
+  Sprites/       ← Shadow_Ellipse.png, AlertIcon.png — both procedurally generated
+                   placeholder-first sprites (soft gradient shadow, wild-creature Alert
+                   indicator), added AUD-003/005
   Data/
-    Species/     ← PhasixData SOs (placeholder, no roster yet)
+    Species/     ← PhasixData SOs — Test_FireType, Test_SteamType (placeholder, no real
+                   roster yet)
     Skills/      ← SkillData SOs (pending roster)
     Items/       ← ItemData SOs (pending §22)
     EvolutionBranches/ ← EvolutionBranchData SOs (pending)
     TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table, pending)
     Aura/        ← AuraTypeData SOs (pending)
+  UI/            ← EncounterPrompt.uxml/.uss, EncounterPromptPanelSettings.asset (320×180
+                   reference resolution, matches the Pixel Perfect Camera)
   MCP/
     Context/     ← This file (read directly by Claude Code, no Unity round-trip)
 ```
