@@ -184,15 +184,79 @@ Note: With Aptitude raising the stat ceiling, players who devolve at higher Apti
 ```
 damage = (attackerStat / defenderStat) × skillPower × primalTypeMultiplier × timedInputBonus
 ```
-- `timedInputBonus` on success: PENDING (e.g. 1.5×)
-- `timedGuardReduction` on success: PENDING (e.g. 0.5×)
-- Instinct → timing window size formula: PENDING
-- Bond flat bonus to timing window: PENDING
+Implemented `DamageCalculator.cs` / `TimedInputConfig.cs`, 2026-08-05 — **all values below are code
+defaults, not playtested/tuned balance numbers.**
+- `timedInputBonus` on success: 1.5× — **placeholder**, `TimedInputConfig.SuccessDamageMultiplier`
+- Defense (superseded 2026-08-05, see DECISIONS.md -> [Combat]): no longer a damage-reduction
+  multiplier — Dodge/Parry success is full avoidance (0× damage), fed into `BattleEngine` as a
+  `damageMultiplier: 0f` on the queued attack, same mechanism as any other multiplier.
+- Marker sweep duration: 1.2s, shared by offense and defense — **placeholder**,
+  `TimedInputConfig.MarkerSweepDuration`. (`ParryMarkerSweepDuration` — Parry sweeping faster than
+  Dodge — was removed 2026-08-05 when Dodge/Parry merged onto one shared bar/ring; Parry's
+  difficulty is expressed by its tighter tolerance instead, see below.)
+- Basic Attack `skillPower`: 10 — **placeholder** (`DamageCalculator.BasicAttackPower`); real skill
+  content with its own power values is Step 4 (Roadmap_v2 Mo 6 Wk 3+)
+
+### Action-command converging ring (superseded the horizontal timing bar, 2026-08-05 — see DECISIONS.md -> [Combat])
+Both offense (`RunTimedInput`, on the targeted enemy) and defense (`RunDefenseTimedInput`, on the
+defending creature) now use the same converging-ring visual: a fixed reference target ring plus a
+white marker ring that starts wider and shrinks past it over the sweep. Success is judged by the
+marker/target RADIUS RATIO at click time, not a bar position — **all values below are code
+defaults, not playtested/tuned balance numbers.**
+- Ring sizing (px, visual only, not gameplay-tuned): target ring `RingTargetRadius` 30, marker
+  starts at `RingMarkerStartRadius` 60 and shrinks to `RingMarkerMinRadius` 2 —
+  `BattleHUDController`
+- Ratio tolerance half-width at 0 Instinct/bond (success = ratio within `[1-half, 1+half]` of the
+  target): Offense `OffenseToleranceHalfWidth` 0.25 (reuses Dodge's — no Parry-equivalent
+  precision mode), Dodge `DodgeToleranceHalfWidth` 0.25, Parry `ParryToleranceHalfWidth` 0.10 (the
+  user's own example numbers: Dodge "1.25 to 0.75", Parry "0.9 to 1.1") — `TimedInputConfig`
+- Instinct/bond scaling: `ComputeToleranceHalfWidth` reuses `ComputeWindowPercent`'s existing
+  curve (`OffenseBaseWindowPercent 12% + Instinct×0.6% + bondBonus`, etc.) as a proportional scale
+  factor on the tolerance half-width — "higher Instinct = larger window" (CLAUDE.md) still holds,
+  just applied to a ratio instead of a bar-position window — **placeholder**
+- Flash feedback colors on click resolution — reworked 2026-08-05 from per-move colors to
+  per-OUTCOME-QUALITY colors shared by Dodge/Parry/offense alike (see DECISIONS.md -> [Combat]):
+  green = normal success, neon purple = "perfect" (innermost 20% of the tolerance,
+  `PerfectToleranceFraction`), red = any Miss — `BattleHUDController`, visual-only, not gameplay
+  values. "Perfect" is exposed (`LastTimedInputWasPerfect`/`LastDefenseWasPerfect`) but not wired
+  to any damage/avoidance bonus yet — visual feedback only for this pass.
 
 ### Aura costs (skill energy)
+- Basic Attack Aura cost: 2 — **placeholder**, `BattleConfig.AttackAuraCost` (2026-08-05, user-
+  directed — see DECISIONS.md -> [Combat]: "make them cost some aura"). Both placeholder attacks
+  cost the same for now; spending never blocks the attack, it floors at 0 (`BattleParticipant.SpendAura`)
+- Perfect Dodge/Parry Aura restore: 2 — **placeholder**, `BattleConfig.PerfectDefenseAuraRestore`
+  (user-directed: "Perfect dodges and parrys restore aura"), clamped at MaxAura
 - Base skill cost range: PENDING
 - Hold Tempo release scaling: PENDING
 - Flow chain condition threshold: PENDING
+
+### Step 5 scaffolding — Aura stat allocation, capture, evolution burst
+Implemented 2026-08-05 — `AuraTierCeiling.cs`, `AuraStatAllocationSystem.cs`,
+`ResonanceBonusEvaluator.cs`, `CaptureSystem.cs`, `EvolutionBurstSystem.cs`. **Almost nothing in
+this section is anchored to a locked GDD number — Progression_Directive_v0_1_0.md and GDD §9.3
+lock the mechanic shapes but explicitly leave every actual value pending.** See DECISIONS.md ->
+[Progression/Combat] for the two interpretation calls (Resonance Bonus's Temper-proxy, Capture's
+lack of any locked formula at all) behind these numbers.
+- Common Aura cost per stat point: 1 (flat) — **placeholder**, `AuraStatAllocationSystem.AuraCostPerStatPoint`;
+  Progression_Directive's own pending list expects this to vary by tier eventually, not stay flat
+- Stat ceiling per tier: `tier × 40 + aptitude × 4` — **placeholder**, `AuraTierCeiling`; the
+  Directive locks "ceiling scales with Aptitude," not the formula
+- Resonance Bonus alignment multiplier: 1.15× when the stat is in the Phasix's Temper's top 3
+  growth-priority stats, else 1.0× — **placeholder** magnitude AND placeholder alignment proxy
+  (Temper stands in for the Directive's undesigned emotional-type mapping — see DECISIONS.md)
+- Capture chance: `10% + (1 - targetHPFraction) × 60%`, clamped 0-95% — **placeholder**,
+  `CaptureSystem`; no formula of any kind exists in the GDD to anchor this to, unlike every other
+  placeholder in this document which at least has a locked mechanic shape
+- Evolution burst trigger threshold: 100% gauge fill — **placeholder**, `EvolutionBurstSystem.TriggerThreshold`
+- Evolution burst reliable-trigger bond threshold: 40% (Companion) — **locked**, GDD §14.2's own
+  "Evolution burst reliable" language at the Companion milestone
+- Evolution burst trigger chance below 40% bond: 40% (even at full gauge) — **placeholder**,
+  `EvolutionBurstSystem.UnreliableTriggerChancePercent`; the GDD only implies unreliability below
+  the Companion threshold, gives no number
+- Evolution burst duration: `2 + bondPercent/100 × 3` turns — **placeholder**,
+  `EvolutionBurstSystem.BaseDurationTurns`/`MaxBondDurationBonusTurns`; "higher bond = longer
+  duration" IS locked (GDD §9.3), the curve is not
 
 ### Combat length target
 - Standard battle: 6–10 turns (locked design intent)
@@ -203,7 +267,33 @@ damage = (attackerStat / defenderStat) × skillPower × primalTypeMultiplier × 
 
 ### Status magnitude ratings
 `if (target.resolve > status.magnitudeRating) → auto-cleanse after 1 turn`
-All 24 statuses: PENDING
+All 28 statuses: PENDING (corrected from "24" — see "Skill tree / status / combo framework" below;
+magnitude ratings themselves are a separate, still-fully-open number from the duration ranges
+already implemented)
+
+### Skill tree / status / combo framework
+Implemented 2026-08-05 — `Assets/Scripts/Combat/StatusEffectCatalog.cs`,
+`StatusDurationCalculator.cs`, `ChainResultCatalog.cs`, `MasteryBonusCatalog.cs`, `ComboEngine.cs`,
+`SkillTreeCatalog.cs`, `SkillSlotCapacity.cs`. **All values below are code defaults, not
+playtested/tuned balance numbers — the mechanics/taxonomy are locked (GDD §4, §14, §15, §17),
+these numbers are not.**
+- Per-status base duration: within GDD's own locked category ranges (DoT 4-6, Debuff 3-5, Control
+  1-3 [Stun pinned to 1], Signal 3-5) — exact per-status number **placeholder**,
+  `StatusEffectCatalog.Get(type).MinDurationTurns/MaxDurationTurns`
+- Universal/Positive category duration range: 3-5 — **placeholder**, no GDD-stated range for these
+  two categories at all (chose to match the Debuff range rather than invent a new one)
+- Stat-to-duration-modifier conversion (Resonance extends / Resolve shortens): 10 stat points = 1
+  turn — **placeholder**, `StatusDurationCalculator.StatPerModifierPoint`; the formula shape
+  itself (`base + ResonanceModifier - ResolveModifier, min 1`) IS locked (GDD §17.2)
+- Combo trigger chance: `10% + Instinct × 1%`, clamped to 80% max — **placeholder**,
+  `ComboEngine.BaseTriggerChancePercent`/`PerInstinctTriggerChancePercent`/`MaxTriggerChancePercent`;
+  the GDD locks only "Instinct increases trigger chance," no formula
+- Combo discovery bonus: 0% at/below 60% bond, ramping linearly to 30% at 100% bond —
+  **placeholder** ramp shape and 30% ceiling, `ComboEngine.MaxDiscoveryBonusPercent`; the "above
+  60% bond" threshold itself IS locked (GDD §4.2)
+- Chain result tie-break (when a target's active statuses satisfy two different chain recipes at
+  once): first match in `ChainResultCatalog`'s declaration order — **placeholder**, not a locked
+  resolution rule (the GDD doesn't address simultaneous-match ordering)
 
 ---
 
@@ -280,18 +370,24 @@ SUP = attacker counters and reduces defender's rhythm effectiveness
 Note: Scaling is smooth and continuous between lanes — not stepped.
 
 ### Action command timing windows
-| Command Type | Timing Window | Notes |
-|---|---|---|
-| Offensive action command | PENDING | Success = boosted outgoing damage |
-| Defensive action command | PENDING | Success = reduced incoming damage |
-| Success threshold | PENDING | Frame window for "success" input |
+Implemented 2026-08-05, defense reworked to Dodge/Parry same day (Expedition 33-inspired, see
+DECISIONS.md -> [Combat]) — see `TimedInputConfig.cs`. **All placeholder, not playtested balance.**
+
+| Command Type | Timing Window | Sweep Duration | Notes |
+|---|---|---|---|
+| Offensive action command | `ComputeWindowPercent(attacker.Instinct, attacker.bondPercent)`, base 12% | 1.2s | Success = boosted outgoing damage (1.5×). Uses the *attacker's* stats. |
+| Dodge (defensive) | `ComputeWindowPercent(DodgeBaseWindowPercent, defender.Instinct, defender.bondPercent)`, base 20% | 1.2s | Success = fully avoids the hit. Uses the *defender's* stats. Wide/easy — the "safe" option. |
+| Parry (defensive) | `ComputeWindowPercent(ParryBaseWindowPercent, defender.Instinct, defender.bondPercent)`, base 6% | 0.7s | Success = fully avoids the hit AND triggers an automatic counter-attack. Uses the *defender's* stats. Narrow/hard, faster sweep — the "risky" option. |
+| Success threshold | Click the bar's button while the marker (sweeping over the mode's duration) is inside the randomly-positioned success zone | — | Zone width = the computed window %, position randomized each attempt |
 
 ### Action command damage modifiers
 | Result | Damage Modifier | Notes |
 |---|---|---|
-| Offensive success | PENDING (e.g. 1.5×) | Applied after base damage formula |
-| Defensive success | PENDING (e.g. 0.5×) | Incoming damage reduction multiplier |
-| Miss / no input | 1.0× baseline | No bonus, no penalty |
+| Offensive success | 1.5× — **placeholder** | `TimedInputConfig.SuccessDamageMultiplier`, applied after base damage formula |
+| Dodge success | 0× (full avoidance) | No damage line in the battle log at all |
+| Parry success | 0× (full avoidance) + automatic counter-attack | Counter uses the same basic-attack damage formula, no timing check of its own |
+| Miss / no input (timeout) — offense | 1.0× baseline | No bonus, no penalty — matches Combat_Directive's "reward, don't punish" intent |
+| Miss / no input (timeout) — Dodge or Parry | 1.0× baseline (full hit) | Same "reward, don't punish": a failed Parry attempt costs nothing extra vs. a failed Dodge or a plain miss |
 
 ### Party size
 | Value | Amount | Notes |

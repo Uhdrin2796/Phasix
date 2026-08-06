@@ -311,7 +311,7 @@ Pulse · Static · Frequency · Silence · Overflow · Echo · Surge · Catalyst
 | Skill tree taxonomy (18 types) | GDD §14 | Taxonomy locked — content pending |
 | Skill tree attribute scaling | GDD §15 | Locked |
 | Battle system | GDD §16 | Partially locked |
-| Status effects (24, 7 chains) | GDD §17 | Locked v0.7.8 |
+| Status effects (28, 7 chains, 8 mastery bonuses) | GDD §17 | Locked v0.7.8 |
 | GDD §21 XP/leveling | **SUPERSEDED** | Do not implement |
 
 ---

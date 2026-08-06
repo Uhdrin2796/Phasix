@@ -65,6 +65,14 @@ public static class PrimalTypeColor
         { PrimalType.Spark,     (PrimalType.Life, PrimalType.Lightning) },
     };
 
+    /// <summary>
+    /// The two base-type parents of a duo-merge PrimalType (e.g. Steam -> Fire, Water). Throws for
+    /// a base type, which has no parents — check the type first if it might be either. Exposes the
+    /// same parent-pair data GetColor() already uses internally, so callers needing the parents for
+    /// their own purposes (e.g. PrimalTypeChart.cs resolving duo-type matchups) don't duplicate it.
+    /// </summary>
+    public static (PrimalType a, PrimalType b) GetDuoParents(PrimalType type) => DuoParents[type];
+
     /// <summary>Base types return their locked hex color; duo types return a 50/50 blend of their two parents.</summary>
     public static Color GetColor(PrimalType type)
     {

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/BattleHUD.uss" />
+    <ui:VisualElement name="BattleHUDRoot" class="battle-root">
+        <ui:VisualElement name="StatusHeader" class="status-header">
+            <ui:VisualElement name="PlayerStatusList" class="status-list">
+                <ui:VisualElement name="PlayerSlot0" class="status-row">
+                    <ui:Label name="PlayerSlot0_Name" text="Ally 1" class="row-name" />
+                    <ui:VisualElement name="PlayerSlot0_HPBack" class="hp-bar-back">
+                        <ui:VisualElement name="PlayerSlot0_HPFill" class="hp-bar-fill" />
+                        <ui:Label name="PlayerSlot0_HPText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot0_AuraBack" class="aura-bar-back">
+                        <ui:VisualElement name="PlayerSlot0_AuraFill" class="aura-bar-fill" />
+                        <ui:Label name="PlayerSlot0_AuraText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot0_BurstBack" class="burst-bar-back">
+                        <ui:VisualElement name="PlayerSlot0_BurstFill" class="burst-bar-fill" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot0_StatusBar" class="status-bar">
+                        <ui:VisualElement name="PlayerSlot0_StatusIcon_Regen" class="status-icon status-icon-purple">
+                            <ui:Label text="R" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot0_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="PlayerSlot0_StatusIcon_Burst" class="status-icon status-icon-orange">
+                            <ui:Label text="B" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot0_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="PlayerSlot1" class="status-row">
+                    <ui:Label name="PlayerSlot1_Name" text="Ally 2" class="row-name" />
+                    <ui:VisualElement name="PlayerSlot1_HPBack" class="hp-bar-back">
+                        <ui:VisualElement name="PlayerSlot1_HPFill" class="hp-bar-fill" />
+                        <ui:Label name="PlayerSlot1_HPText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot1_AuraBack" class="aura-bar-back">
+                        <ui:VisualElement name="PlayerSlot1_AuraFill" class="aura-bar-fill" />
+                        <ui:Label name="PlayerSlot1_AuraText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot1_BurstBack" class="burst-bar-back">
+                        <ui:VisualElement name="PlayerSlot1_BurstFill" class="burst-bar-fill" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot1_StatusBar" class="status-bar">
+                        <ui:VisualElement name="PlayerSlot1_StatusIcon_Regen" class="status-icon status-icon-purple">
+                            <ui:Label text="R" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot1_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="PlayerSlot1_StatusIcon_Burst" class="status-icon status-icon-orange">
+                            <ui:Label text="B" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot1_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="PlayerSlot2" class="status-row">
+                    <ui:Label name="PlayerSlot2_Name" text="Ally 3" class="row-name" />
+                    <ui:VisualElement name="PlayerSlot2_HPBack" class="hp-bar-back">
+                        <ui:VisualElement name="PlayerSlot2_HPFill" class="hp-bar-fill" />
+                        <ui:Label name="PlayerSlot2_HPText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot2_AuraBack" class="aura-bar-back">
+                        <ui:VisualElement name="PlayerSlot2_AuraFill" class="aura-bar-fill" />
+                        <ui:Label name="PlayerSlot2_AuraText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot2_BurstBack" class="burst-bar-back">
+                        <ui:VisualElement name="PlayerSlot2_BurstFill" class="burst-bar-fill" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerSlot2_StatusBar" class="status-bar">
+                        <ui:VisualElement name="PlayerSlot2_StatusIcon_Regen" class="status-icon status-icon-purple">
+                            <ui:Label text="R" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot2_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="PlayerSlot2_StatusIcon_Burst" class="status-icon status-icon-orange">
+                            <ui:Label text="B" class="status-icon-label" />
+                            <ui:Label name="PlayerSlot2_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="EnemyStatusList" class="status-list status-list-enemy">
+                <ui:VisualElement name="EnemySlot0" class="status-row status-row-enemy">
+                    <ui:Label name="EnemySlot0_Name" text="Enemy" class="row-name" />
+                    <ui:VisualElement name="EnemySlot0_HPBack" class="hp-bar-back">
+                        <ui:VisualElement name="EnemySlot0_HPFill" class="hp-bar-fill" />
+                        <ui:Label name="EnemySlot0_HPText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="EnemySlot0_AuraBack" class="aura-bar-back">
+                        <ui:VisualElement name="EnemySlot0_AuraFill" class="aura-bar-fill" />
+                        <ui:Label name="EnemySlot0_AuraText" text="" class="bar-value-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="EnemySlot0_BurstBack" class="burst-bar-back" />
+                    <ui:VisualElement name="EnemySlot0_StatusBar" class="status-bar" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="Stage" class="stage">
+            <ui:VisualElement name="PlayerStageArea" class="stage-side stage-side-player">
+                <ui:VisualElement name="PlayerStageSlot0" class="stage-creature">
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot0" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot1" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot2" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot3" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot4" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot5" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot6" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot7" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot8" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot9" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot10" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_SkillSlot11" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot0_MoveOption0" class="move-option-placeholder">
+                        <ui:Label text="A" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot0_MoveOption1" class="move-option-placeholder move-option-blue">
+                        <ui:Label text="C" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot0_MoveOption2" class="move-option-placeholder move-option-pink">
+                        <ui:Label text="H" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot0_MoveOption3" class="move-option-placeholder move-option-purple">
+                        <ui:Label text="R" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot0_MoveOption4" class="move-option-placeholder move-option-gold">
+                        <ui:Label text="K" class="move-option-label" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="PlayerStageSlot1" class="stage-creature">
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot0" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot1" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot2" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot3" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot4" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot5" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot6" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot7" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot8" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot9" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot10" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_SkillSlot11" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot1_MoveOption0" class="move-option-placeholder">
+                        <ui:Label text="A" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot1_MoveOption1" class="move-option-placeholder move-option-blue">
+                        <ui:Label text="C" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot1_MoveOption2" class="move-option-placeholder move-option-pink">
+                        <ui:Label text="H" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot1_MoveOption3" class="move-option-placeholder move-option-purple">
+                        <ui:Label text="R" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot1_MoveOption4" class="move-option-placeholder move-option-gold">
+                        <ui:Label text="K" class="move-option-label" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="PlayerStageSlot2" class="stage-creature">
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot0" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot1" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot2" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot3" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot4" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot5" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot6" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot7" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot8" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot9" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot10" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_SkillSlot11" class="skill-slot-placeholder" />
+                    <ui:VisualElement name="PlayerStageSlot2_MoveOption0" class="move-option-placeholder">
+                        <ui:Label text="A" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot2_MoveOption1" class="move-option-placeholder move-option-blue">
+                        <ui:Label text="C" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot2_MoveOption2" class="move-option-placeholder move-option-pink">
+                        <ui:Label text="H" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot2_MoveOption3" class="move-option-placeholder move-option-purple">
+                        <ui:Label text="R" class="move-option-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PlayerStageSlot2_MoveOption4" class="move-option-placeholder move-option-gold">
+                        <ui:Label text="K" class="move-option-label" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="EnemyStageArea" class="stage-side stage-side-enemy">
+                <ui:VisualElement name="EnemyStageSlot0" class="stage-creature" />
+            </ui:VisualElement>
+            <ui:VisualElement name="StageBottomRow" class="stage-bottom-row">
+                <ui:VisualElement name="ActionPanel" class="action-panel">
+                    <ui:VisualElement name="ActionAnnouncement" class="action-announcement">
+                        <ui:Label name="ActionAnnouncementLabel" text="" class="turn-label action-announcement-label" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ContinuePrompt" class="continue-prompt">
+                        <ui:Label name="ContinuePromptLabel" text="" class="turn-label" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="BattleLogPanel" class="battle-log-panel">
+                    <ui:Label text="Battle Log" class="battle-log-title" />
+                    <ui:ScrollView name="BattleLogScrollView" class="battle-log-scroll">
+                        <ui:VisualElement name="BattleLogContent" class="battle-log-content" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -23,6 +23,11 @@ public class DebugPartyBootstrap : MonoBehaviour
 
         var runtime = new PhasixRuntimeData("debug-test-companion");
         runtime.speciesData = _testSpeciesData;
+        // Without this, baseStats defaults to all-zero (StatBlock is a struct) and
+        // BattleParticipant.MaxHP clamps to 1 — the companion would die in one hit in any battle
+        // playtest. Mirrors WildSpawnSystem.CreateWildInstance's identical line.
+        runtime.baseStats = new StatBlock(_testSpeciesData.Vitality, _testSpeciesData.Force, _testSpeciesData.Resonance,
+            _testSpeciesData.Guard, _testSpeciesData.Ward, _testSpeciesData.Resolve, _testSpeciesData.Instinct, _testSpeciesData.Aura);
 
         int slot = PartySystem.Instance.AddToParty(runtime);
         Debug.Log($"[DebugPartyBootstrap] Added test Phasix ({_testSpeciesData.SpeciesName}) to party slot {slot}.");

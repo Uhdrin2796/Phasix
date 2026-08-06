@@ -12,6 +12,10 @@
 /[Mm]emory[Cc]aptures/
 /[Rr]ecordings/
 
+# Throwaway MCP/manage_camera verification screenshots (Claude Code live-testing artifacts,
+# not game content) — dumps into Assets/Screenshots by default across sessions.
+/[Aa]ssets/[Ss]creenshots/
+
 # Asset meta data should only be ignored when the corresponding asset is also ignored
 !/[Aa]ssets/**/*.meta
 

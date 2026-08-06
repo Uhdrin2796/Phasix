@@ -657,3 +657,36 @@ Issues that required significant investigation to resolve. Read before debugging
   `Time.realtimeSinceStartup` reads first — it's frequently much larger than the requested sleep,
   and for any test involving sustained velocity/movement, an `EditorApplication.update`-driven
   treadmill is more reliable than tuning sleep durations against an unknown, variable latency.
+
+### [Tooling] A domain reload fired mid-Play-Mode and silently reset singletons (PartySystem.Instance, static handoff state), throwing a NullReferenceException in newly-loaded-scene code
+- **Symptom:** Playtesting `BattleManager`'s additive scene load (Roadmap_v2 Mo 5 Wk 1-2): first
+  attempt, `BattleManager.Start()` never appeared to run at all — `_state` stayed null for
+  thousands of frames despite `Time.frameCount` visibly advancing normally between checks. Directly
+  reflection-invoking `Start()` to force it surfaced the real symptom: a `NullReferenceException`
+  at `BattleHUDController.Instance.Show()` — `Instance` was null even though the scene file itself
+  was correctly wired (right script GUIDs, right PanelSettings/sourceAsset references, verified by
+  reading the raw `.unity` YAML). A second, independent symptom on retry: `PartySystem.Instance`
+  read null too, even though `_PartySystem` was confirmed still present and active in the
+  hierarchy, and `DebugPartyBootstrap` had logged successfully adding a companion earlier in the
+  same Play session.
+- **Root cause:** `mcpforunity://editor/state` showed `play_mode.is_changing: true` stuck for
+  several minutes (`activity.phase: "playmode_transition"`), with a `last_domain_reload_after`
+  timestamp landing *during* that stuck window — i.e. a script domain reload fired mid-Play-Mode,
+  which resets all static state (singletons' `Instance` fields, `BattleTransition.PendingEnemy`,
+  etc.) and can leave newly-loaded-scene objects' `Awake()`/`Start()` dispatch in a bad state
+  relative to code that already captured a reference before the reload. Nothing in this session
+  changed a script mid-Play; the far more likely trigger is a filesystem change from *another*
+  concurrent Claude Code session with an open working directory on this same repo (see
+  `CLAUDE.md`'s multi-session guidance) — Unity's asset watcher reacting to an external file touch
+  is exactly what forces an unplanned recompile/domain reload.
+- **Fix:** Don't try to debug through a stuck `playmode_transition` — check
+  `mcpforunity://editor/state` for `play_mode.is_changing` and a `last_domain_reload_after`
+  timestamp inside that window first, and if present, just `manage_editor stop` then `play` again
+  rather than chasing what looks like a code bug. The second, clean run completed with no reload
+  and no errors — the underlying `BattleManager`/`BattleHUDController` code was correct the whole
+  time; only the automation session's timing was corrupted.
+- **Date:** August 2026
+- **Key rule:** If a MonoBehaviour lifecycle method (`Awake`/`Start`) that should have already run
+  reads as never-having-happened despite many real frames elapsing, check `editor_state` for a
+  stuck `playmode_transition` / mid-session domain reload before assuming the script itself is
+  broken — and if another session shares this working directory, treat that as the first suspect.

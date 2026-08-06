@@ -96,10 +96,25 @@ On the overworld, players can avoid visible enemy Phasix by choosing a lane far 
 ### Timed Input System
 Combat uses **action commands** — timed button presses during attacks and incoming hits:
 
-- **Offensive action command:** Successfully timed press boosts outgoing attack damage
-- **Defensive action command:** Successfully timed press reduces incoming damage
+- **Offensive action command:** Successfully timed press boosts outgoing attack damage. This is
+  still the Mario RPG / Paper Mario model. Keeps combat active and attentive rather than passive
+  menu selection.
+- **Defensive action command — SUPERSEDED 2026-08-05** (user-directed, see DECISIONS.md -> [Combat]):
+  the original "successfully timed press reduces incoming damage" model is replaced by a
+  **full-avoidance Dodge/Parry system**, inspired by Clair Obscur: Expedition 33. The defender
+  picks one of two options before the timing check runs:
+  - **Dodge** — wide/easy timing window, success fully avoids the hit, no follow-up.
+  - **Parry** — narrow/hard timing window, success fully avoids the hit AND triggers an automatic
+    counter-attack against the attacker.
+  Both options fail the same way as a total miss on offense: the hit lands at full damage, no
+  extra penalty for attempting the harder Parry and missing ("reward, don't punish").
 
-This is the Mario RPG / Paper Mario model. Keeps combat active and attentive rather than passive menu selection.
+Some attacks/skills may eventually require **multiple action-command beats** in a single
+attack — e.g. a multi-hit offensive skill with several timed presses, or a defensive sequence with
+more than one Dodge/Parry check. Not built yet (skill tree framework, Step 4, is still scaffold
+content only), but `BattleHUDController.RunTimedInput` is deliberately a single-window primitive
+so a future multi-beat attack/skill can just call it multiple times in sequence rather than needing
+a rewrite.
 
 Exact timing windows, success thresholds, and damage modifiers are **pending numerical calibration** (NumericalCalibration.md).
 

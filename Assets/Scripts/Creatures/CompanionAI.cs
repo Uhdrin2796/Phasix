@@ -314,6 +314,26 @@ public class CompanionAI : MonoBehaviour
     }
 #endif
 
+    /// <summary>
+    /// Pauses (or resumes) this companion entirely — stops Update/FixedUpdate AND disables
+    /// AIPath itself, not just this script. Disabling only CompanionAI isn't enough: AIPath is
+    /// its own MonoBehaviour with its own internal timer (repathRate) that keeps issuing fresh
+    /// Seeker path searches on a clock, independent of whether ComputeDestination's result
+    /// actually changed — so it goes on recalculating a path toward an already-reached, frozen
+    /// player for as long as AIPath itself stays enabled. Called by BattleManager
+    /// (2026-08-06, user-noticed live in the console during a battle — the companion has
+    /// nothing to path toward while the player is frozen and the overworld camera is hidden, so
+    /// letting it keep searching is pure waste) around the same Start()/EndBattle() points that
+    /// already restore the overworld camera. Zeroes the Rigidbody2D's velocity on pause so the
+    /// companion doesn't drift on its last-applied MovePosition call while frozen.
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        enabled = !paused;
+        if (_aiPath != null) _aiPath.enabled = !paused;
+        if (paused && _rigidbody2D != null) _rigidbody2D.linearVelocity = Vector2.zero;
+    }
+
     /// <summary>Assigns the transform this companion follows. Called by PartySystem on activation.</summary>
     public void SetTarget(Transform target)
     {

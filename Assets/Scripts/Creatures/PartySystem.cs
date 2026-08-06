@@ -38,6 +38,9 @@ public class PartySystem : MonoBehaviour
     public int ActiveSlotIndex => _activeSlotIndex;
     public PhasixRuntimeData ActiveCompanion => _activeSlotIndex >= 0 ? _slots[_activeSlotIndex] : null;
 
+    /// <summary>The spawned companion's CompanionAI, if a companion is currently active. Null otherwise (no slot activated yet). Used by BattleManager to pause/resume A* pathfinding during battle — see CompanionAI.SetPaused.</summary>
+    public CompanionAI ActiveCompanionAI => _companionAI;
+
     private void Awake()
     {
         Instance = this;

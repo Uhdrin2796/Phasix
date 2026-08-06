@@ -210,8 +210,11 @@ public class WildEncounterCreature : MonoBehaviour
         // Guards against two encounters resolving in the same physics step and clobbering
         // each other's Show() callbacks — only one spawn point exists today so this can't
         // happen organically yet, but the guard is cheap and the failure mode (a soft-locked
-        // second creature) isn't.
-        if (EncounterPromptController.Instance.IsVisible) return;
+        // second creature) isn't. Also guards against a trigger firing before
+        // EncounterPromptController.Awake() has run (observed live — Instance was null here at
+        // least once; root cause not fully isolated, but a silently-skipped encounter is a far
+        // better failure mode than an uncaught NullReferenceException on a physics callback).
+        if (EncounterPromptController.Instance == null || EncounterPromptController.Instance.IsVisible) return;
 
         _contacted = true;
 
@@ -228,12 +231,15 @@ public class WildEncounterCreature : MonoBehaviour
 
     private void HandleEngage(PlayerTopDownController player)
     {
-        // TODO: no BattleManager exists yet (Phase 3) — real Engage will trigger the
-        // Combat_Directive cinematic transition into an additively-loaded BattleScene_Main
-        // instead of this. For now, resolves identically to Flee.
-        Debug.Log($"[WildEncounterCreature] Engage requested for {_runtimeData.speciesData.SpeciesName} — no BattleManager yet, scaffold resolves as Flee.");
         EventBus.Raise_WildEncounterEngageRequested(_runtimeData);
-        Resolve(player);
+        EncounterPromptController.Instance.Hide();
+
+        // Player stays frozen until Resolve() runs on battle completion — BattleTransition
+        // additively loads BattleScene_Main on top of the overworld (Combat_Directive Part 1)
+        // and hands control back here via the callback once BattleManager reports a result.
+        // Win/loss doesn't change what happens to this wild creature yet — capture is Step 5
+        // (Roadmap_v2 Mo 8 Wk 3) — so both outcomes just end the encounter for now.
+        BattleTransition.StartWildBattle(_runtimeData, _ => Resolve(player));
     }
 
     private void Resolve(PlayerTopDownController player)

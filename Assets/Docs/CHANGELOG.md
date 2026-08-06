@@ -18,6 +18,742 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-06] Phase 3 — Evolution Burst gauge made visible + player-activated
+- **Context:** User asked how to access Evolution Burst and found there was no visible gauge —
+  it filled and triggered entirely invisibly. Asked for a visible purple fill bar under the Aura
+  bar, changed from auto-trigger to a player click on the bar itself once full (yellow border =
+  ready), confirming separately that activation should only work at full gauge. Full record:
+  DECISIONS.md -> [Combat].
+- **Built:** New `.burst-bar-back`/`.burst-bar-fill` purple gauge bar under each player's Aura bar
+  (status-icon row shifted down to make room); `.burst-bar-ready` yellow-border modifier once
+  full. New `BattleHUDController.BurstBarClicked` event + `SetBurstFillBar`. New
+  `EvolutionBurstSystem.ActivateReady` (public `TriggerThreshold`) — unlike the old `TryTrigger`,
+  has NO bond-based reliability chance, since a click on a UI-marked-ready bar must always work.
+  `BattleManager.AddBurstFillAndCheckTrigger` renamed to `AddBurstFill` (fill + UI update only,
+  no longer auto-triggers); new `HandleBurstBarClicked` calls `ActivateReady`, safely a no-op on
+  an early click, a dead party member, or an already-active gauge.
+- **Verified:** Live Play Mode — filled to 85, a live Charge cast crossed the threshold, screenshot
+  confirmed full purple bar with yellow border; clicking it produced the "ignites!" log line, the
+  status icon, and a bar reset. A 30%-fill click confirmed as a complete no-op. 133/133 EditMode
+  tests (4 new, covering ActivateReady's full/not-full/already-active/bond-independence).
+
+[2026-08-06] Phase 3 — CaptureSystem + EvolutionBurstSystem wired into the live battle loop
+- **Context:** Asked whether anything was left in the Phase 3 plan. Found that the plan's final
+  Phase 3 Gate playtest couldn't actually run — 5 Step 4/5 systems (Capture, Combo, Status
+  Effects, Evolution Burst, Aura Stat Allocation) existed as tested classes but none were reachable
+  from live play. User chose to wire only Capture + Evolution Burst, leaving the other 3 alone per
+  this project's own DECISIONS.md notes (Combo/Status/Mastery/Chain explicitly deferred to a real
+  skill-selection UI; Aura Stat Allocation is a post-battle progression system, not a mid-battle
+  one). Full record: DECISIONS.md -> [Combat].
+- **Built:** New 5th move option "K" (Capture, gold, 3 o'clock) — targets the enemy, attempts
+  `CaptureSystem.AttemptCapture`; success adds the creature to the party
+  (`PartySystem.AddToParty`) and ends the battle immediately (`EndBattle(Won)` + new
+  `_battleEndedEarly` flag so `RunBattleLoop` doesn't also run `EnemyTurn` on an unloading scene);
+  failure logs it and consumes the turn like Charge/Heal/Regen. New
+  `BattleParticipant.BurstGauge` + `BattleManager.AddBurstFillAndCheckTrigger`/`TickPlayerBurst`
+  wire `EvolutionBurstSystem` at all 3 GDD-locked fill sources (skill use, timed-input success,
+  taking an undefended hit) — status-only (new orange "B" status icon, Regen's exact countdown
+  pattern), deliberately no stat/damage effect since "ApplyBurstEffects" is genuinely undesigned
+  in the GDD. New `BattleConfig.BurstFillPerSkillUse/PerTimedInputSuccess/PerHitTaken` constants.
+- **Verified:** Live Play Mode — Capture failure path confirmed (10% floor chance at full HP);
+  isolated `AttemptCapture` retry loop confirmed the success path correctly grows the party.
+  Evolution Burst: filled to 100, confirmed a real 60%-chance trigger miss at 0% bond then a
+  success (2-turn duration correct), status icon + countdown rendered correctly, `TickPlayerBurst`
+  counted down and expired correctly with a log line. A live Charge cast confirmed the actual
+  `BattleManager` call sites fire (fill grew by skill-use + the same round's auto-played hit-taken
+  fill, both firing correctly together). 129/129 EditMode tests unaffected.
+
+[2026-08-06] Phase 3 — Continue button removed (fully auto-paced turns); "R" log text -> "Aura Regen"
+- **Context:** After playtesting several turns, user judged the Continue-button click between
+  PlayerTurn and EnemyTurn unnecessary — a delay is enough to read that turns switched. Also
+  asked for the Regen cast's battle log line to spell out "Aura Regen" instead of the bare "R".
+  Full record: DECISIONS.md -> [Combat] (2 entries).
+- **Built:** Deleted `BattleHUDController.WaitForContinue` and its backing
+  `ContinueButton`/`_continueButton`/`_continuePressed` — the turn-transition call site in
+  `BattleManager.PlayerTurn` now uses `ShowTimedMessage("Enemy's turn...", ...)`, same as every
+  other beat. Deleted the now-dead `.prompt-button` CSS class and the `ContinueButton` UXML
+  element. `AppendBattleLog`'s Regen line changed to `"{name} uses Aura Regen!"` (the brief
+  on-stage announcement keeps the short "R" form on purpose).
+- **Verified:** Live Play Mode — confirmed `ContinueButton` is genuinely gone from the UI tree
+  (not just hidden); cast Regen and let the battle run with zero further clicks — the turn
+  transitioned into EnemyTurn and the enemy's attack resolved entirely on its own. Battle log
+  confirmed reading "uses Aura Regen!". 129/129 EditMode tests unaffected.
+
+[2026-08-06] Phase 3 — Status-bar polish: legible countdown + fixed reserved height
+- **Context:** User feedback on the just-added status icon: the countdown subscript overlapped
+  the icon and was hard to read, and the status-row box visibly resized whenever a status
+  activated/expired. Full record: DECISIONS.md -> [Combat].
+- **Built:** Countdown subscript offset increased (`bottom:-5px` -> `-13px`) for real visual
+  separation from the icon. `.status-bar` given a fixed `height: 26px` so the row never
+  collapses/expands based on whether its icon is visible. Added an empty `EnemySlot0_StatusBar`
+  with the same class so player and enemy status-row boxes reserve identical height.
+- **Verified:** Live Play Mode — measured PlayerSlot0's row height before/after casting Regen
+  (161px both times, unchanged); EnemySlot0 matched at 161px. Screenshot confirmed clear
+  separation between the "R" icon and its "3" counter. 129/129 EditMode tests unaffected.
+
+[2026-08-06] Phase 3 — "H" gets a real effect, new "R" (Regen) orb, status-icon countdown system
+- **Context:** User specced "H"'s long-pending effect (6 Aura -> 4 HP instant heal) and asked for
+  a 4th move, "R" (Regen, purple, 2 o'clock): 8 Aura for a 2 HP/turn heal-over-time lasting 4
+  turns, plus a small status-bar icon under the HP/Aura box that shows a countdown subscript
+  (confirmed as counting DOWN — "4 then 3 then 2 etc" — not up) outside its own frame at
+  bottom-right, with bottom-left reserved for future start-of-turn effects. Full record:
+  DECISIONS.md -> [Combat].
+- **Built:** `BattleParticipant.Heal`/`ApplyRegen`/`TickRegen` (new). `BattleConfig`:
+  `HealAuraCost`/`HealAmount`/`RegenAuraCost`/`RegenHealPerTurn`/`RegenDurationTurns`. New
+  `BattleManager.TickPlayerRegen()` — ticks every alive party member's active Regen once per
+  PlayerTurn, right before the Continue gate, so a status cast this turn gets its first tick
+  immediately. Refactored `BattleHUDController`'s per-move callback params (`onAttackConfirmed`/
+  `onChargeConfirmed`/`onHealConfirmed`) into a single `onMoveConfirmed(optionIndex, target)` plus
+  a `MoveOptionIsSelfOnly` array, since a 4th self-only move made one-callback-per-move stop
+  scaling. New `.status-bar`/`.status-icon`/`.status-icon-purple`/`.status-icon-counter-br`
+  (+ unused `-bl` reserved for later) in `BattleHUD.uss`; `BattleHUDController.SetRegenStatus`
+  shows/updates/hides the icon and its counter text.
+- **Verified:** Live Play Mode — cast "R", confirmed the immediate first tick (battle log: "uses
+  R!" then "regenerates 2 HP!"), HP/Aura math correct, status icon appeared with countdown "3"
+  positioned outside its frame at bottom-right. 129/129 EditMode tests (9 new, covering
+  Heal/ApplyRegen/TickRegen including max-HP clamping and post-expiry inertness).
+
+[2026-08-06] Phase 3 — "H" orb added, "C" reworked to self-target drag, unified MoveKind targeting
+- **Context:** User asked for a new solo/self-only skill orb ("H", pastel pink), and for "C"
+  (Charge) to use the same "click it, then choose who to select" gesture as the new orb — with
+  the constraint that the only valid selection for a solo skill is the caster itself. Full record:
+  DECISIONS.md -> [Combat].
+- **Built:** New `.move-option-pink` "H" orb at 12 o'clock. New private `MoveKind {Attack,
+  Charge, Heal}` unifies `BeginDrag`/`OnDragPointerUp` across all three moves — Attack's valid
+  drop target is the enemy, Charge/Heal's valid drop target is ONLY the caster's own creature.
+  Dragging Charge or Heal onto the enemy is now rejected and cancels back to the move options,
+  same as Attack dragged onto empty space. `ShowMoveSelection` gained a `BattleParticipant self`
+  parameter; `onChargeSelected` split into `onChargeConfirmed`/`onHealConfirmed`
+  (`Action<BattleParticipant>`). Removed the now-obsolete immediate-click `SelectCharge`. "H"'s
+  actual gameplay effect is still undecided — placeholder logs a message and ends the turn, no
+  stat change (content intentionally not invented, per CLAUDE.md).
+- **Verified:** Live Play Mode — dragged "H" onto the caster, confirmed correctly (battle log:
+  "uses H!"); dragged "C" onto the enemy, correctly rejected with no state change and the move
+  options reappearing for a retry. 120/120 EditMode tests unaffected.
+
+[2026-08-06] Phase 3 — Label centering fix, "S" -> "C" Charge mechanic, 12-slot skill ring, companion pathfinding paused during battle
+- **Context:** Follow-up polish session after live playtesting. Four separate user asks in
+  sequence: (1) the move-orb letters still weren't centered after the prior pass, (2) turn the
+  blue "S" orb into a "C" Charge mechanic — no attack, restores Aura instead, (3) noticed the
+  companion's A* pathfinding still computing during battle, asked whether that's needed, (4) add
+  12 dark grey placeholder skill slots around the player, refined across 2 more rounds of
+  feedback into "A"/"C" reading as 2 filled slots among the 12, not decorations. Full record:
+  DECISIONS.md -> [Combat] (4 entries) and [Combat/Performance].
+- **Built:**
+  - `.move-option-label` centering bug root-caused via live layout inspection (`execute_code`):
+    Unity's default runtime theme applies non-zero, ASYMMETRIC margin/padding to every Label —
+    added explicit `margin:0; padding:0`.
+  - "S" (Strike) -> "C" (Charge): new `BattleHUDController.SelectCharge` (single click, no drag,
+    no target) restores `BattleConfig.ChargeAuraRestore` (10) Aura and ends that attacker's turn
+    without an attack; new `ShowMoveSelection(... onChargeSelected)` overload;
+    `BattleManager.PlayerTurn`'s new `chargeSelected` branch.
+  - New `CompanionAI.SetPaused(bool)` (disables both CompanionAI and its AIPath component — AIPath
+    repaths on its own timer independent of CompanionAI) and `PartySystem.ActiveCompanionAI`;
+    `BattleManager` pauses the companion in `Start()`, resumes it in `EndBattle()`, alongside the
+    existing overworld-camera hide/restore.
+  - New `.skill-slot-placeholder` — 12 per player creature, one per clock hour, same radius AND
+    same 32x32 size as "A"/"C" (iterated from a separate outer ring, to same-radius-smaller, to
+    final same-radius-same-size after 2 rounds of live feedback) — `BattleHUD.uxml` orders them
+    before the move options so "A"/"C" paint fully on top at hours 1/11.
+- **Verified:** Live Play Mode throughout — Aura drain-then-Charge-click showed 5/20 -> 15/20 with
+  enemy HP unchanged (no attack); `CompanionAI.enabled`/`AIPath.enabled` confirmed `true` before
+  battle, `false` immediately after engaging; final skill-ring screenshot (1920px) shows 12
+  uniform slots, "A"/"C" fully filling 1/11 o'clock with no grey visible underneath. 120/120
+  EditMode tests passing after every change in this batch.
+
+[2026-08-05] Phase 3 — Move orbs fixed at 1/11 o'clock, centered labels, blue/green orb colors
+- **Context:** User asked to put the two move orbs at the 1 and 11 o'clock positions (instead of
+  the full-circle top/bottom split from the immediately prior session entry), make sure the
+  letters are centered on the orb, and color one blue and one green. Full record: DECISIONS.md ->
+  [Combat].
+- **Built:** New `MoveOptionClockHours = { 1f, 11f }` array; `PositionMoveOptions` converts clock
+  hour -> math degrees (`90 - 30*hour`) instead of the generalized full-360° split.
+  `.move-option-label` switched to absolute-fill + `-unity-text-align:middle-center` for
+  guaranteed centering. New `.move-option-blue` class applied to the "S" orb only; "A" keeps its
+  original green styling.
+- **Verified:** Live Play Mode screenshot (1920px) — blue "S" at 11 o'clock, green "A" at 1
+  o'clock, both letters centered. 120/120 EditMode tests unaffected.
+
+[2026-08-05] Phase 3 — Move orbs now distributed around a full circle, not an arc above the creature
+- **Context:** User asked to make sure the attack orbs sit in a circle around the Phasix — the
+  prior layout confined them to an 80° arc above it, so both orbs still read as clustered at the
+  top. Full record: DECISIONS.md -> [Combat].
+- **Built:** `PositionMoveOptions` now spaces options across the full 360° (`90 + 360*i/total`)
+  instead of a fixed arc — "A" sits directly above the creature, "S" directly below, opposite
+  points on the circle. Generalizes to a future 3rd/4th option automatically.
+- **Verified:** Live Play Mode screenshot — orbs symmetric above/below with no UI overlap.
+  120/120 EditMode tests unaffected.
+
+[2026-08-05] Phase 3 — Higher starting Aura, numeric HP/Aura readouts, move orbs pushed out and shrunk
+- **Context:** Follow-up polish after seeing the Aura cost/restore mechanic live. Full record:
+  DECISIONS.md -> [Combat].
+- **Built:** `Test_FireType`/`Test_SteamType` Aura bumped 5 -> 20 (room to see multiple attacks'
+  cost/restore over a real battle). New `.bar-value-label` overlay shows "current/max" on both
+  the HP and Aura bars for all 4 status rows; `SetHPFill`/`SetAuraFill` now set the label text
+  alongside the fill width in one call. `MoveOptionRadius` 60px -> 95px and
+  `.move-option-placeholder` 48x48 -> 32x32 (floating-orb separation from the creature, smaller
+  icons); labels shortened from "ATK"/"ATK" to "A"/"S" (Attack/Strike).
+- **Verified:** Live Play Mode screenshot — HP reads "120/120", Aura reads "20/20" on both status
+  rows; the two move orbs render smaller with clear separation from the creature. 120/120
+  EditMode tests unaffected (pure UI/data-value change).
+
+[2026-08-05] Phase 3 — Attacks cost Aura; a perfect Dodge/Parry restores it
+- **Context:** Final step of the sequence the user laid out: add a second attack, see the
+  layout, restyle the icons, then wire real Aura costs. Full record: DECISIONS.md -> [Combat].
+- **Built:** `BattleParticipant.SpendAura`/`.RestoreAura` (clamped at 0/MaxAura respectively,
+  spending never blocks the attack). `BattleConfig.AttackAuraCost` (2, both placeholder attacks
+  cost the same) spent in `PlayerTurn` right after target confirmation. `BattleConfig.PerfectDefenseAuraRestore`
+  (2) restored to the defender in `EnemyTurn` whenever `LastDefenseWasPerfect` is true on a
+  successful Dodge/Parry, with a "X restores Aura!" battle log line. `BattleHUDController.RefreshHP`
+  renamed to `RefreshBars` and extended to also refresh Aura fill bars, since Aura now changes
+  during battle instead of staying static after `Initialize`.
+- **Tests:** New `BattleParticipantTests` (6 tests) covering `SpendAura`/`RestoreAura` clamping
+  and no-op-on-zero/negative behavior. 120/120 EditMode tests passing (was 114).
+- **Verified:** Live Play Mode — a real drag-to-target attack dropped Aura from 5/5 to 3/5
+  (screenshot-confirmed bar shortening); `RestoreAura` confirmed against the live battle-state
+  participant, correctly clamping back to 5/5 (screenshot-confirmed bar refilling). The
+  perfect-detection signal itself (`LastDefenseWasPerfect`) was already proven correct via manual
+  coroutine-stepping in the prior ring-color session — this pass wires `RestoreAura` on top of
+  that.
+
+[2026-08-05] Phase 3 — Second attack option; move icons now plain Sonny 2-style circles labeled "ATK"
+- **Context:** User wanted a second attack option to see the 2-icon radial layout before wiring
+  Aura costs, then asked for the icon style itself to change to match Sonny 2's actual reference
+  art (plain circles, minimal text) instead of pill-shaped buttons with descriptive labels. Full
+  record: DECISIONS.md -> [Combat].
+- **Built:** `BattleHUDController.PositionMoveOptions` now computes each move option's position
+  via trigonometry (spaced evenly across a configurable arc, `MoveOptionsPerSlot = 2`) instead of
+  one hardcoded offset — generalizes to a 3rd/4th option later with no new positioning code.
+  `.move-option-placeholder` changed from a 70x38 pill to a 48x48 circle; both options now
+  labeled "ATK" (identical text, position is the only distinguishing signal) instead of "Attack
+  1"/"Attack 2" — both still mechanically identical basic attacks, real skill differentiation is
+  a separate later pass.
+- **Verified:** Live Play Mode screenshots at each step — first confirming the 2-pill layout
+  (pills touched slightly at the shared radius), then the circular "ATK" icons sitting cleanly
+  apart with no overlap. 114/114 EditMode tests unaffected (pure UI sizing/positioning change).
+- **Next:** Aura costs on attacks, and perfect Dodge/Parry restoring Aura — the user's follow-up
+  ask, queued for once this layout was confirmed.
+
+[2026-08-05] Phase 3 — Ring flash colors redesigned around a miss/success/"perfect" quality ladder
+- **Context:** User asked whether Dodge's flash was already green (it wasn't — it was orange, a
+  per-move color scheme) and asked for a redesign: red stays for a miss, green for a normal
+  success, and a new bright neon purple "perfect" tier for a near-dead-center hit, shared
+  identically across Dodge/Parry/offense rather than colored per-move. Full record: DECISIONS.md
+  -> [Combat].
+- **Built:** `SuccessFlashColor`/`PerfectFlashColor`/`MissFlashColor` replace the old
+  `DodgeFlashColor`/`ParryFlashColor`/`OffenseFlashColor` — one shared 3-tier palette instead of
+  per-move colors. New `PerfectToleranceFraction` (0.2 placeholder): a hit counts as "perfect"
+  when its ratio deviation from dead-center is within the innermost 20% of whichever tolerance
+  applied. New `LastTimedInputWasPerfect`/`LastDefenseWasPerfect` bool properties expose the tier
+  (not wired to any gameplay bonus yet — visual feedback only for this pass, deliberately not
+  inventing what a "perfect" should mechanically do beyond what was asked).
+- **Verified:** A new verification technique for this precision-dependent case — manually driving
+  the `RunDefenseTimedInput` coroutine via direct `IEnumerator.MoveNext()` calls instead of
+  `StartCoroutine`, to deterministically land the marker at an exact chosen ratio before a
+  synthetic click, sidestepping this session's recurring unfocused-Editor large-`Time.deltaTime`
+  timing issue. Confirmed exact RGBA matches for all three tiers: a ~0.00002 deviation (dead
+  center) resolved as a perfect Parry with the exact purple value; a 0.15 deviation (inside
+  Dodge's tolerance but outside its perfect band) resolved as a normal Dodge success with the
+  exact green value, screenshot-confirmed rendering correctly.
+
+[2026-08-05] Phase 3 — Offense joins the converging ring; ring redesigned to target+marker ratio with flash feedback
+- **Context:** Two rounds of live follow-up feedback on the just-shipped converging-ring defense
+  timing. First: "make the attack input similar to the defend input but on the targeted enemy."
+  Then, mid-implementation: simplify the ring itself — no pre-drawn zone bands, just a fixed
+  target ring and a white marker ring that starts wide and shrinks past it, judged by their size
+  ratio (Dodge within 0.75-1.25x, Parry within 0.9-1.1x) with orange/green flash feedback on
+  success. Then: flash red on an absolute miss. Full record: DECISIONS.md -> [Combat] (two
+  entries — "Sonny 2-style radial move selection..." for the first pass, "Unified converging-ring
+  timing..." for this one).
+- **Built:** `RunTimedInput` (offense) dropped the horizontal bar entirely and now uses the same
+  `RingVisual` as defense, reparented above the TARGETED ENEMY. `RingVisual` simplified from
+  "two nested zone bands + marker" to `TargetRadius`/`MarkerRadius`/`MarkerColor` — a fixed
+  reference ring plus one converging marker, no visible pre-drawn success zone. New
+  `TimedInputConfig.ComputeToleranceHalfWidth` reuses the existing Instinct/bond
+  `ComputeWindowPercent` curve as a proportional scale factor on the new ratio-tolerance
+  constants (`OffenseToleranceHalfWidth`/`DodgeToleranceHalfWidth`/`ParryToleranceHalfWidth`),
+  preserving "higher Instinct = larger window" under the new mechanic. Marker flashes orange
+  (Dodge success), green (Parry or offense success), or red (any Miss — wrong tolerance, wrong
+  button, or timeout) before hiding. Deleted the now-fully-unused horizontal-bar UXML/USS/fields
+  (`TimingBarTrack`/`Zone`/`Marker`/`Button` and `.timing-bar-*`) rather than leaving them as dead
+  code; renamed the surviving text-only label host `TimingBarContainer`/`Label` ->
+  `ActionAnnouncement`/`ActionAnnouncementLabel` since "TimingBar" was now a misnomer.
+- **Tests:** 3 new EditMode tests for `ComputeToleranceHalfWidth` (zero-stat exact-base case,
+  Instinct widens it, Parry stays narrower than Dodge). 114/114 EditMode tests passing.
+- **Verified:** Live Play Mode across each iteration — a real click-drag attack landing correctly
+  on the enemy with the ring there (12 damage), isolated synthetic-click proofs for every outcome
+  (Dodge/Parry/offense success via a deliberately huge tolerance to make timing deterministic;
+  Miss via a deliberately tiny one, confirming the exact red RGBA flash value), and a screenshot
+  of the simplified target+marker visual rendering correctly above the defending creature.
+
+[2026-08-05] Phase 3 — Sonny 2-style radial move selection + drag-to-target; converging-ring defense
+- **Context:** User referenced Sonny 2's radial move-options-around-the-character (instead of a
+  boxed menu) and asked for click-and-drag targeting, plus a circular converging-ring visual for
+  defense timing instead of the horizontal bar, positioned above the defending Phasix. Full
+  record: DECISIONS.md -> [Combat].
+- **Built:** `DragLineVisual`/`RingVisual` (new Painter2D-drawn custom `VisualElement`s —
+  straight line and stroked-circle/annulus-band drawing respectively). The boxed `MoveMenu` is
+  gone; each player stage slot has an "Attack" placeholder positioned above its creature
+  (`BattleHUDController.ShowMoveSelection`), built as the first slot of a radial system (only
+  one move exists today). Pressing it starts a click-and-drag — `DragLineVisual` follows the
+  cursor from the creature to wherever the player drags; releasing over the enemy confirms the
+  target via the same callback pattern `ShowMoveMenu` used, releasing elsewhere cancels back to
+  retry. `RunDefenseTimedInput` now positions a `RingVisual` above the defending stage slot
+  instead of using the (now offense-only) horizontal bar — same nested Dodge/Parry zone math,
+  drawn as concentric bands with a marker ring that converges inward over the sweep instead of a
+  marker sweeping left-to-right.
+- **Bug caught during verification:** hiding only the offense zone highlight (not the whole
+  timing-bar track) during defense left the track's background bar and a stale marker visibly
+  leaking through behind the DEFEND label. Fixed by hiding the entire `TimingBarTrack` for
+  defense, only showing it for offense.
+- **Verified:** Live Play Mode — screenshot-confirmed the "Attack" placeholder position, a
+  synthetic drag correctly drawing the line from player to enemy and resolving into a real
+  13-damage attack on release, and the converging ring rendering correctly (both zone bands
+  visible, no track leak) after the fix. 111/111 EditMode tests unaffected (UI/interaction-layer
+  change only).
+
+[2026-08-05] Phase 3 — Continue button now only gates the player-to-enemy turn transition
+- **Context:** User wanted Continue to only appear "when transitioning from player to enemy" —
+  once clicked, the rest of the enemy's turn should just play out with enough time to read, not
+  require a click per beat. Full record: DECISIONS.md -> [Combat] "Battle pacing" entry.
+- **Built:** New `BattleHUDController.ShowTimedMessage(message, durationSeconds)` — shows the
+  same message panel `WaitForContinue` uses, minus the button, auto-hiding after a fixed
+  duration instead of waiting for a click. New `BattleConfig.AutoMessageDurationSeconds` (1.5s
+  placeholder) shared by every auto-paced beat. `PlayerTurn`'s single `WaitForContinue` moved
+  from per-attacker to once after the whole loop (the actual player-to-enemy handoff);
+  in-between attacker beats now use `ShowTimedMessage`. `EnemyTurn` has no `WaitForContinue`
+  calls left at all — attack announcement, defended/hit result, and counter-attack result all
+  auto-pace via `ShowTimedMessage`; the live Dodge/Parry click remains the one real interactive
+  moment in the enemy's turn.
+- **Verified:** Live Play Mode — confirmed the single Continue gate appears exactly once (after
+  the player's attack resolves, screenshot-verified with the button visible), and clicking it
+  plays the enemy's entire turn (announcement -> defense window -> result) through automatically
+  with zero further clicks, landing back on the next move menu. 111/111 EditMode tests still
+  passing (pure pacing/UI change, no combat math touched).
+
+[2026-08-05] Phase 3 — Dodge/Parry reworked to a live click, no more choose-then-time menu
+- **Context:** User wanted the Dodge/Parry defense to "feel more live" — left-click to attempt
+  Dodge, right-click to attempt Parry, clickable anywhere on screen rather than aiming at a
+  button, for as long as the timing bar is running. Full record: DECISIONS.md -> [Combat]
+  "Defense model" entry's 2026-08-05 Update.
+- **Changed:** `BattleHUDController.ChooseDefense` (the Dodge/Parry choice-button prompt) and the
+  `Dodge`/`Parry` values of `RunTimedInput`'s `TimedInputMode` are gone. New
+  `RunDefenseTimedInput` shows ONE bar with the wide Dodge zone and, nested inside it as a
+  sub-range, the narrower Parry zone — both drawn at once, single shared marker sweep. A
+  `PointerDownEvent` callback registered on the HUD's screen-covering root element (not any
+  specific button) reads which mouse button clicked and where the marker was at that instant:
+  left-click inside the Dodge zone -> Dodge; right-click inside the (nested) Parry zone -> Parry;
+  anything else (wrong zone, wrong button, or no click before the sweep ends) -> Miss, full
+  damage, same as before. `TimedInputConfig.ParryMarkerSweepDuration` removed — Parry's
+  difficulty is now entirely the nested zone's narrower WIDTH, since one shared marker can't
+  sweep at two different speeds for two different possible actions. Removed the now-dead
+  `DefenseChoicePrompt`/`DodgeChoiceButton`/`ParryChoiceButton` UXML and their CSS.
+- **Verified:** Live Play Mode — the real battle flow still works end-to-end (a timeout correctly
+  resolves to a Miss with full damage and no counter-attack); isolated proofs confirmed a
+  synthetic left-click resolves to `Dodge` and a synthetic right-click resolves to `Parry`
+  (precisely timing a live click via MCP is unreliable, so used the same guaranteed-width-window
+  isolation technique as earlier `RunTimedInput` verification); screenshot confirms both zones
+  render correctly nested on one shared bar with the new instructional label ("Left-Click Dodge ·
+  Right-Click Parry"). 111/111 EditMode tests still passing (no test changes needed — this was a
+  pure input/UI rework, the underlying `BattleEngine`/`BattleLogFormatter` logic was untouched).
+
+[2026-08-05] Phase 3 — Aura stat allocation, capture, evolution burst, audio/VFX hooks (Step 5 scaffolding)
+- **Context:** Continuing the approved Phase 3 plan past Step 4. Research first surfaced a real
+  contradiction between two equally-"Locked" GDD sections on whether losing a battle costs bond
+  (§21.6: no bond loss at all; §14.5: Micro -0.5-1% bond loss on losing) — asked the user
+  directly rather than guessing; resolved to **zero bond loss on losing a battle** (§21.6 wins).
+  No code change needed — `BattleManager.EndBattle` already never touches bond on loss; this just
+  confirms that's correct going forward. Full record in DECISIONS.md -> [Combat].
+- **Built:** `AuraTierCeiling`/`AuraStatAllocationSystem` (Common Aura -> free stat point
+  allocation, gated by a tier+Aptitude stat ceiling, per Progression_Directive_v0_1_0.md's "Free
+  Allocation Model"/"Tier Stat Ceiling"). `ResonanceBonusEvaluator` (alignment-based bonus
+  multiplier — see decision note below on its Temper-based proxy). `CaptureSystem` (capture
+  chance formula + attempt, raises `EventBus.OnPhasixCaptured` on success). `EvolutionBurstGauge`/
+  `EvolutionBurstSystem` (Type K mid-battle evolution burst — GDD §9.3's gauge fill/trigger/expiry
+  state machine; reliable trigger at >=40% bond per GDD §14.2, unreliable-but-possible below it).
+  `BattleAudioVfxHooks` (empty `EventBus` subscriber stubs for 8 battle events, wired via
+  `[RuntimeInitializeOnLoadMethod]` matching `SkillTreeUnlockSystem`'s pattern from the Step 4
+  pass — no actual audio/VFX content, since GDD §27 Audio Design is entirely "Pending, design
+  work not yet started").
+- **Honesty note on this pass vs. Step 4:** Step 4's skill taxonomy/status/chain/mastery content
+  was almost entirely locked GDD content with only the numbers pending. Step 5 is the opposite —
+  Progression_Directive locks the Aura *mechanics* but leaves every number pending, capture has
+  **no locked formula of any kind** (not even a mechanic shape beyond "every enemy is
+  capturable"), evolution burst is 4 bullet points total, and audio/VFX has zero content
+  anywhere. Built as clearly-flagged placeholder scaffolding throughout — see
+  NumericalCalibration.md's new "Step 5 scaffolding" section and DECISIONS.md -> [Progression/Combat]
+  for exactly which pieces are placeholder-shape-and-number vs. locked-shape-placeholder-number.
+- **Tests:** 25 new EditMode tests (`AuraStatAllocationSystemTests`, `ResonanceBonusEvaluatorTests`,
+  `CaptureSystemTests`, `EvolutionBurstSystemTests`). 111/111 EditMode tests passing (was 86).
+- **Verified:** Live Play Mode via unity-mcp — confirmed the new `[RuntimeInitializeOnLoadMethod]`
+  subscribers (`SkillTreeUnlockSystem` from Step 4, `BattleAudioVfxHooks` from this pass)
+  coexist cleanly with the existing battle flow, no console errors, full encounter->battle loop
+  still works end-to-end (screenshot-verified).
+- **Next:** Both Step 4 and Step 5's data/rules layers are now built and tested. What's left of
+  the Phase 3 plan is UI/integration work with no remaining locked-content research to do: a real
+  skill-selection battle UI (to replace "Attack" as the only move and actually exercise the
+  combo/status/chain/mastery/burst systems live), and the Phase 3 Gate's full playtest pass. Both
+  are UI-heavy and better done with the user's iterative feel/UX feedback loop (as the rest of
+  this session's combat HUD work was) rather than built blind.
+
+[2026-08-05] Phase 3 — Skill Tree Framework, closes out the mechanical scope of Step 4 (Roadmap_v2 Mo 6 Wk 3 – Mo 7 Wk 4)
+- **Context:** Continuing the approved Phase 3 plan after the Dodge/Parry work. Extracted exact
+  locked design content from the GDD first (§4 taxonomy/combo, §14.2 bond zones, §15 attribute
+  scaling, §17 status effects) rather than inventing any of it — found and fixed a real doc bug
+  in the process (see below). See DECISIONS.md -> [Combat] for the full decision record,
+  including what's deliberately NOT built yet.
+- **Built:** `SkillTreeCatalog` (per-type primary attribute/role/bond-gate metadata for all 18
+  `SkillTreeType` values, reusing the already-existing locked enum) and `SkillSlotCapacity`
+  (tier -> tree count / active slot table, T1=2...T5=5-7, throws rather than inventing numbers
+  for the fusion-dependent T6/T7). `SkillTreeUnlockSystem` wires Type F (Bond, unlocks at 20%
+  bond) and Type O (Personality, unlocks at 40% bond) to `EventBus.OnBondMilestoneReached` via
+  `[RuntimeInitializeOnLoadMethod]`. `StatusEffectType`/`StatusEffectCategory`/
+  `StatusEffectCatalog` (all 28 statuses across 5 categories, with the exact mastery-bonus tag
+  sets transcribed verbatim from GDD §17.9 rather than derived from category/flavor text) and
+  `StatusDurationCalculator` (the locked `base + Resonance - Resolve, min 1, positive statuses
+  skip Resolve` formula). `ChainResultType`/`ChainResultCatalog` (all 7 chain results, several
+  with multiple valid recipes) and `MasteryBonusType`/`MasteryBonusCatalog` (all 8 bonuses,
+  `EvaluateAll` returns every bonus currently satisfied by a self/target status pair — stacking
+  supported). `ComboTier`/`ComboEngine` (Duo/Trio/Quad detection via trailing-window distinct-tree
+  checking, plus placeholder Instinct-scaled trigger chance and bond->60%-gated discovery bonus
+  curves). 36 placeholder `SkillData` assets (2 per tree type, `Assets/Data/Skills/`, generic
+  names/descriptions, created via a bulk `AssetDatabase` script rather than 36 manual Inspector
+  passes).
+- **Doc fix found along the way:** `ClaudeCode_Primer_v1_1_0.md` said "24" statuses; the GDD's
+  own §17 tables actually sum to 28 (verified by reading every row, not assumed). Fixed the
+  Primer rather than building the wrong count into code.
+- **NOT built this pass:** live in-battle skill selection. `BattleManager`/`BattleHUD` only
+  support "Attack" — there's no move menu to pick a specific skill from yet, so there was
+  nothing to wire the combo/status/chain/mastery systems INTO live gameplay with. This is a
+  rules-layer/data-model pass, verified the same way `DamageCalculator`/`PrimalTypeChart` were —
+  thorough EditMode tests, not a new UI with nothing real behind it yet.
+- **Tests:** 43 new EditMode tests across `StatusEffectCatalogTests`, `StatusDurationCalculatorTests`,
+  `ChainResultCatalogTests`, `MasteryBonusCatalogTests`, `ComboEngineTests`, `SkillSlotCapacityTests`,
+  `SkillTreeUnlockSystemTests`. 86/86 EditMode tests passing (was 43).
+- **Docs:** `NumericalCalibration.md` gained a "Skill tree / status / combo framework" section
+  covering every placeholder number introduced (duration ranges, stat-to-modifier conversion,
+  combo trigger chance/discovery bonus curves, chain-result tie-break). `DECISIONS.md` ->
+  [Combat] has the full record, including the specific interpretation calls made where the GDD's
+  prose didn't fully spell out self/target sides for a couple of mastery bonuses.
+- **Next:** The live skill-selection battle UI (a real move menu beyond "Attack," wiring actual
+  skill use into `BattleManager`, then the plan's "manually trigger a combo in Play Mode"
+  playtest checkpoint) is the natural follow-up once there's a reason to build it. Plan Step 5
+  (bond gauge/capture/Aura system/VFX hooks) is next in the approved plan.
+
+[2026-08-05] Phase 3 — Battle HUD: action panel + battle log split 50/50 across the screen width
+- **Built:** `.action-panel`/`.battle-log-panel` (`BattleHUD.uss`) switched from fixed `420px`
+  widths to `flex-grow: 1; flex-basis: 0` inside `.stage-bottom-row` (already `left:0; right:0`,
+  edge-to-edge) — each panel now fills exactly half the screen width, with only a small
+  margin-based gap between them. Height stays fixed at `300px` on both, unchanged.
+- **Verified:** Live Play Mode screenshot via unity-mcp — both panels span from their screen edge
+  to the center line.
+
+[2026-08-05] Phase 3 — Dodge/Parry defense system, replaces flat damage-reduction defense (Expedition 33-inspired, user-directed)
+- **Context:** User played the earlier flat-multiplier defense live and asked to mimic Clair
+  Obscur: Expedition 33's combat feel instead. Clarified via AskUserQuestion: full avoidance
+  (not a reduction multiplier), and two distinct options (not one) — Dodge (safe, avoid-only)
+  vs. Parry (risky, avoid + auto-counter). See DECISIONS.md -> [Combat] for the full decision
+  record and Combat_Directive_v0_1_0.md Part 4 for the superseded/updated design text.
+- **Built:** `BattleHUDController.ChooseDefense` — a new choice prompt (Dodge/Parry buttons,
+  blue/orange respectively) shown before the timing check on every enemy attack.
+  `RunTimedInput` reworked from an `isDefensive` bool to a `TimedInputMode { Offense, Dodge,
+  Parry }` enum plus an explicit `sweepDuration` param (Parry sweeps faster — 0.7s vs. 1.2s —
+  via `TimedInputConfig.ParryMarkerSweepDuration`), each mode with its own bar color/button
+  text (green/"Time It!", blue/"Dodge!", orange/"Parry!"). `TimedInputConfig` gained
+  `DodgeBaseWindowPercent` (20%, wide/easy) and `ParryBaseWindowPercent` (6%, narrow/hard) plus
+  an overloaded `ComputeWindowPercent(baseWindowPercent, instinct, bondPercent)`;
+  `SuccessDefenseMultiplier` was removed entirely (defense is binary avoid/full-damage now, not
+  a multiplier). `BattleManager.EnemyTurn` rewritten: choose defense -> run the matching timing
+  check -> `damageMultiplier: 0f` on success (fully avoids the hit, same
+  `BattleEngine.QueueBasicAttack`/`ResolveQueuedActions` path every other attack uses) or `1f`
+  on failure (full hit, same as a missed offensive press — "reward, don't punish", no extra
+  penalty for a failed Parry attempt) -> if the defense was a successful Parry, an automatic
+  counter-attack fires (`target` attacks `attacker`, no timing check of its own, same
+  `QueueBasicAttack`/`LogResults` pattern as the player's own attacks). `BattleLogFormatter`
+  gained `FormatDefenseOutcome` (avoided: "X dodges Y's attack!" / "X parries Y's attack —
+  opening for a counter!", no damage number at all; failed: identical text to a normal attack)
+  and had `FormatAttack` simplified back down (dropped the now-dead `isDefensiveTiming` param —
+  every remaining caller was always passing `false` once defense moved to its own formatter).
+  New/updated `BattleHUD.uxml`/`.uss`: `DefenseChoicePrompt` block, `.defense-choice-prompt`/
+  `.dodge-choice-button`/`.parry-choice-button`, and the timing-bar color classes renamed/split
+  from offense/defense to offense/dodge/parry (green/blue/orange).
+- **Forward-looking note (user-flagged):** future attacks/skills may need multiple
+  action-command beats per attack (multi-hit offense, multi-check defense). `RunTimedInput`
+  stayed a single-window primitive on purpose so a future multi-beat attack can just call it
+  more than once in sequence — no rework needed for that later.
+- **Tests:** `BattleEngineTests`'s defense-multiplier test renamed/rewritten to
+  `ResolveQueuedActions_ZeroMultiplier_FullyAvoidsDamage` (0 multiplier = full avoidance).
+  `BattleLogFormatterTests` updated for `FormatAttack`'s new signature and 3 new
+  `FormatDefenseOutcome` cases (dodged/parried/failed). `TimedInputConfigTests` gained a test
+  confirming Parry's window is narrower than Dodge's at equal Instinct/bond. 43/43 EditMode
+  tests passing.
+- **Verified:** Live Play Mode via unity-mcp — teleported onto a wild encounter, engaged,
+  confirmed the offensive attack flow end-to-end (13 damage, log entry, HP bar), the Dodge/Parry
+  choice prompt rendering correctly (screenshot), the Parry timing bar's label/button/color, a
+  failed Parry taking full damage and logging as a plain attack with no counter firing, and (via
+  an isolated `RunTimedInput` call with a guaranteed-width window, since MCP round-trip latency
+  makes precisely timing a click during a live 0.7s sweep unreliable — same workaround used
+  earlier this session) that Parry mode's success detection resolves correctly. The
+  defended-and-counter wiring in `EnemyTurn` reuses the exact call pattern already proven live
+  in `PlayerTurn`, just with attacker/target swapped.
+- **Docs:** `Combat_Directive_v0_1_0.md` Part 4 updated in place (defense section marked
+  superseded with the new model spelled out). `NumericalCalibration.md`'s action-command
+  sections updated with Dodge/Parry windows, sweep durations, and damage modifiers (all still
+  placeholder). `DECISIONS.md` -> [Combat] has the full decision record.
+- **Next:** Steps 5-6 of the Phase 3 plan (skill tree framework; bond gauge/capture/Aura/VFX
+  hooks) are still pending — user has been focused on iterative combat feel/UX rather than
+  moving forward, so follow their explicit direction on when to resume those.
+
+[2026-08-05] Phase 3 — Damage formula + Primal type chart, closes out Step 3 (Roadmap_v2 Mo 6 Wk 1-2)
+- **Context:** Replaces `BattleConfig.PlaceholderAttackDamage`'s flat 5-damage stand-in with the
+  real formula. Unlike most Phase 3 numbers, the type chart itself is NOT a placeholder — GDD
+  §9 has a full 8x8 matchup table marked "Locked v0.2.0"; found it before inventing anything.
+- **Built:** `DamageCalculator.ComputeDamage` — `(AttackerStat / DefenderStat) x skillPower x
+  primalTypeMultiplier`, Physical = Force/Guard, Elemental = Resonance/Ward (CLAUDE.md). Basic
+  Attack treated as Physical with placeholder `skillPower = 10` (real skill content is Step 4).
+  `PrimalTypeChart` ScriptableObject — the 8 base types' locked 8x8 matrix transcribed verbatim
+  from the GDD, minimum 0.5x (no immunities). Duo-merge types (28 of 36 `PrimalType` values, e.g.
+  the existing `Test_SteamType` test asset) aren't individually charted in the GDD — resolved by
+  averaging across each duo's base parents, reusing `PrimalTypeColor`'s existing parent-pair data
+  (now exposed via a new `GetDuoParents` method) rather than duplicating it. New
+  `Assets/Data/TypeCharts/PrimalTypeChart.asset`, wired into `BattleManager` via a new
+  `[SerializeField] PrimalTypeChart _typeChart` (falls back to a neutral 1.0x if left unassigned,
+  rather than crashing).
+- **`BattleEngine`/`BattleAction` change:** `BaseDamage` is now caller-supplied (default
+  `BattleConfig.PlaceholderAttackDamage` for callers that don't need the real formula, e.g. tests)
+  instead of `BattleEngine` hardcoding the flat constant — `BattleManager` computes it via
+  `DamageCalculator` before queueing. `DamageMultiplier` (the Step 2 timed-input bonus/reduction)
+  still applies on top, unchanged — matches CLAUDE.md's "apply timed bonus after formula."
+- **Logged in `NumericalCalibration.md`:** all the Step 2/3 placeholder values that were still
+  marked PENDING there (timing windows, damage modifiers, `skillPower`) now have their actual code
+  defaults recorded, clearly flagged as unplaytested placeholders, not final balance.
+- **Verified:** 11 new EditMode tests (`PrimalTypeChartTests` — spot-checks against the locked GDD
+  values including the Water-beats-Fire/Light-Shadow-mutual-2x callouts, duo-type averaging, and a
+  full-chart no-immunities sweep; `DamageCalculatorTests` — stat-pair selection by category,
+  null-chart fallback, minimum-1-damage floor) — 33 total, all passing. Live Play Mode run: both
+  combatants happened to roll the same test species (Force 8, Guard 6) — computed
+  `(8/6) x 10 x 1.0 = 13.33 -> 13` and confirmed both sides' HP dropped by exactly 13, not the old
+  flat 5.
+- **This closes out Step 3.** Next: Step 4 — skill tree framework (Roadmap_v2 Mo 6 Wk 3 – Mo 7 Wk
+  4): `SkillTreeData` SO (18 types), bond-gated Type F/O unlocks, combo engine, 24-status effect
+  engine.
+- **Added same day, per user request — text battle log:** new `BattleActionResult` (what
+  `BattleEngine.ResolveQueuedActions` actually applied — attacker, target, final damage; the method
+  now returns `List<BattleActionResult>` instead of `void`) and `BattleLogFormatter` (pure text
+  formatting: damage number, Primal-type effectiveness flavor text mapped from the multiplier
+  — "super effective"/"effective"/neutral (no note)/"not very effective"/"barely effective" — and,
+  when the relevant action-command timing succeeded, "timing was perfect!" for offense or "blocked
+  just in time!" for defense). `DamageCalculator.ComputeTypeMultiplier` made public so the log can
+  report the same multiplier `ComputeDamage` used internally, without recomputing or risking drift.
+  New scrolling `BattleLogPanel`/`ScrollView` in `BattleHUD.uxml`/`.uss`.
+  `BattleHUDController.AppendBattleLog`/`ClearBattleLog` added; `BattleManager` clears the
+  log at battle start and appends one line per resolved attack. 7 new EditMode tests
+  (`BattleLogFormatterTests`) — 40 total, all passing. Verified live: log correctly showed both
+  attacks with exact damage numbers; separately proved the "super effective!"/"timing was perfect!"
+  text branches via an isolated Water-vs-Fire/successful-timing scenario.
+- **Post-review layout pass (same day):** log was centered on the stage with small text — hard to
+  notice/read. Removed the old fixed-height `BottomBar` entirely and replaced it with a
+  `StageBottomRow` inside `Stage`: `ActionPanel` (current turn/move menu/timing bar) on the left,
+  `BattleLogPanel` on the right, both fixed 420x300px bordered panels so toggling between MoveMenu
+  and TimingBarContainer still doesn't reflow anything (same discipline as the original bottom-bar
+  fix). Creatures moved from `top: 50%` to `top: 30%` to keep clear of the new bottom row. Bumped
+  battle log font 15px→19px and title 16px→22px; timing bar track narrowed 420px→360px to fit the
+  smaller panel width. Re-verified live via screenshot — both panels clearly visible side by side,
+  log text legible.
+- **HP + timing-bar clarity pass (same day):** user reported attacks "just happening on their own,
+  or happens twice" — turned out to be the two *separate* per-round action-command checks (offense
+  on your own attack, defense blocking the enemy's) not reading as distinct, compounded by combat
+  ending in 1-2 hits (Vitality 18-20 vs ~13 damage/hit) leaving no room to actually see a timing
+  bonus/reduction play out. Fixed both:
+  - `Test_FireType`/`Test_SteamType` Vitality bumped 20/18 → 120/110 so a fight runs ~6-9 rounds
+    instead of 1-2.
+  - `RunTimedInput` now takes an `isDefensive` flag; toggles `.timing-bar-offense` (green
+    track/zone/button, "Time It!") vs `.timing-bar-defense` (blue, "Block!") on the container, so
+    the two checks are visually unmistakable rather than only distinguished by reading the label.
+    Labels themselves reworded too: "YOUR ATTACK — {name}" vs "INCOMING — Block {name}!". Verified
+    the class-toggle and button-text swap directly for both modes (screenshot timing was unreliable
+    here since a manual verification coroutine ended up racing the live battle loop — not a real
+    bug, just a testing artifact).
+- **Continue button — replaces fixed pacing timers entirely (same day, per user discussion):**
+  auto-advancing on `AttackBeatPause`/`EnemyAttackAnnouncePause` meant guessing a single "right"
+  delay for everyone, which needed re-tuning three times already and still didn't feel right.
+  Traditional turn-based RPGs (Final Fantasy, Pokemon, Sonny 2) instead wait for player input
+  between beats, so the player sets their own pace. New `BattleHUDController.WaitForContinue` — a
+  Continue button/prompt shown after every single beat (the enemy's "is attacking!" announcement,
+  and every resolved attack, player's or enemy's) — replaces both fixed-timer constants, which are
+  now deleted. `ShowTurnMessage` also removed (no longer had any caller once `WaitForContinue`
+  absorbed its job). Verified live: after one resolved attack, `ContinuePrompt` stays visible and
+  the battle state stays frozen (enemy at 107/120, player still full) until a Continue click is
+  simulated — confirmed clicking it correctly advances straight to the next beat (the enemy's
+  attack announcement), not further.
+
+[2026-08-05] Phase 3 — Battle scene + turn state machine (Roadmap_v2 Mo 5 Wk 1-2)
+- **Context:** Phase 2 gate met (Wk 14-16 wild encounter closed it out); the repo audit fully
+  closed the same day in a separate session. First real code in `Scripts/Combat/`.
+- **Built:** `BattleConfig` (ActivePartySize=3 prototype constant, PlaceholderAttackDamage=5),
+  `BattleParticipant`/`BattleAction`/`BattleState`/`BattleOutcome` (plain C# battle-only state),
+  `BattleEngine` (static turn-resolution rules — queueing, damage, win/loss — matching
+  `BondSystem.cs`'s testable static-logic pattern), `BattleManager` (MonoBehaviour coroutine state
+  machine: PlayerTurn → EnemyTurn → ResolveActions → CheckWinLoss → EndBattle), `BattleHUDController`
+  (UI Toolkit HP bars/name plates/move menu, matching `EncounterPromptController`'s convention),
+  `BattleTransition` (static additive-scene-load bridge, matching Combat_Directive Part 1's
+  "overworld remains loaded underneath combat"). Expanded the `BattleResult` stub with real fields.
+  New `Assets/Scenes/BattleScene_Main.unity` (added to Build Settings), new
+  `Assets/UI/BattleHUD.uxml`/`.uss`.
+- **Wired:** `WildEncounterCreature.HandleEngage` now actually starts a battle via
+  `BattleTransition.StartWildBattle` instead of resolving as Flee (the Wk 14-16 scaffold TODO).
+- **Fixed in passing:** `DebugPartyBootstrap` never set `baseStats` on its test companion —
+  `BattleParticipant.MaxHP` clamped to 1 from a 0-Vitality PhasixRuntimeData, which would've made
+  any battle playtest end in one hit. Mirrors `WildSpawnSystem.CreateWildInstance`'s identical line.
+  Also gave `Test_FireType`/`Test_SteamType` real (if placeholder) non-zero stats via
+  `SerializedObject` — both were still all-zero from creation, same root cause.
+- **Damage is a flat placeholder** (`BattleConfig.PlaceholderAttackDamage`) — the real
+  `(AttackerStat / DefenderStat) x skillPower x primalTypeMultiplier` formula is Step 3 (Mo 6 Wk
+  1-2). Move menu currently offers only "Attack" — real skill content is Step 4+.
+- **Verified live:** 9 new EditMode tests (`BattleEngineTests.cs`, alongside `BondSystemTests.cs`)
+  all pass under Test Runner. Full Play Mode run: teleported player onto a wild creature, invoked
+  Engage, additive `BattleScene_Main` load succeeded, HUD showed HP/move menu, drove 4 rounds via
+  the actual `BattleManager`/`BattleHUDController` callback path (no real input device in this
+  session — same `execute_code`-driven technique as prior sessions), HP tracked correctly each
+  round (20→15→10→5→0 both sides), EndBattle fired, scene unloaded, player unfroze, encounter
+  prompt hid, and the engaged creature was destroyed while the other two spawn points' creatures
+  were untouched.
+- **Tooling note:** mid-playtest, `editor_state` showed a domain reload firing *during* Play Mode
+  (`play_mode.is_changing` stuck `true` for several minutes), which reset `PartySystem.Instance`
+  to null and left `BattleScene_Main`'s just-loaded GameObjects' `Awake()` un-dispatched, throwing
+  a `NullReferenceException` in `BattleManager.Start()` the first time through. Stopping and
+  re-entering Play Mode produced a clean run with no such reload. Likely external file-system
+  interference (another concurrent session in this same working directory) rather than a code bug
+  — see `LESSONS_LEARNED.md` for the full writeup and a faster-diagnosis path for next time.
+- **Next:** Step 3 — damage formula + Primal type chart (Mo 6 Wk 1-2), then the skill tree
+  framework (Step 4) and Aura/capture/VFX (Step 5) per the plan at
+  `C:\Users\aluca\.claude\plans\i-have-another-session-gleaming-squid.md`.
+- **Post-review fixes and HUD redesign (same day, after the user playtested it live — several rounds of feedback):**
+  - **Panel scale bug:** the move menu visually overlapped the player name plate. Root cause:
+    `UIRoot_BattleHUD`'s `UIDocument` reused `EncounterPromptPanelSettings.asset`, which is
+    `ScaleWithScreenSize` at a 320x180 reference resolution — fine for one small compact widget,
+    but on a real screen every UI pixel blew up ~2.7x. Fixed by giving the battle HUD its own
+    `Assets/UI/BattleHUDPanelSettings.asset` (`ConstantPixelSize`, scale 1) so USS values map 1:1
+    to screen pixels.
+  - **Layout redesign (superseding the first color-band lane backdrop):** user reference was
+    Sonny 2's battle screen, not a literal lane-striped background. Rebuilt `BattleHUD.uxml`/`.uss`
+    into that shape — top HP+Aura list per side (party left, enemy right), a middle stage with
+    placeholder creature circles (party left / enemy right / same lane, tinted via the existing
+    `PrimalTypeColor` table), bottom turn label + action bar. All existing element names/IDs were
+    kept identical so `BattleHUDController.cs`'s query logic didn't need to change.
+  - **Added `BattleParticipant.MaxAura`/`CurrentAura`** — the Aura *base stat*
+    (`EffectiveStat(StatType.Aura)`), not the Aura *resource*/currency system (still Step 5).
+    Static full bar for now; nothing spends it in battle yet.
+  - **Added `BattleLaneLayout.cs` + `BattleStageGizmos.cs`** — a placeholder world-space layout for
+    the 7 lanes and a Scene-view-only gizmo drawing them (matches `CompanionAI`'s existing
+    pattern-gizmo convention — `OnDrawGizmos` never renders to players or in a build). No visible
+    lane lines in the actual HUD, per user direction.
+  - **Scene-cut fix:** the battle was reading as a translucent HUD floating over the paused
+    overworld, not a real scene transition. `BattleManager.Start()` now disables the overworld's
+    `Camera.main` (component only, not the GameObject — leaves its `AudioListener` etc. alone;
+    Screen Space Overlay UI doesn't need a camera to render) and `EndBattle()` re-enables it. Also
+    gave `.battle-root` a solid (non-transparent) background as a belt-and-suspenders backdrop.
+  - **Readability pass:** every HP/Aura bar, name label, and button was too small to read at 1:1
+    pixel scale — bumped font sizes (12px→18-20px), bar heights (4-6px→10-16px), and paddings
+    across the board.
+  - Re-verified live via screenshot after each round: no more overlap, real scene cut with no
+    overworld visible, bars/text clearly legible, creatures positioned correctly.
+  - **Further sizing/spacing pass:** `.status-list` width changed from a fixed 280px to `33%` so
+    HP/Aura bars scale with actual screen width instead of a flat pixel guess; bar heights bumped
+    again (HP 16→24px, Aura 10→16px). Stage creatures pulled in from edge-anchored
+    (`justify-content: space-between`) to `justify-content: center` + fixed side margins, so both
+    sides sit noticeably closer to the middle instead of hugging the screen edges. Re-verified live.
+  - **Final placement/font pass:** center-anchored margins overcorrected — creatures ended up too
+    close together. Switched `.stage-side` from flex margins to explicit `position: absolute` with
+    `left: 20%`/`right: 20%` (translated back 50% of the element's own size so the anchor is the
+    group's center) so each side sits at a precise, screen-width-relative 1/5-in from its edge
+    regardless of resolution. Bumped remaining text sizes further: name labels 20→30px, turn label
+    18→26px, Attack button 16→24px. Re-verified live via screenshot.
+  - **Turn-resolution bug:** clicking Attack was deducting HP from *both* sides at once. Root
+    cause: `RunBattleLoop` queued the player's attack in `PlayerTurn`, then queued the enemy's
+    counter-attack in `EnemyTurn`, then resolved *both* together in one batch — one click, one
+    full round. Fixed by resolving each attack immediately as it's queued (`PlayerTurn`/
+    `EnemyTurn` now each call `BattleEngine.ResolveQueuedActions` + refresh the HUD right after
+    queueing their own single action, instead of `RunBattleLoop` batching both phases together).
+    `BattleEngine` itself needed no changes — verified the resolve-only-affects-its-own-pair
+    mechanism directly via `execute_code` (isolated `BattleState`/`BattleParticipant` proof, since
+    MCP round-trip latency is too coarse to reliably catch the intermediate in-scene frame between
+    the two turns). All 16 EditMode tests still pass unchanged.
+  - **Pacing:** even after the turn-resolution fix, the enemy's counter-attack resolved in the same
+    instant as the player's click, since `EnemyTurn` had no delay at all. Added
+    `BattleManager.AttackBeatPause` (0.6s, placeholder — real animation-driven pacing is Step 5's
+    battle VFX/audio hooks, Roadmap_v2 Mo 9) after each individual attack resolves in both
+    `PlayerTurn` and `EnemyTurn`, so there's a readable beat between "my attack landed" and "the
+    enemy is now attacking back."
+  - **Found and fixed in passing:** `WildEncounterCreature.OnTriggerEnter2D` threw a
+    `NullReferenceException` on `EncounterPromptController.Instance.IsVisible` — observed live at
+    least once, root cause not fully isolated (possibly a trigger firing before that singleton's
+    `Awake()` had run). Added a null guard; a silently-skipped encounter is a far better failure
+    mode than an uncaught exception on a physics callback.
+  - **Real bug found from a user-supplied screen recording:** the whole HUD (bottom bar, both
+    stage creatures) visibly jumped down right as the battle scene loaded. Diagnosed by extracting
+    frames from the recording (`cv2`, no `ffmpeg` on this machine) and tracking pixel positions —
+    the jump was a one-time settle, not continuous drift, and it lined up exactly with the Editor
+    Game View's "Display 1: No cameras rendering" state. Root cause: the earlier scene-cut fix
+    fully disabled `Camera.main`, leaving *zero* enabled cameras in the scene — with none active,
+    the Game View has no defined render-target reference, and the Screen Space Overlay panel's
+    canvas size resolved inconsistently for the first frame or two before settling. Fixed by
+    keeping the camera enabled but rendering nothing (`cullingMask = 0`,
+    `clearFlags = SolidColor`, black) instead of disabling it outright — a valid camera always
+    exists, so the Game View never enters that state. All three properties are cached and restored
+    in `EndBattle`. Re-verified live: no jump, panel stable from the first frame.
+  - **Turn clarity:** added `BattleHUDController.ShowTurnMessage()` — a plain status label with no
+    button, shown during `EnemyTurn` (`"{name} is attacking!"`) so there's a visible cue for whose
+    turn is active. Previously the enemy's turn had zero on-screen indication at all, which read as
+    the pause doing nothing.
+  - **Reflow bug:** hiding the Attack button for `ShowTurnMessage` shrank `.move-menu`'s content,
+    which shrank the content-sized `.bottom-bar`, which reflowed `.stage` (`flex-grow: 1`) to fill
+    the freed space every single turn — the visible symptom was the whole stage appearing to
+    grow/shrink as the button toggled. Fixed by giving `.bottom-bar` a fixed `height: 150px`
+    instead of letting it size to content, plus `justify-content: center` so the label/button stay
+    vertically centered within that fixed space either way. Verified via resolved layout heights
+    directly (`bottomBar.resolvedStyle.height` / `stage.resolvedStyle.height`), confirmed identical
+    (150px / 761px) with the button shown vs. hidden.
+  - **Pacing tweak:** `AttackBeatPause` (governs the pause after every attack, both player's and
+    enemy's) bumped from 0.6s to 1.4s, then settled at 1.0s per direct user feedback on the live
+    feel. Shared constant, so this affects both directions equally; flagged in case the two ever
+    need to be split into separate values.
+
+[2026-08-05] Phase 3 — Timed input system, closes out Step 2 (Roadmap_v2 Mo 5 Wk 3-4)
+- **Context:** Combat_Directive_v0_1_0.md Part 4 — "Mario RPG / Paper Mario model": a timed press
+  during an attack boosts outgoing damage (offensive action command), a timed press during an
+  incoming hit reduces it (defensive action command). Window size scales with Instinct + bond per
+  CLAUDE.md. Exact timing/threshold/modifier values are explicitly "pending numerical calibration"
+  — everything below is a reasonable, clearly-tagged placeholder, not a locked design decision.
+- **Built:** `TimedInputConfig` (window-size formula, marker sweep duration, success multipliers —
+  all placeholder constants). `BattleHUDController.RunTimedInput` — a marker sweeps left-to-right
+  across a bar over `MarkerSweepDuration`; a randomly-positioned success zone (width =
+  `ComputeWindowPercent(instinct, bondPercent)`) is where the player must click "Time It!" while
+  the marker is inside it; a miss by timeout resolves as a failure, same as clicking outside the
+  zone. New `TimingBarContainer`/`TimingBarTrack`/`TimingBarZone`/`TimingBarMarker`/
+  `TimingBarButton` elements in `BattleHUD.uxml`/`.uss`, toggled independently of `MoveMenu`.
+- **Wired into `BattleManager`:** every attack — player's or enemy's — now runs the minigame before
+  resolving. Offense uses the *attacker's* Instinct/bond for the window; defense uses the
+  *defender's*. Success multiplies damage by `SuccessDamageMultiplier` (1.5x) on offense or
+  `SuccessDefenseMultiplier` (0.5x) on defense; failure leaves damage unchanged (1x) — skilled play
+  is rewarded, not punished, per the Directive's design intent ("keeps combat active... rewarded
+  without making it inaccessible").
+- **`BattleEngine` change:** `QueueBasicAttack`/`BattleAction` gained an optional `damageMultiplier`
+  parameter (default 1, so all existing calls/tests are unaffected) — `BattleManager` computes the
+  combined offense/defense multiplier and passes it in; `BattleEngine` itself stays timing-agnostic,
+  just a single multiply. Matches CLAUDE.md's "apply timed bonus after formula" shape, so this
+  carries over unchanged once Step 3's real damage formula replaces the flat placeholder.
+- **Verified:** 6 new EditMode tests (`TimedInputConfigTests` — window scaling with Instinct/bond,
+  min/max clamping; 2 new `BattleEngineTests` — damage multiplier applied correctly for both
+  offense and defense) — 22 total, all passing. Live Play Mode run: full round (attack + defend)
+  completes cleanly through both timing minigames via timeout (auto-fail) with no errors; separately
+  proved the *success* path fires correctly by running the real coroutine with a 100%-wide window
+  (guarantees any click succeeds) and confirming `LastTimedInputSuccess` came back `true`.
+- **This closes out Step 2** (Roadmap_v2 Mo 5 Wk 1-4 — battle scene, turn state machine, and timed
+  input, all built, playtested, and iterated on user feedback). Next: Step 3 — damage formula +
+  Primal type chart (Mo 6 Wk 1-2), replacing `BattleConfig.PlaceholderAttackDamage` with the real
+  `(AttackerStat / DefenderStat) x skillPower x primalTypeMultiplier` formula.
+
 [2026-08-04] Repo audit — AUD-006: camera lookahead, closing out the audit
 - **Context:** Last open item from `AUDIT_202608.md`. The audit's suggested fix
   (`m_LookaheadTime` on a Cinemachine Composer) is a Cinemachine 2.x API this project's

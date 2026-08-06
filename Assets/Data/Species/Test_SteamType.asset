@@ -18,12 +18,12 @@ MonoBehaviour:
   _primalType: 8
   _signalPool: 
   _tempoType: 0
-  _vitality: 0
-  _force: 0
-  _resonance: 0
-  _guard: 0
-  _ward: 0
-  _resolve: 0
-  _instinct: 0
-  _aura: 0
+  _vitality: 110
+  _force: 7
+  _resonance: 8
+  _guard: 5
+  _ward: 6
+  _resolve: 5
+  _instinct: 6
+  _aura: 20
   _availableTreeTypes: 

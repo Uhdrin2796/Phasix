@@ -1,0 +1,488 @@
+.battle-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    /* Solid — this must read as a real scene cut, not a HUD floating over the paused overworld.
+       BattleManager also disables the overworld camera while a battle is active; this backdrop
+       is the visual belt-and-suspenders in case anything else ever renders behind the panel.
+       Placeholder arena color only — real diorama art is still "pending art direction" per
+       Combat_Directive_v0_1_0.md. */
+    background-color: rgb(24, 20, 26);
+}
+
+/* Sonny 2-style layout: top HP/Aura list per side, middle stage with placeholder creature
+   circles (player left, enemy right, same lane — no visible lane graphics; see
+   BattleStageGizmos.cs for the Scene-view-only dev visualization of the 7 lane positions), and a
+   bottom row inside the stage with the current-action panel on the left and the battle log on the
+   right. */
+
+.status-header {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 16px;
+}
+
+.status-list {
+    flex-direction: column;
+    width: 33%;
+}
+
+.status-list-enemy {
+    align-items: flex-end;
+}
+
+.status-row {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background-color: rgba(20, 20, 24, 0.9);
+    border-width: 2px;
+    border-color: rgb(90, 90, 100);
+}
+
+.status-row-enemy {
+    align-items: flex-end;
+}
+
+.row-name {
+    font-size: 30px;
+    color: rgb(255, 255, 255);
+    margin-bottom: 8px;
+    -unity-font-style: bold;
+}
+
+.hp-bar-back {
+    width: 100%;
+    height: 24px;
+    margin-bottom: 8px;
+    background-color: rgb(50, 50, 56);
+    border-width: 2px;
+    border-color: rgb(0, 0, 0);
+}
+
+.hp-bar-fill {
+    height: 100%;
+    width: 100%;
+    background-color: rgb(90, 200, 100);
+}
+
+.aura-bar-back {
+    width: 100%;
+    height: 16px;
+    background-color: rgb(40, 40, 52);
+    border-width: 2px;
+    border-color: rgb(0, 0, 0);
+}
+
+.aura-bar-fill {
+    height: 100%;
+    width: 100%;
+    background-color: rgb(90, 140, 230);
+}
+
+/* Evolution Burst gauge bar (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): "put a
+   new bar underneath the aura bar... purple bar... shift the buff/debuff icons below this new
+   purple bar." Same box-model as .hp-bar-back/.aura-bar-back (dark back + colored fill), so it
+   reads as a third bar in the same family, not a different widget. Present (empty, no fill
+   child) on EnemySlot0 too, same reserved-height reasoning as .status-bar below — see that
+   comment. BattleHUDController.SetBurstFillBar drives the fill width; the back element itself is
+   the click target (BurstBarClicked) and gets .burst-bar-ready once full. */
+.burst-bar-back {
+    width: 100%;
+    height: 14px;
+    margin-top: 6px;
+    background-color: rgb(40, 40, 52);
+    border-width: 2px;
+    border-color: rgb(0, 0, 0);
+}
+
+.burst-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: rgb(150, 90, 220);
+}
+
+/* "When it hits max fill and it can be triggered, outline a yellow border around the purple bar
+   and allow it to be clickable" — BattleHUDController.SetBurstFillBar toggles this once
+   FillPercent reaches EvolutionBurstSystem.TriggerThreshold (the exact same threshold
+   EvolutionBurstSystem.ActivateReady itself checks, so this visual promise is never wrong about
+   what a click will do). The bar is always a valid click TARGET (BurstBarClicked fires
+   unconditionally) — this class is purely the "yes, right now" affordance, not a gate. */
+.burst-bar-ready {
+    border-color: rgb(230, 210, 60);
+}
+
+/* Status bar (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): a row of small buff/
+   debuff icons directly underneath the Burst bar (shifted down from directly under Aura once the
+   Burst bar was added above — "shift the buff/debuff icons below this new purple bar"), e.g. "a
+   small icon that looks exactly like the R orb but smaller... acting like a status bar." Each
+   icon is hidden (display:none) until BattleHUDController.SetRegenStatus/SetBurstStatus actually
+   activates it. Fixed height (2026-08-06 follow-up — user-directed: "make it so the text box has
+   a dedicated space for both player and enemy so it doesn't auto resize when it appears and
+   disappears") — WITHOUT an explicit height, this row collapses to 0px whenever its only child is
+   display:none (a hidden flex child contributes nothing to its parent's size), which visibly
+   resized the whole status-row box every time a status activated/expired. A fixed height reserves
+   the space unconditionally. Present on EnemySlot0 too (empty for now — see BattleHUD.uxml) for
+   the same reason: every status-row box (player or enemy) is now the same height regardless of
+   whether anything is actually active. */
+.status-bar {
+    flex-direction: row;
+    height: 26px;
+    margin-top: 6px;
+}
+
+/* Miniature version of .move-option-placeholder — same shape language (circle, bold single
+   letter), a third the size, so a status icon reads as "the same skill, just small" rather than
+   a different visual language. */
+.status-icon {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    border-width: 2px;
+    margin-right: 6px;
+}
+
+.status-icon-purple {
+    background-color: rgb(90, 60, 120);
+    border-color: rgb(190, 140, 230);
+}
+
+/* Mini "B" (Evolution Burst) icon — orange, 2026-08-06 wiring EvolutionBurstSystem into the live
+   loop. Same miniature pattern as .status-icon-purple. */
+.status-icon-orange {
+    background-color: rgb(140, 85, 30);
+    border-color: rgb(240, 170, 90);
+}
+
+.status-icon-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(230, 230, 230);
+}
+
+/* Countdown subscript (2026-08-06, user-directed: "a countdown counter is better for user
+   intuition — 4 turns will be 4 then 3 then 2 etc") — sits OUTSIDE the icon's own circular frame
+   (negative offsets), not clipped inside it. Bottom-RIGHT specifically marks an END-of-turn
+   effect (Regen ticks at the end of the player's turn) — bottom-LEFT (.status-icon-counter-bl,
+   below) is reserved for a future START-of-turn effect, so the corner alone communicates which
+   phase a status resolves in without reading the icon. Dropped further below the icon (2026-08-06
+   follow-up — user-directed: "hard to read... drop it a little lower so its more viewable and not
+   overlapping with the icon") — the original -5px offset only barely cleared the icon's own
+   bottom edge; -13px clears it with real breathing room. .status-bar's fixed height (above)
+   already accounts for this extra drop. Outlined for legibility against whatever is directly
+   behind it (the stage background, not a solid bar). */
+.status-icon-counter-br {
+    position: absolute;
+    right: -2px;
+    bottom: -13px;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+}
+
+/* Mirror of .status-icon-counter-br, bottom-left — for a future START-of-turn effect. Not used
+   by any status yet (Regen is the only one, and it's end-of-turn), defined now so the
+   left/right convention is established in code, not just described in a comment. */
+.status-icon-counter-bl {
+    position: absolute;
+    left: -2px;
+    bottom: -13px;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+}
+
+/* Numeric "current/max" readout overlaid on top of the HP/Aura fill bars (2026-08-05, user-
+   directed: "add a number in the health and aura so I can see how many points are in each").
+   Spans the whole bar-back so it's centered regardless of fill width; drawn after the fill
+   element in the visual tree so it renders on top. Outline (not just a plain color) keeps it
+   legible whether it's sitting over the filled or unfilled portion of the bar. */
+.bar-value-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: 12px;
+    color: rgb(255, 255, 255);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+}
+
+.stage {
+    flex-grow: 1;
+    position: relative;
+}
+
+/* Creatures sit in the upper portion of the stage (not dead-center) so the bottom row (action
+   panel + battle log) has clear room below without overlapping them. Each side is anchored at
+   1/5 of the screen width in from its edge, translated back by half its own size so the anchor
+   point is the group's center, not its corner. */
+.stage-side {
+    position: absolute;
+    top: 30%;
+    flex-direction: row;
+    align-items: center;
+}
+
+.stage-side-player {
+    left: 20%;
+    translate: -50% -50%;
+}
+
+.stage-side-enemy {
+    right: 20%;
+    translate: 50% -50%;
+    flex-direction: row-reverse;
+}
+
+.stage-creature {
+    width: 72px;
+    height: 72px;
+    border-radius: 36px;
+    margin-left: 10px;
+    margin-right: 10px;
+    background-color: rgb(140, 140, 150);
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0.4);
+    opacity: 1;
+}
+
+/* Sonny 2-style move selection (2026-08-05/06, user-directed — see DECISIONS.md -> [Combat]):
+   small round icon badges floating further out from the acting player's stage creature at fixed
+   clock-face positions instead of a boxed menu, matching Sonny 2's own circular ability-icon
+   reference (plain circle, minimal text, no description needed). Five placeholders exist now —
+   "A" (Attack, green, 1 o'clock) and "K" (Capture, gold via .move-option-gold, 3 o'clock,
+   2026-08-06 Phase 3 Gate wiring): click-drag onto an ENEMY. "C" (Charge, blue, 11 o'clock), "H"
+   (Heal, pink, 12 o'clock), and "R" (Regen, purple via .move-option-purple, 2 o'clock) are all
+   solo/self-only skills: same click-drag gesture as Attack, but the only valid drop target is the
+   CASTER's own creature ("this one happens to only make it so you can select the character that
+   is casting it") — releasing anywhere else cancels back to the placeholders, same as Attack.
+   "C" restores Aura instantly; "H" spends Aura for an instant HP heal; "R" spends Aura for an
+   over-time heal that ticks at the end of the player's turn (see BattleManager.TickPlayerRegen
+   and the .status-bar icon below); "K" attempts CaptureSystem's placeholder chance-roll, ending
+   the battle on success. All five go through BattleHUDController.BeginDrag/OnDragPointerUp
+   (MoveOptionIsSelfOnly, index-matched to this array, decides the valid drop target per move —
+   not a per-move enum/switch, so adding a 6th move needs no new branch here) — none is a full
+   Button, so pointer-down doesn't fight the drag for pointer capture. BattleHUDController
+   computes each option's left/top per-instance (PositionMoveOptions, using MoveOptionRadius for
+   the distance from the creature) — this class only supplies the fixed visual size/style, not
+   position. */
+.move-option-placeholder {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background-color: rgb(60, 110, 65);
+    border-width: 3px;
+    border-color: rgb(140, 230, 150);
+    border-radius: 16px;
+}
+
+/* Second orb ("C", Charge) — blue instead of green, per the user's explicit "make one blue and the other green." */
+.move-option-blue {
+    background-color: rgb(50, 85, 120);
+    border-color: rgb(130, 190, 240);
+}
+
+/* Third orb ("H", Heal) — pastel pink. Solo/self-only skill — costs HealAuraCost Aura, heals
+   HealAmount HP instantly on cast (see BattleManager.PlayerTurn's MoveOptionHeal branch). */
+.move-option-pink {
+    background-color: rgb(150, 90, 115);
+    border-color: rgb(240, 170, 200);
+}
+
+/* Fourth orb ("R", Regen, 2026-08-06 addition) — purple. Solo/self-only skill — costs
+   RegenAuraCost Aura, heals RegenHealPerTurn HP at the end of the player's turn for
+   RegenDurationTurns turns (see BattleManager.TickPlayerRegen). Same purple, smaller, is reused
+   for the .status-icon-purple buff icon below while the status is active. */
+.move-option-purple {
+    background-color: rgb(90, 60, 120);
+    border-color: rgb(190, 140, 230);
+}
+
+/* Fifth orb ("K", Capture, 2026-08-06 Phase 3 Gate wiring) — gold. NOT self-only — targets the
+   ENEMY like Attack (see BattleHUDController.MoveOptionIsSelfOnly). Attempts CaptureSystem's
+   placeholder chance-roll; success ends the battle and adds the enemy to the party. */
+.move-option-gold {
+    background-color: rgb(120, 100, 40);
+    border-color: rgb(230, 200, 90);
+}
+
+/* Absolute-fills the parent circle with centered text rather than relying on flex centering —
+   guarantees the letter is dead-center regardless of the Label's own default box/alignment
+   quirks (2026-08-05, user-directed: "make sure the letters are centered on the orb"). The first
+   pass at this still rendered off-center because Unity's default runtime theme applies a
+   non-zero, ASYMMETRIC margin/padding to every Label (measured live: margin 2/4/4/2,
+   padding 1/2/4/4 px, left/right/top/bottom) — with left:0/right:0/top:0/bottom:0 alone, that
+   margin still shifts the box right+down inside the 0-inset rect. margin:0 and padding:0 here
+   are load-bearing, not decorative (2026-08-06 fix — see DECISIONS.md -> [Combat]). */
+.move-option-label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+    font-size: 13px;
+    color: rgb(230, 230, 230);
+    -unity-font-style: bold;
+}
+
+/* Empty skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark
+   grey, unlabeled placeholder circles distributed one per clock hour around the acting
+   creature, on the SAME radius path as "A"/"C"/"H"/"R"/"K" (.move-option-placeholder,
+   MoveOptionRadius) — user preferred that original spacing over a separate outer ring.
+   Deliberately the SAME size as .move-option-placeholder too (2026-08-06 follow-up — user
+   clarified the model: these 12 are the slots, and "A"/"C"/"H"/"R"/"K" are skills already SLOTTED
+   INTO the 1/11/12/2/3 o'clock positions, not a smaller decoration peeking out from behind a
+   bigger orb) — 7 read as empty (grey), 5 read as filled (colored, lettered), all on one uniform
+   ring. BattleHUD.uxml orders the skill slots BEFORE the move options so "A"/"C"/"H"/"R"/"K" paint
+   on top and fully cover the grey slot underneath at those five positions. No text, no
+   color-coding, no click handler yet on the empty ones — real
+   skill content is still "taxonomy locked, individual skills pending" per CLAUDE.md.
+   BattleHUDController computes each slot's left/top per-instance (PositionSkillSlots) — this
+   class only supplies the fixed visual size/style. Shown/hidden together with the move options
+   (SetMoveOptionsVisible). */
+.skill-slot-placeholder {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background-color: rgb(45, 45, 50);
+    border-width: 3px;
+    border-color: rgb(80, 80, 85);
+    border-radius: 16px;
+}
+
+/* Converging-ring action-command timing (2026-08-05, user-directed, Sonny 2-referenced — see
+   DECISIONS.md -> [Combat]): shared by both RunTimedInput (offense, reparented above the
+   TARGETED enemy) and RunDefenseTimedInput (defense, reparented above the defending player
+   creature) — replaces the old horizontal timing bar entirely. RingVisual draws itself via
+   Painter2D — see that class. pickingMode is Ignore on the element itself; sized generously so
+   the full-radius ring always fits inside its own layout box. */
+.timing-ring {
+    position: absolute;
+    top: -150px;
+    left: 50%;
+    translate: -50% 0;
+    width: 140px;
+    height: 140px;
+}
+
+/* Bottom row: action panel (current turn/move/timing bar) fills the left half of the screen,
+   battle log fills the right half — each panel is flex-grow:1/flex-basis:0 so the row's full
+   width (left:0/right:0, edge-to-edge) splits exactly 50/50, with only a small gap-via-margin
+   between them. Height is fixed (300px) on both, unrelated to the width split. */
+.stage-bottom-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 20px;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.action-panel {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 300px;
+    margin-right: 8px;
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(10, 10, 14, 0.9);
+    border-width: 2px;
+    border-color: rgb(90, 90, 100);
+}
+
+.turn-label {
+    font-size: 28px;
+    color: rgb(230, 230, 230);
+    margin-bottom: 12px;
+    -unity-text-align: middle-center;
+}
+
+/* Action announcement — text-only now (Combat_Directive_v0_1_0.md Part 4's action-command label).
+   Both the offensive and defensive timing checks moved entirely to the converging RingVisual
+   (2026-08-05, user-directed — see DECISIONS.md -> [Combat] and .timing-ring above); this panel
+   just shows which check is running and on whom, color-coded to match (green = offense, gold =
+   defend) so it's still unmistakable at a glance which check the ring belongs to. */
+.action-announcement {
+    align-items: center;
+    padding: 4px;
+}
+
+.action-announcement-label {
+    -unity-font-style: bold;
+}
+
+.action-announcement-offense .action-announcement-label {
+    color: rgb(140, 230, 150);
+}
+
+.action-announcement-defend .action-announcement-label {
+    color: rgb(230, 210, 130);
+}
+
+/* Auto-paced beat message (BattleHUDController.ShowTimedMessage) — shown after every beat
+   (announcement, resolved attack, turn transition), auto-hiding on a fixed timer with no click
+   required. Used to gate on a Continue button (name kept as "continue-prompt"/"ContinuePrompt"
+   rather than renamed, to minimize churn — see DECISIONS.md -> [Combat]) until the user judged
+   the extra click unnecessary (2026-08-06). */
+.continue-prompt {
+    align-items: center;
+    padding: 6px;
+}
+
+/* Text battle log — damage dealt, Primal type effectiveness, timed-input results. */
+.battle-log-panel {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 300px;
+    margin-left: 8px;
+    padding: 14px;
+    background-color: rgba(10, 10, 14, 0.9);
+    border-width: 2px;
+    border-color: rgb(90, 90, 100);
+}
+
+.battle-log-title {
+    font-size: 22px;
+    color: rgb(210, 210, 220);
+    -unity-font-style: bold;
+    margin-bottom: 8px;
+}
+
+.battle-log-scroll {
+    flex-grow: 1;
+}
+
+.battle-log-entry {
+    font-size: 19px;
+    color: rgb(230, 230, 235);
+    white-space: normal;
+    margin-bottom: 8px;
+}
