@@ -3,95 +3,8 @@
     <ui:Style src="project://database/Assets/UI/BattleHUD.uss" />
     <ui:VisualElement name="BattleHUDRoot" class="battle-root">
         <ui:VisualElement name="StatusHeader" class="status-header">
-            <ui:VisualElement name="PlayerStatusList" class="status-list">
-                <ui:VisualElement name="PlayerSlot0" class="status-row">
-                    <ui:Label name="PlayerSlot0_Name" text="Ally 1" class="row-name" />
-                    <ui:VisualElement name="PlayerSlot0_HPBack" class="hp-bar-back">
-                        <ui:VisualElement name="PlayerSlot0_HPFill" class="hp-bar-fill" />
-                        <ui:Label name="PlayerSlot0_HPText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot0_AuraBack" class="aura-bar-back">
-                        <ui:VisualElement name="PlayerSlot0_AuraFill" class="aura-bar-fill" />
-                        <ui:Label name="PlayerSlot0_AuraText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot0_BurstBack" class="burst-bar-back">
-                        <ui:VisualElement name="PlayerSlot0_BurstFill" class="burst-bar-fill" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot0_StatusBar" class="status-bar">
-                        <ui:VisualElement name="PlayerSlot0_StatusIcon_Regen" class="status-icon status-icon-purple">
-                            <ui:Label text="R" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot0_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                        <ui:VisualElement name="PlayerSlot0_StatusIcon_Burst" class="status-icon status-icon-orange">
-                            <ui:Label text="B" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot0_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement name="PlayerSlot1" class="status-row">
-                    <ui:Label name="PlayerSlot1_Name" text="Ally 2" class="row-name" />
-                    <ui:VisualElement name="PlayerSlot1_HPBack" class="hp-bar-back">
-                        <ui:VisualElement name="PlayerSlot1_HPFill" class="hp-bar-fill" />
-                        <ui:Label name="PlayerSlot1_HPText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot1_AuraBack" class="aura-bar-back">
-                        <ui:VisualElement name="PlayerSlot1_AuraFill" class="aura-bar-fill" />
-                        <ui:Label name="PlayerSlot1_AuraText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot1_BurstBack" class="burst-bar-back">
-                        <ui:VisualElement name="PlayerSlot1_BurstFill" class="burst-bar-fill" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot1_StatusBar" class="status-bar">
-                        <ui:VisualElement name="PlayerSlot1_StatusIcon_Regen" class="status-icon status-icon-purple">
-                            <ui:Label text="R" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot1_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                        <ui:VisualElement name="PlayerSlot1_StatusIcon_Burst" class="status-icon status-icon-orange">
-                            <ui:Label text="B" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot1_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-                <ui:VisualElement name="PlayerSlot2" class="status-row">
-                    <ui:Label name="PlayerSlot2_Name" text="Ally 3" class="row-name" />
-                    <ui:VisualElement name="PlayerSlot2_HPBack" class="hp-bar-back">
-                        <ui:VisualElement name="PlayerSlot2_HPFill" class="hp-bar-fill" />
-                        <ui:Label name="PlayerSlot2_HPText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot2_AuraBack" class="aura-bar-back">
-                        <ui:VisualElement name="PlayerSlot2_AuraFill" class="aura-bar-fill" />
-                        <ui:Label name="PlayerSlot2_AuraText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot2_BurstBack" class="burst-bar-back">
-                        <ui:VisualElement name="PlayerSlot2_BurstFill" class="burst-bar-fill" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerSlot2_StatusBar" class="status-bar">
-                        <ui:VisualElement name="PlayerSlot2_StatusIcon_Regen" class="status-icon status-icon-purple">
-                            <ui:Label text="R" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot2_StatusIcon_Regen_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                        <ui:VisualElement name="PlayerSlot2_StatusIcon_Burst" class="status-icon status-icon-orange">
-                            <ui:Label text="B" class="status-icon-label" />
-                            <ui:Label name="PlayerSlot2_StatusIcon_Burst_Counter" text="" class="status-icon-counter-br" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:VisualElement>
-            </ui:VisualElement>
-            <ui:VisualElement name="EnemyStatusList" class="status-list status-list-enemy">
-                <ui:VisualElement name="EnemySlot0" class="status-row status-row-enemy">
-                    <ui:Label name="EnemySlot0_Name" text="Enemy" class="row-name" />
-                    <ui:VisualElement name="EnemySlot0_HPBack" class="hp-bar-back">
-                        <ui:VisualElement name="EnemySlot0_HPFill" class="hp-bar-fill" />
-                        <ui:Label name="EnemySlot0_HPText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="EnemySlot0_AuraBack" class="aura-bar-back">
-                        <ui:VisualElement name="EnemySlot0_AuraFill" class="aura-bar-fill" />
-                        <ui:Label name="EnemySlot0_AuraText" text="" class="bar-value-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="EnemySlot0_BurstBack" class="burst-bar-back" />
-                    <ui:VisualElement name="EnemySlot0_StatusBar" class="status-bar" />
-                </ui:VisualElement>
-            </ui:VisualElement>
+            <ui:VisualElement name="PlayerStatusList" class="status-list" />
+            <ui:VisualElement name="EnemyStatusList" class="status-list status-list-enemy" />
         </ui:VisualElement>
         <ui:VisualElement name="Stage" class="stage">
             <ui:VisualElement name="PlayerStageArea" class="stage-side stage-side-player">
@@ -202,6 +115,7 @@
                     </ui:ScrollView>
                 </ui:VisualElement>
             </ui:VisualElement>
+            <ui:Button name="EndTurnButton" text="End Turn" class="end-turn-button" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

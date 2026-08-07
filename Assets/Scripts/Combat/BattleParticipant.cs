@@ -46,6 +46,18 @@ public class BattleParticipant
     /// </summary>
     public EvolutionBurstGauge BurstGauge { get; } = new EvolutionBurstGauge();
 
+    /// <summary>
+    /// Whether this participant has already used their action this player turn — reset to false
+    /// at the start of every PlayerTurn (2026-08-06, user-directed — see DECISIONS.md -> [Combat]:
+    /// free-choice creature selection replaced strict turn order, so BattleManager needs to know
+    /// who's already gone). Drives BattleHUDController.ShowMoveSelectionReadOnly's greyed-out
+    /// "already acted" state when the player re-clicks this creature. Currently every move greys
+    /// out once this is true — plain public state, not baked into any one move's logic, so a
+    /// future synergy skill or passive that allows a second action per turn only needs to check
+    /// this flag differently for that specific option, not restructure how it's tracked.
+    /// </summary>
+    public bool HasActedThisTurn { get; set; }
+
     public string DisplayName => RuntimeData.speciesData != null ? RuntimeData.speciesData.SpeciesName : "???";
 
     public BattleParticipant(PhasixRuntimeData runtimeData, bool isPlayerSide)

@@ -19,146 +19,152 @@
    bottom row inside the stage with the current-action panel on the left and the battle log on the
    right. */
 
+/* Absolutely positioned over the stage rather than a normal flex-column sibling of it (2026-08-06,
+   user-directed — see DECISIONS.md -> [Combat]: adding a 3rd party member visibly moved the
+   ENEMY too, because .status-header's height was growing with each new .status-row and .stage
+   (flex-grow: 1, same flex-column parent) was shrinking to compensate — .stage-side's `top: %`
+   anchors then resolved to a different absolute pixel position any time party size changed, even
+   though nothing about the enemy itself had changed. Taking status-header out of flex flow makes
+   .stage always fill the FULL battle-root height regardless of party size, so stage-side's anchor
+   point is now a fixed px offset (see .stage-side below) — stable no matter how many rows are
+   shown. */
 .status-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     flex-direction: row;
     justify-content: space-between;
-    padding: 16px;
+    padding: 8px;
 }
 
+/* Fixed narrow sidebar, not the old 33%-of-screen row list — the radial nameplate below doesn't
+   need that much width, and a narrower sidebar leaves clean horizontal separation from the
+   staged creatures (anchored around the 20%/80% marks — see .stage-side below), no matter how
+   tall the sidebar grows stacking nameplates. */
 .status-list {
     flex-direction: column;
-    width: 33%;
+    width: 160px;
 }
 
 .status-list-enemy {
     align-items: flex-end;
 }
 
-.status-row {
-    width: 100%;
-    padding: 10px 14px;
-    margin-bottom: 8px;
-    background-color: rgba(20, 20, 24, 0.9);
-    border-width: 2px;
-    border-color: rgb(90, 90, 100);
+/* Radial nameplate (2026-08-06, user-directed — see DECISIONS.md -> [Combat]: replaces the old
+   stacked HP/Aura/Burst bars with a circular gauge around a portrait, "so its cleaner and more
+   straight forward"). Deliberately an INVISIBLE container — no background, no border — per the
+   user's explicit ask: "an invisible container that this hud sits in, so when you have to stack
+   multiple of these huds together... you can just stack the full containers side by side." Every
+   sub-element (name, ring, stats, buff row) lives inside this one self-contained box; stacking N
+   of them (up to MaxNameplateSlots — see BattleHUDController) is just N containers in a column,
+   nothing about one depends on its neighbors. Fixed width matching .status-list so the buff row
+   below has a stable wrap boundary. */
+/* Sized to fit MaxNameplateSlots (7) stacked in the available header height without overlapping
+   the bottom row (2026-08-06 — verified live, first pass at 64px rings/12px name overflowed past
+   7 slots into the Battle Log panel; shrunk across the board here). */
+.nameplate {
+    width: 160px;
+    padding: 2px;
+    margin-bottom: 3px;
 }
 
-.status-row-enemy {
-    align-items: flex-end;
-}
-
-.row-name {
-    font-size: 30px;
+.nameplate-name {
     color: rgb(255, 255, 255);
-    margin-bottom: 8px;
     -unity-font-style: bold;
+    font-size: 10px;
+    -unity-text-align: middle-center;
+    margin-bottom: 1px;
 }
 
-.hp-bar-back {
-    width: 100%;
+/* Square mount for RadialGaugeVisual (a custom Painter2D element, not a UXML-declared child —
+   see BattleHUDController.BuildNameplate) plus the portrait circle it draws around. Both are
+   centered in this box and share its exact size, so RadialGaugeVisual's own resolvedStyle-based
+   radius math always matches where the portrait actually sits. */
+.nameplate-ring-wrap {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 2px;
+}
+
+.nameplate-portrait {
+    position: absolute;
+    width: 24px;
     height: 24px;
-    margin-bottom: 8px;
-    background-color: rgb(50, 50, 56);
+    left: 11px;
+    top: 11px;
+    border-radius: 12px;
+    background-color: rgb(140, 140, 150);
     border-width: 2px;
-    border-color: rgb(0, 0, 0);
+    border-color: rgba(0, 0, 0, 0.4);
 }
 
-.hp-bar-fill {
-    height: 100%;
-    width: 100%;
-    background-color: rgb(90, 200, 100);
+.nameplate-gauge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 46px;
+    height: 46px;
 }
 
-.aura-bar-back {
-    width: 100%;
-    height: 16px;
-    background-color: rgb(40, 40, 52);
-    border-width: 2px;
-    border-color: rgb(0, 0, 0);
-}
-
-.aura-bar-fill {
-    height: 100%;
-    width: 100%;
-    background-color: rgb(90, 140, 230);
-}
-
-/* Evolution Burst gauge bar (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): "put a
-   new bar underneath the aura bar... purple bar... shift the buff/debuff icons below this new
-   purple bar." Same box-model as .hp-bar-back/.aura-bar-back (dark back + colored fill), so it
-   reads as a third bar in the same family, not a different widget. Present (empty, no fill
-   child) on EnemySlot0 too, same reserved-height reasoning as .status-bar below — see that
-   comment. BattleHUDController.SetBurstFillBar drives the fill width; the back element itself is
-   the click target (BurstBarClicked) and gets .burst-bar-ready once full. */
-.burst-bar-back {
-    width: 100%;
-    height: 14px;
-    margin-top: 6px;
-    background-color: rgb(40, 40, 52);
-    border-width: 2px;
-    border-color: rgb(0, 0, 0);
-}
-
-.burst-bar-fill {
-    height: 100%;
-    width: 0%;
-    background-color: rgb(150, 90, 220);
-}
-
-/* "When it hits max fill and it can be triggered, outline a yellow border around the purple bar
-   and allow it to be clickable" — BattleHUDController.SetBurstFillBar toggles this once
-   FillPercent reaches EvolutionBurstSystem.TriggerThreshold (the exact same threshold
-   EvolutionBurstSystem.ActivateReady itself checks, so this visual promise is never wrong about
-   what a click will do). The bar is always a valid click TARGET (BurstBarClicked fires
-   unconditionally) — this class is purely the "yes, right now" affordance, not a gate. */
-.burst-bar-ready {
-    border-color: rgb(230, 210, 60);
-}
-
-/* Status bar (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): a row of small buff/
-   debuff icons directly underneath the Burst bar (shifted down from directly under Aura once the
-   Burst bar was added above — "shift the buff/debuff icons below this new purple bar"), e.g. "a
-   small icon that looks exactly like the R orb but smaller... acting like a status bar." Each
-   icon is hidden (display:none) until BattleHUDController.SetRegenStatus/SetBurstStatus actually
-   activates it. Fixed height (2026-08-06 follow-up — user-directed: "make it so the text box has
-   a dedicated space for both player and enemy so it doesn't auto resize when it appears and
-   disappears") — WITHOUT an explicit height, this row collapses to 0px whenever its only child is
-   display:none (a hidden flex child contributes nothing to its parent's size), which visibly
-   resized the whole status-row box every time a status activated/expired. A fixed height reserves
-   the space unconditionally. Present on EnemySlot0 too (empty for now — see BattleHUD.uxml) for
-   the same reason: every status-row box (player or enemy) is now the same height regardless of
-   whether anything is actually active. */
-.status-bar {
+.nameplate-stats {
     flex-direction: row;
-    height: 26px;
-    margin-top: 6px;
+    justify-content: center;
+    margin-bottom: 1px;
 }
 
-/* Miniature version of .move-option-placeholder — same shape language (circle, bold single
-   letter), a third the size, so a status icon reads as "the same skill, just small" rather than
-   a different visual language. */
-.status-icon {
+.nameplate-stat {
+    font-size: 7px;
+    margin-right: 4px;
+    -unity-text-align: middle-center;
+}
+
+.nameplate-stat-hp {
+    color: rgb(90, 200, 100);
+}
+
+.nameplate-stat-aura {
+    color: rgb(90, 140, 230);
+}
+
+.nameplate-stat-evo {
+    color: rgb(150, 90, 220);
+    margin-right: 0;
+}
+
+/* Buff/debuff row — deliberately its own full-width row below the stats, NOT squeezed next to
+   the name (2026-08-06, user-directed: "we'll be putting a lot so keeping it underneath makes
+   sense so you can just stack from left to right"). flex-wrap means once a row fills the
+   nameplate's width it starts a second row on its own — no extra logic needed as more buffs get
+   added later. */
+.nameplate-buffs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.nameplate-buff-icon {
     display: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 10px;
-    border-width: 2px;
-    margin-right: 6px;
+    position: relative;
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    border-width: 1px;
+    margin: 0 3px 2px 0;
 }
 
-.status-icon-purple {
+.nameplate-buff-regen {
     background-color: rgb(90, 60, 120);
     border-color: rgb(190, 140, 230);
 }
 
-/* Mini "B" (Evolution Burst) icon — orange, 2026-08-06 wiring EvolutionBurstSystem into the live
-   loop. Same miniature pattern as .status-icon-purple. */
-.status-icon-orange {
+.nameplate-buff-burst {
     background-color: rgb(140, 85, 30);
     border-color: rgb(240, 170, 90);
 }
 
-.status-icon-label {
+.nameplate-buff-icon-label {
     position: absolute;
     left: 0;
     right: 0;
@@ -167,65 +173,19 @@
     margin: 0;
     padding: 0;
     -unity-text-align: middle-center;
-    font-size: 10px;
+    font-size: 7px;
     -unity-font-style: bold;
     color: rgb(230, 230, 230);
 }
 
-/* Countdown subscript (2026-08-06, user-directed: "a countdown counter is better for user
-   intuition — 4 turns will be 4 then 3 then 2 etc") — sits OUTSIDE the icon's own circular frame
-   (negative offsets), not clipped inside it. Bottom-RIGHT specifically marks an END-of-turn
-   effect (Regen ticks at the end of the player's turn) — bottom-LEFT (.status-icon-counter-bl,
-   below) is reserved for a future START-of-turn effect, so the corner alone communicates which
-   phase a status resolves in without reading the icon. Dropped further below the icon (2026-08-06
-   follow-up — user-directed: "hard to read... drop it a little lower so its more viewable and not
-   overlapping with the icon") — the original -5px offset only barely cleared the icon's own
-   bottom edge; -13px clears it with real breathing room. .status-bar's fixed height (above)
-   already accounts for this extra drop. Outlined for legibility against whatever is directly
-   behind it (the stage background, not a solid bar). */
-.status-icon-counter-br {
+.nameplate-buff-icon-counter {
     position: absolute;
     right: -2px;
-    bottom: -13px;
+    bottom: -8px;
     margin: 0;
     padding: 0;
-    font-size: 10px;
+    font-size: 7px;
     -unity-font-style: bold;
-    color: rgb(255, 255, 255);
-    -unity-text-outline-width: 1px;
-    -unity-text-outline-color: rgb(0, 0, 0);
-}
-
-/* Mirror of .status-icon-counter-br, bottom-left — for a future START-of-turn effect. Not used
-   by any status yet (Regen is the only one, and it's end-of-turn), defined now so the
-   left/right convention is established in code, not just described in a comment. */
-.status-icon-counter-bl {
-    position: absolute;
-    left: -2px;
-    bottom: -13px;
-    margin: 0;
-    padding: 0;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgb(255, 255, 255);
-    -unity-text-outline-width: 1px;
-    -unity-text-outline-color: rgb(0, 0, 0);
-}
-
-/* Numeric "current/max" readout overlaid on top of the HP/Aura fill bars (2026-08-05, user-
-   directed: "add a number in the health and aura so I can see how many points are in each").
-   Spans the whole bar-back so it's centered regardless of fill width; drawn after the fill
-   element in the visual tree so it renders on top. Outline (not just a plain color) keeps it
-   legible whether it's sitting over the filled or unfilled portion of the bar. */
-.bar-value-label {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    -unity-text-align: middle-center;
-    -unity-font-style: bold;
-    font-size: 12px;
     color: rgb(255, 255, 255);
     -unity-text-outline-width: 1px;
     -unity-text-outline-color: rgb(0, 0, 0);
@@ -239,10 +199,15 @@
 /* Creatures sit in the upper portion of the stage (not dead-center) so the bottom row (action
    panel + battle log) has clear room below without overlapping them. Each side is anchored at
    1/5 of the screen width in from its edge, translated back by half its own size so the anchor
-   point is the group's center, not its corner. */
+   point is the group's center, not its corner. `top` is a fixed px offset, NOT a percentage
+   (2026-08-06, user-directed — see DECISIONS.md -> [Combat]) — .stage now always fills the full
+   battle-root height (status-header is absolutely positioned, out of flow — see that comment), so
+   a fixed px clears the header with margin to spare regardless of party size, instead of a
+   `top: 30%` that used to resolve to a different pixel position every time the header's content
+   height changed. */
 .stage-side {
     position: absolute;
-    top: 30%;
+    top: 480px;
     flex-direction: row;
     align-items: center;
 }
@@ -258,12 +223,23 @@
     flex-direction: row-reverse;
 }
 
+/* Absolutely positioned (not flex-flowed) so BattleHUDController can freely reorder player
+   creatures for paint order (BringToFront, for "selected wheel always on top" — see
+   DECISIONS.md -> [Combat], 2026-08-06 layering fix) WITHOUT that reorder also moving them
+   within the row — a flex-flowed child's document position IS its layout position, so
+   BringToFront on a flex child used to visibly shove it to a different spot. left/top are set
+   per-instance in C# (BattleHUDController.LayoutPlayerStageCreatures) at 128px column spacing
+   (72 width + 28+28, same visual gap the old margin-left/right produced), anchored/compacted
+   to however many party members are actually present this battle. Also sets up "place each
+   Phasix at an explicit position" for a future formation/positioning feature (deferred — see
+   DECISIONS.md) — anchoring the pair where they are now is a placeholder, not the final say on
+   where a creature can stand. */
 .stage-creature {
+    position: absolute;
+    top: 0;
     width: 72px;
     height: 72px;
     border-radius: 36px;
-    margin-left: 10px;
-    margin-right: 10px;
     background-color: rgb(140, 140, 150);
     border-width: 3px;
     border-color: rgba(0, 0, 0, 0.4);
@@ -352,6 +328,15 @@
     -unity-font-style: bold;
 }
 
+/* "Already acted this turn" state (2026-08-06, user-directed — see DECISIONS.md -> [Combat]:
+   "if the phasix already moved during its turn then it can still show, but will be greyed out
+   for active skills") — BattleHUDController.ShowMoveSelectionReadOnly applies this to every orb
+   in the wheel; BeginDrag refuses to start a drag for a read-only slot, so this is a genuine
+   disabled state, not just a visual one. */
+.move-option-disabled {
+    opacity: 0.35;
+}
+
 /* Empty skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark
    grey, unlabeled placeholder circles distributed one per clock hour around the acting
    creature, on the SAME radius path as "A"/"C"/"H"/"R"/"K" (.move-option-placeholder,
@@ -395,7 +380,9 @@
 /* Bottom row: action panel (current turn/move/timing bar) fills the left half of the screen,
    battle log fills the right half — each panel is flex-grow:1/flex-basis:0 so the row's full
    width (left:0/right:0, edge-to-edge) splits exactly 50/50, with only a small gap-via-margin
-   between them. Height is fixed (300px) on both, unrelated to the width split. */
+   between them. Height is fixed (150px, halved from 300px 2026-08-06 — user-directed: "make the
+   battle log and notif menu to be about 50% of its current height so theres more room") on both,
+   unrelated to the width split. */
 .stage-bottom-row {
     position: absolute;
     left: 0;
@@ -408,9 +395,9 @@
 .action-panel {
     flex-grow: 1;
     flex-basis: 0;
-    height: 300px;
+    height: 150px;
     margin-right: 8px;
-    padding: 16px;
+    padding: 10px;
     align-items: center;
     justify-content: center;
     background-color: rgba(10, 10, 14, 0.9);
@@ -419,9 +406,9 @@
 }
 
 .turn-label {
-    font-size: 28px;
+    font-size: 18px;
     color: rgb(230, 230, 230);
-    margin-bottom: 12px;
+    margin-bottom: 6px;
     -unity-text-align: middle-center;
 }
 
@@ -461,19 +448,19 @@
 .battle-log-panel {
     flex-grow: 1;
     flex-basis: 0;
-    height: 300px;
+    height: 150px;
     margin-left: 8px;
-    padding: 14px;
+    padding: 10px;
     background-color: rgba(10, 10, 14, 0.9);
     border-width: 2px;
     border-color: rgb(90, 90, 100);
 }
 
 .battle-log-title {
-    font-size: 22px;
+    font-size: 15px;
     color: rgb(210, 210, 220);
     -unity-font-style: bold;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
 .battle-log-scroll {
@@ -481,8 +468,31 @@
 }
 
 .battle-log-entry {
-    font-size: 19px;
+    font-size: 13px;
     color: rgb(230, 230, 235);
     white-space: normal;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
+}
+
+/* End Turn button (2026-08-06, user-directed — see DECISIONS.md -> [Combat]: "an end turn
+   button thats separate from the dialogue boxes but is clear. Similar to slay the spire 2").
+   Deliberately its own distinct, always-there-during-the-player's-turn control — NOT part of
+   the ContinuePrompt/ActionAnnouncement dialogue boxes, which the user separately noted are
+   "planned to be removed once there is more UI feedback" (this button is not). Sits above the
+   bottom row (stage-bottom-row is bottom:20px, 150px tall as of the panel-height halving below)
+   so it never overlaps the action panel or battle log. BattleHUDController.SetEndTurnButtonVisible
+   toggles it — shown only while the player's turn is active. */
+.end-turn-button {
+    position: absolute;
+    right: 24px;
+    bottom: 190px;
+    min-width: 160px;
+    height: 56px;
+    font-size: 24px;
+    -unity-font-style: bold;
+    background-color: rgb(170, 55, 55);
+    color: rgb(255, 255, 255);
+    border-width: 3px;
+    border-color: rgb(230, 120, 120);
+    border-radius: 10px;
 }

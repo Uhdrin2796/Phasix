@@ -54,6 +54,15 @@ public class BattleManager : MonoBehaviour
     private bool _playerActionChosen;
     private BattleParticipant _pendingTarget;
     private bool _battleEndedEarly; // set true by a successful Capture — EndBattle already ran, RunBattleLoop must not also call EnemyTurn
+
+    // Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md -> [Combat]):
+    // set by BattleHUDController's click events, consumed by PlayerTurn's own loop. Plain fields
+    // rather than a queue — only the MOST RECENT click matters; rapid double-clicks just resolve
+    // to whichever was last when PlayerTurn's WaitUntil next checks.
+    private int _pendingCreatureClickSlot = -1;
+    private bool _endTurnRequested;
+    private bool _backgroundClickRequested;
+
     private Camera _overworldCamera;
     private int _overworldCullingMask;
     private CameraClearFlags _overworldClearFlags;
@@ -117,6 +126,14 @@ public class BattleManager : MonoBehaviour
         // unload), so no explicit unsubscribe is needed.
         BattleHUDController.Instance.BurstBarClicked += HandleBurstBarClicked;
 
+        // Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md ->
+        // [Combat]): PlayerTurn's own loop consumes these two fields via WaitUntil rather than
+        // acting on them directly in the handler — keeps all the actual turn-flow logic in one
+        // place (the coroutine) instead of splitting it across event callbacks.
+        BattleHUDController.Instance.PlayerCreatureClicked += slot => _pendingCreatureClickSlot = slot;
+        BattleHUDController.Instance.EndTurnClicked += () => _endTurnRequested = true;
+        BattleHUDController.Instance.StageBackgroundClicked += () => _backgroundClickRequested = true;
+
         StartCoroutine(RunBattleLoop());
     }
 
@@ -172,44 +189,114 @@ public class BattleManager : MonoBehaviour
     private const int MoveOptionCapture = 4;
 
     /// <summary>
-    /// Each alive player participant picks a move via the HUD's Sonny 2-style radial placeholders
-    /// (2026-08-05/06, user-directed — see DECISIONS.md -> [Combat]): click-and-drag the "A"
-    /// (Attack) placeholder onto an ENEMY to select the move and target in one gesture, or
-    /// click-and-drag "C" (Charge), "H" (Heal), or "R" (Regen) onto the CASTER's OWN creature —
-    /// all three are solo/self-only skills, so the only valid drop target is the attacker itself
-    /// (BattleHUDController.ShowMoveSelection's self-only handling). Only one enemy exists per
-    /// wild encounter, so Attack's target choice currently just gates the pace of the turn rather
-    /// than offering a real choice — the UI structure is real, richer content arrives with the
-    /// skill tree framework (Step 4). Stops early if the enemy side is wiped mid-turn (remaining
-    /// party members don't get to swing at a dead target).
+    /// Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md -> [Combat]),
+    /// replacing the old strict-turn-order foreach: the player can click ANY of their alive
+    /// Phasix, in any order, to open its move wheel via the HUD's Sonny 2-style radial
+    /// placeholders — click-and-drag the "A" (Attack) or "K" (Capture) placeholder onto an ENEMY,
+    /// or "C" (Charge), "H" (Heal), or "R" (Regen) onto the CASTER's OWN creature (all three are
+    /// solo/self-only). Clicking a DIFFERENT creature while one's wheel is open (whether it's
+    /// still choosing a move, or just being viewed read-only) closes the current one and opens
+    /// the new one — no move is lost, since nothing is committed until a drag actually confirms a
+    /// target. A creature that's already acted this turn (BattleParticipant.HasActedThisTurn)
+    /// still opens on click, but read-only/greyed (ShowMoveSelectionReadOnly) — every current
+    /// move requires the turn's one action, so there's nothing to actually pick, but the wheel
+    /// stays inspectable. The player ends their own turn explicitly via the dedicated End Turn
+    /// button (EndTurnClicked) rather than the turn auto-ending once everyone's acted — matching
+    /// how the free-choice model doesn't force every creature to act every round.
     ///
-    /// Between successive party members' attacks (if more than one is alive), pacing is
-    /// automatic — BattleHUDController.ShowTimedMessage, no click. Once every alive party member
-    /// has acted, any active Regen statuses tick (heal + countdown, see TickPlayerRegen) before
-    /// the single Continue click for this whole turn, which gates the transition into the enemy's
-    /// turn (2026-08-05, user-directed — see DECISIONS.md -> [Combat]).
+    /// Stops immediately (skipping the end-of-turn ticks/message below) if the enemy side is
+    /// wiped mid-turn, checked at the top of every loop iteration — same "no swinging at a dead
+    /// target" intent the old foreach had, just re-derived for a player-driven loop instead of a
+    /// fixed order.
     /// </summary>
     private IEnumerator PlayerTurn()
     {
-        foreach (BattleParticipant attacker in _state.PlayerSide)
+        foreach (BattleParticipant p in _state.PlayerSide) p.HasActedThisTurn = false;
+
+        _endTurnRequested = false;
+        _pendingCreatureClickSlot = -1;
+        _backgroundClickRequested = false;
+        BattleHUDController.Instance.SetEndTurnButtonVisible(true);
+
+        int activeSlot = -1; // -1 = no wheel currently open
+        int chosenOptionIndex = -1; // set by ShowMoveSelection's callback once a drag confirms a target
+
+        while (!_endTurnRequested)
         {
-            if (!attacker.IsAlive) continue;
+            if (_state.EnemySide.TrueForAll(e => !e.IsAlive)) yield break; // wiped mid-turn — battle is already over, TryEndBattle picks this up right after PlayerTurn returns
 
-            List<BattleParticipant> aliveEnemies = _state.EnemySide.FindAll(e => e.IsAlive);
-            if (aliveEnemies.Count == 0) yield break; // enemy side already wiped earlier this turn
+            if (activeSlot < 0)
+            {
+                yield return new WaitUntil(() => _endTurnRequested || _pendingCreatureClickSlot >= 0);
+                if (_endTurnRequested) break;
 
-            _playerActionChosen = false;
-            int chosenOptionIndex = -1;
-            int attackerSlotIndex = _state.PlayerSide.IndexOf(attacker);
-            BattleHUDController.Instance.ShowMoveSelection(attackerSlotIndex, attacker, aliveEnemies,
-                (optionIndex, chosenTarget) =>
+                // A background click that landed while nothing was selected is a no-op (nothing
+                // to close) — clear it here so it can't linger and instantly close the wheel
+                // we're about to open below.
+                _backgroundClickRequested = false;
+
+                activeSlot = _pendingCreatureClickSlot;
+                _pendingCreatureClickSlot = -1;
+
+                BattleParticipant clicked = _state.PlayerSide[activeSlot];
+                if (!clicked.IsAlive) { activeSlot = -1; continue; }
+
+                if (clicked.HasActedThisTurn)
                 {
-                    chosenOptionIndex = optionIndex;
-                    _pendingTarget = chosenTarget; // only meaningful for Attack; self-only moves ignore it
-                    _playerActionChosen = true;
-                });
+                    BattleHUDController.Instance.ShowMoveSelectionReadOnly(activeSlot);
+                }
+                else
+                {
+                    _playerActionChosen = false;
+                    chosenOptionIndex = -1;
+                    List<BattleParticipant> aliveEnemiesForWheel = _state.EnemySide.FindAll(e => e.IsAlive);
+                    BattleHUDController.Instance.ShowMoveSelection(activeSlot, clicked, aliveEnemiesForWheel,
+                        (optionIndex, chosenTarget) =>
+                        {
+                            chosenOptionIndex = optionIndex;
+                            _pendingTarget = chosenTarget; // only meaningful for Attack/Capture; self-only moves ignore it
+                            _playerActionChosen = true;
+                        });
+                }
+            }
 
-            yield return new WaitUntil(() => _playerActionChosen);
+            // Wait for whichever comes first: End Turn, a move confirmed (only possible in the
+            // functional branch above), the player switching to a DIFFERENT creature (valid from
+            // either the functional or read-only branch — "click on another phasix the current
+            // phasix orb menu closes, then the new clicked phasix menu shows"), or a click on the
+            // empty stage background (2026-08-06, user-directed: "clicking outside of that should
+            // hide any open skill wheels").
+            int openedSlot = activeSlot;
+            yield return new WaitUntil(() =>
+                _endTurnRequested ||
+                _playerActionChosen ||
+                _backgroundClickRequested ||
+                (_pendingCreatureClickSlot >= 0 && _pendingCreatureClickSlot != openedSlot));
+
+            if (_endTurnRequested) break;
+
+            if (_backgroundClickRequested)
+            {
+                _backgroundClickRequested = false;
+                BattleHUDController.Instance.HideMoveSelection();
+                activeSlot = -1;
+                continue; // nothing to open — next iteration's "activeSlot < 0" branch just waits again
+            }
+
+            if (_pendingCreatureClickSlot >= 0 && _pendingCreatureClickSlot != openedSlot)
+            {
+                BattleHUDController.Instance.HideMoveSelection();
+                activeSlot = -1;
+                continue; // next iteration's "activeSlot < 0" branch picks up the pending click
+            }
+
+            if (!_playerActionChosen) continue; // read-only wheel, nothing else happened yet — keep waiting
+
+            BattleParticipant attacker = _state.PlayerSide[activeSlot];
+            int attackerSlotIndex = activeSlot;
+            _playerActionChosen = false;
+            activeSlot = -1; // the wheel this action came from is already hidden by BeginDrag's own confirm/drag flow
+            attacker.HasActedThisTurn = true;
 
             // "C" (Charge) — no attack, no timed input, just restores Aura and ends this
             // attacker's action (2026-08-06, user-directed — see DECISIONS.md -> [Combat]).
@@ -334,6 +421,9 @@ public class BattleManager : MonoBehaviour
             yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
                 $"{attacker.DisplayName} attacks!", BattleConfig.AutoMessageDurationSeconds));
         }
+
+        BattleHUDController.Instance.SetEndTurnButtonVisible(false);
+        BattleHUDController.Instance.HideMoveSelection();
 
         // Regen and Evolution Burst both tick once per player turn, for EVERY alive party member
         // (not just whoever acted this turn) — see TickPlayerRegen/TickPlayerBurst.

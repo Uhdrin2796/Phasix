@@ -1138,6 +1138,366 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
 - **Date:** 2026-08-06
 - **Ref:** Companion note to `EvolutionBurstSystem.cs`'s own class doc comment (same date).
 
+### [Combat] Free-choice creature selection replaces strict turn order; staggered layout; End Turn button
+- **Found:** With a 2nd party member (via Capture, from the previous session's wiring), the user
+  saw two problems live: (1) player creatures rendered side-by-side, cramped, each one's orb ring
+  overlapping the next creature's space; (2) the old strict-turn-order foreach (each party member
+  auto-prompted in a fixed sequence) didn't match how the reference games (Sonny 2, Slay the
+  Spire 2) let the player freely choose which character acts, in any order.
+- **Decided:** Four coordinated changes:
+  1. **Free-choice selection** — `BattleManager.PlayerTurn` rewritten from a `foreach` over
+     `PlayerSide` to an event-driven `while` loop. New `BattleHUDController.PlayerCreatureClicked`
+     event fires whenever a player stage creature (the ball, or anywhere in its empty grey skill-
+     slot cluster — anything that ISN'T a specific colored move orb, which calls
+     `evt.StopPropagation()` so pressing a move doesn't ALSO count as "just select this creature")
+     is pressed. Clicking an unacted creature opens its move wheel and waits for a pick; clicking
+     a DIFFERENT creature before (or instead of) picking closes the current wheel and opens the
+     new one — "click on another phasix the current phasix orb menu closes, then the new clicked
+     phasix menu shows." Nothing is lost by switching, since nothing commits until a drag actually
+     confirms a target.
+  2. **Already-acted = read-only, not hidden** — new `BattleParticipant.HasActedThisTurn` (reset
+     at the start of every `PlayerTurn`) and `BattleHUDController.ShowMoveSelectionReadOnly` — new
+     `.move-option-disabled` (opacity 0.35) on every orb, and `BeginDrag` refuses to start a drag
+     for a read-only slot. "If the phasix already moved during its turn then it can still show,
+     but will be greyed out for active skills." Deliberately greys out ALL current moves — no move
+     supports a second action yet — but `HasActedThisTurn` is a plain per-participant flag, not
+     baked into any one move's logic, specifically so a future synergy skill or passive ("thinking
+     all the current ones will be greyed out, but would like to include possibility for synergy
+     skills or special passives that allow multiple actions") only needs its own check against
+     this flag, not a restructure of how acted-state is tracked or shown.
+  3. **Staggered stage layout** — `.stage-creature` margin-left/right widened 10px -> 28px, plus a
+     new `BattleHUDController.ApplyStageCreatureStagger` applying a per-index vertical `translate`
+     ({0, -45, 25} px) — a pure rendering transform, doesn't disturb
+     PositionMoveOptions/PositionSkillSlots' math (both already relative to each creature's own
+     untransformed box). "They need to be offset/staggered so you can see the full character
+     similar to sonny 2 or slay the spire 2." Written index-matched, not party-size-matched, so
+     the same method would apply to a future multi-slot `EnemyStageArea` — "each phasix needs to
+     have its own orb slots revolving around it, both enemy and player" — though only the player
+     side actually needed it this pass (still a single enemy slot).
+  4. **Dedicated End Turn button** — new `EndTurnButton` (`.end-turn-button`, bottom-right of the
+     stage, above the action/log panels) + `BattleHUDController.EndTurnClicked` event, shown only
+     during the player's turn (`SetEndTurnButtonVisible`). "An end turn button thats separate from
+     the dialogue boxes but is clear. Similar to slay the spire 2." The user explicitly
+     distinguished this from the `ContinuePrompt`/`ActionAnnouncement` dialogue boxes, which stay
+     for now but are "planned to be removed once there is more UI feedback to player" — the End
+     Turn button is NOT on that removal list.
+- **Why:** See "Found" above — both issues were observed live with a real 2-member party, not
+  hypothetical.
+- **Alternatives rejected:** Keeping strict turn order and just fixing the visual overlap —
+  rejected because the user's ask was explicitly about the INTERACTION model ("click on the
+  players phasix, after clicking the orbs then show"), not just spacing. Hard-disabling
+  (hiding/removing) an already-acted creature's wheel entirely instead of showing it read-only —
+  rejected, the user specifically said it "can still show, but will be greyed out."
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode with a real 2nd party member (added via `PartySystem.AddToParty`,
+  mirroring what a real Capture does) — screenshot confirmed the two creatures render staggered
+  (no overlap) and the End Turn button renders bottom-right, distinct from the dialogue boxes.
+  Clicked creature 0: its wheel opened. Clicked creature 1 while creature 0's wheel was open:
+  creature 0's wheel closed, creature 1's opened (confirmed via screenshot). Cast Charge on
+  creature 1, then re-clicked it: wheel reopened visibly greyed; attempted to click "H" on it —
+  confirmed via `BattleParticipant.CurrentAura` reading unchanged (20 before/after) that
+  `BeginDrag` correctly refused the drag. End Turn: a synthetic UI Toolkit click on the `Button`
+  element didn't register (a known limitation of simulating `Button`'s internal `Clickable`
+  manipulator via `SendEvent` — real mouse input isn't affected, and this is Unity engine
+  behavior, not project code), so verified by directly invoking the `EndTurnClicked` delegate
+  instead (confirmed exactly 1 subscriber = `BattleManager`'s handler) — `_endTurnRequested`
+  correctly flipped `true`, and the subsequent screenshot confirmed the turn genuinely
+  transitioned into `EnemyTurn` (an attack resolved) and back into a fresh `PlayerTurn` (End Turn
+  button reappeared). 133/133 EditMode tests unaffected (pure turn-flow/UI restructuring, no
+  formula logic touched — no new tests added this pass, matching that this is orchestration, not
+  new calculable behavior).
+- **Ref:** Builds on the whole move-orb/drag-targeting/status-icon foundation established across
+  every prior `[Combat]` entry in this file; supersedes the "sequential order, everyone acts"
+  framing baked into those entries' own doc comments (updated in-code alongside this change).
+
+### [Combat] Stage-creature layering fixed to match visual depth; selected wheel always frontmost
+- **Found:** With the new staggered layout (previous entry) live and a real 2-member party, the
+  user caught: "when selecting the front phasix some of the skill orbs were showing behind the
+  phasix in a further away lane." Root cause: `ApplyStageCreatureStagger` only applied a `translate`
+  (rendering-only, doesn't reorder siblings) — UI Toolkit draws children in fixed document order
+  (`PlayerStageSlot0`, `1`, `2`), which no longer matched visual depth once slot 1 (`StaggerY =
+  -45`, moved up/back) was staggered to sit "behind" slot 0 (`StaggerY = 0`). Document order still
+  drew slot 1 after slot 0, so slot 1's ball rendered on top of slot 0's orb ring even though slot
+  1 was meant to read as further away.
+- **Decided:** Two-part fix in `BattleHUDController`:
+  1. `ApplyStageCreatureStagger` now also calls the new `RestoreStageCreatureDepthOrder` — sorts
+     player slots ascending by `StaggerY` and `BringToFront()`s them in that order, so document
+     order always matches back-to-front visual depth at rest (furthest-back drawn first, frontmost
+     drawn last/on top).
+  2. **Correction from the user mid-verification:** the first pass only fixed the static/idle
+     ordering. The user then clarified: "the selected character's skill wheel should always be in
+     the front over everything so you can see it clearly" — i.e. depth order should NOT apply to
+     whichever creature currently has its wheel open, even if that creature is in a "back" lane.
+     `ShowMoveSelection`/`ShowMoveSelectionReadOnly` now call `BringToFront()` on the selected
+     creature as they open its wheel, temporarily overriding the depth sort; `HideMoveSelection`
+     calls `RestoreStageCreatureDepthOrder()` to undo the override once the wheel closes, so idle
+     creatures go back to reading correctly by lane depth.
+- **Why:** See "Found" above (static ordering) and the user's direct correction (interactive
+  override) — both observed/stated live, not hypothetical.
+- **Alternatives rejected:** Reordering only once at battle start and never touching it again for
+  selection — rejected per the user's explicit correction that the active wheel must always be
+  fully visible/clickable regardless of which lane it's in, not just "correctly occluded by depth."
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode, real 2-member party. Selected slot 0 (front lane, `StaggerY=0`):
+  its wheel rendered fully in front of slot 1's ball — no clipping. Selected slot 1 (back lane,
+  `StaggerY=-45`) instead: confirmed via screenshot that slot 1's wheel now renders ON TOP of slot
+  0's ball (correctly overriding depth order while active), where before the fix it would have
+  drawn behind it. Ran two full turn cycles with both party members acting each turn (via direct
+  event invocation, since `Button`/pointer synthetic dispatch has the same test-simulation
+  limitation noted in the prior entry): both creatures' `HasActedThisTurn` correctly flipped `true`
+  after acting and reset to `false` at the start of each new `PlayerTurn`; re-clicking an
+  already-acted creature showed the greyed read-only wheel (confirmed via
+  `.move-option-disabled` class check); enemy HP dropped each cycle (two attacks landed per
+  cycle); both party members took enemy damage between cycles. No errors, 133/133 EditMode tests
+  still pass (pure z-order/ordering change, no formula logic touched).
+- **Ref:** Directly follows the previous `[Combat]` entry (free-choice selection/stagger/End Turn
+  button) — this closes the visual gap that entry's stagger introduced.
+
+### [Combat] Stage creatures switched from flex layout to fixed absolute positions; background-click closes wheel
+- **Found:** The previous entry's `BringToFront()`-based layering fix had a side effect the user
+  caught next: "when i click on the other phasix during a play mode the phasix seem to move. or
+  adjust spots." Root cause: `.stage-creature` was a normal flex child of `.stage-side-player`
+  (`flex-direction: row`) — in UI Toolkit/Yoga, a flex child's DOCUMENT position IS its LAYOUT
+  position, so `BringToFront()` (which reorders the element to be the last child) was also moving
+  it to the rightmost slot in the row, not just changing paint order. Confirmed via
+  `resolvedStyle.left`/`worldBound` reads before/after a click — the just-selected creature's `left`
+  jumped to match whichever column BringToFront put it in.
+- **Decided:**
+  1. `.stage-creature` changed to `position: absolute; top: 0;` (removed `margin-left`/`right`);
+     new `BattleHUDController.LayoutPlayerStageCreatures(visibleCount)` sets each visible slot's
+     `left` explicitly (`i * 128 + 28`, reproducing the old flex spacing exactly) and sizes
+     `PlayerStageArea` to match (needed because `.stage-side-player`'s `translate: -50% -50%`
+     centering depends on its own box having a real size, which collapses once its children leave
+     normal flow). Called once from `Initialize` — party composition doesn't change mid-battle
+     (death fades a creature via `SetStageCreatureAliveState`, it doesn't hide the slot), so a
+     single layout pass per battle is sufficient. With creatures no longer flex-flowed,
+     `BringToFront()` (used by the prior entry's depth-order fix) now only affects paint order —
+     the bug is structurally gone, not just patched around.
+  2. Separately, the user also asked: "clicking outside of that should hide any open skill
+     wheels." New `BattleHUDController.StageBackgroundClicked` event, registered on `_stage`
+     (checks `evt.target == _stage`, so it only fires for genuinely empty background — move-orb
+     clicks already `StopPropagation`, and `.stage` fills essentially the whole play area below
+     the status header via `flex-grow: 1`). `BattleManager.PlayerTurn` treats it as an extra wake
+     condition alongside End Turn / move confirmed / switch-creature: hides the wheel and resets
+     to no-selection, without opening anything new. A background click that arrives while nothing
+     is selected is explicitly discarded (not left pending) — otherwise it would sit as a stale
+     flag and instantly close the very next wheel the player opens.
+  3. **Explicitly deferred, not built now:** the user separately noted they'll eventually want to
+     place Phasix in various stage positions for strategy ("later on... right now its not
+     critical so we can just anchor the pair phasix where they are"). `LayoutPlayerStageCreatures`
+     is written as the intended hook for that — it's already "explicit per-slot position," just
+     currently always `column i`; a future formation/positioning feature would change what feeds
+     that method, not its underlying mechanism. No formation UI/logic exists yet — scaffold only.
+- **Why:** See "Found" above (layout regression) and the two direct user asks (background-click
+  dismiss; deferred positioning) — all stated live, not hypothetical.
+- **Alternatives rejected:** Reparenting the wheel's orbs/skill-slots into a separate shared
+  top-level overlay container instead of repositioning the creature itself — rejected as a bigger
+  refactor for the same result; keeping the creature in flex layout and finding some other way to
+  fake z-order — rejected, UI Toolkit has no z-index independent of document order, so getting
+  paint-order control without a layout side effect requires taking the element out of flow one way
+  or another.
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode, real 2-member party. Recorded `worldBound` for both creatures
+  before any click (Slot0 x=306,y=540; Slot1 x=434,y=495), clicked Slot1 then Slot0 in turn, and
+  confirmed both `worldBound`s were byte-identical after each click — no movement. Screenshot
+  confirmed Slot0's wheel still renders correctly on top of Slot1 (the depth-order fix from the
+  previous entry still holds now that it's paint-order-only). Background-click: opened Slot0's
+  wheel (confirmed `option.style.display == Flex`), invoked `StageBackgroundClicked` directly,
+  confirmed the wheel closed (`display == None`). Stale-flag edge case: invoked
+  `StageBackgroundClicked` with nothing selected, then immediately opened Slot1's wheel — confirmed
+  it opened and STAYED open (didn't get instantly closed by the earlier no-op click), proving the
+  `activeSlot < 0` branch's explicit reset works. 133/133 EditMode tests pass throughout (pure
+  layout/event-wiring change, no formula logic touched).
+- **Ref:** Directly follows and structurally supersedes the layering-fix mechanism in the previous
+  `[Combat]` entry (BringToFront still used for paint order, now safe because of this entry's
+  layout change).
+
+### [Combat] Status header decoupled from stage position; compact row sizing; bottom panels halved
+- **Found:** Playtesting with a real 3-member party (the current max, `BattleConfig.ActivePartySize
+  = PartySystem.MaxPartySize = 3`), the user caught: "when i add more phasixs to my team and they
+  get placed in the battle scene the enemy moves as well." Root cause: `.status-header` was a
+  normal flex-column sibling of `.stage` inside `.battle-root` — each added `.status-row` grew
+  `.status-header`'s own height, which shrank `.stage` (`flex-grow: 1`, same fixed-height parent),
+  and `.stage-side`'s `top: 30%` anchor (used by BOTH player and enemy) resolved to a different
+  absolute pixel position every time party size changed — moving the enemy even though nothing
+  about the enemy itself had changed. Same conversation, the user also flagged the status text as
+  "a little too big and taking up all the room... squished," anticipating a future larger party
+  (Combat_Directive_v0_1_0.md: 3-5 members, exact size still pending — NOT the same number as the
+  7-lane depth system, which is a separate front-to-back positioning mechanic, not party size),
+  and asked to shrink the Battle Log/action panel to ~50% height for more open stage room.
+- **Decided:**
+  1. `.status-header` switched to `position: absolute; top/left/right: 0`, taking it out of
+     `.battle-root`'s flex flow entirely — `.stage` (the only remaining flow child) now always
+     fills the FULL battle-root height regardless of party size, so nothing about it depends on
+     how many status rows are shown anymore.
+  2. `.stage-side`'s `top` changed from `30%` to a fixed `480px` — a percentage was only ever
+     "stable" by coincidence when `.stage`'s own height was itself stable; now that `.stage` is
+     always full-height, a fixed px is the correct/simpler mechanism, not just a workaround. Value
+     computed to clear a full 3-row header (~113px/row incl. the resize below, ×3 + header padding
+     ≈ 371px) PLUS the group's own `translate: -50% -50%` centering (half its 72px height) PLUS
+     the worst-case upward creature stagger (-45px, see the stagger-layering entries above) — see
+     inline USS comment for the arithmetic.
+  3. Compacted `.status-row` and its children throughout (`row-name` 30px→18px font,
+     `hp-bar-back` 24px→16px, `aura-bar-back` 16px→12px, `burst-bar-back` 14px→10px, `.status-bar`
+     26px→20px + `.status-icon` 20px→16px + its label/counter fonts 10px→8px, row padding
+     10/14px→6/10px, `bar-value-label` 12px→9px) — same information, meaningfully less vertical
+     space per row, so more rows (toward the eventual 3-5 range) fit without the header growing
+     as fast per member added.
+  4. `.action-panel`/`.battle-log-panel` height halved 300px→150px per the user's explicit "about
+     50%" ask, with internal font sizes/padding scaled down to match (`turn-label` 28px→18px,
+     `battle-log-title` 22px→15px, `battle-log-entry` 19px→13px) so text doesn't crowd the now-
+     shorter box. `.end-turn-button`'s `bottom` recalculated (340px→190px) to sit just above the
+     now-shorter bottom row.
+- **Why:** See "Found" above — both the positional bug and the sizing ask were observed/stated
+  live against a real 3-member party, not hypothetical.
+- **Alternatives rejected:** Hardcoding `.status-header` to a fixed height (matching 3 rows) and
+  leaving it in normal flex flow — rejected in favor of taking it out of flow entirely, since a
+  hardcoded height would need to be manually kept in sync with `BattleConfig.ActivePartySize` and
+  every row-dimension constant above it, two places to remember instead of the positioning
+  mechanism just not depending on content size at all. Scaling stage-side's `top` down further to
+  reclaim MORE of the freed vertical space — left as-is (480px) for now; not wrong to revisit once
+  there's real creature art rather than placeholder balls.
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode. Baseline: started a battle with a 1-member party, recorded enemy
+  `worldBound` = `(x:1553, y:480, w:72, h:72)`. Ended that battle, filled the party to 3 members
+  (the current max), started a fresh battle — enemy `worldBound` came back byte-identical:
+  `(x:1553, y:480, w:72, h:72)`. Screenshot confirmed all 3 status rows render fully legible with
+  clear gap above the creature stage (no overlap), creatures sit well clear of both the header and
+  the now-shorter bottom row, and the End Turn button no longer overlaps anything. 133/133
+  EditMode tests pass (pure USS change, no C# logic touched this pass).
+- **Ref:** Builds on the two `[Combat]` layering/positioning entries directly above — same
+  underlying "party size shouldn't silently move things" theme, this time in the header/stage
+  relationship rather than BringToFront.
+
+### [Combat] Radial nameplate HUD replaces stacked HP/Aura/Burst bars; up to 7 slots per side
+- **Found:** User asked directly: "is there another style for hud... to be re-arranged so its
+  cleaner and more straight forward?" — an exploratory question, answered with a mockup (Artifact
+  tool, not implemented yet) before any code changed, per this session's own "don't implement
+  until the user agrees" convention. Iterated through several rounds of user feedback on the
+  mockup alone:
+  1. First proposal: name overlaid on the HP bar, buffs squeezed next to the name. User corrected:
+     "we'll be putting a lot [of buffs] so keeping it underneath makes sense so you can just stack
+     from left to right" — buffs need their own full-width row, not a cramped inline strip.
+  2. User then proposed the actual shape used: "circular one... arches around the player
+     portrait. So half circle for health over the top half, then bottom left half could be the
+     aura and the bottom right half could be the evo gauge... limited to a certain max width, then
+     after that first row is filled then the 2nd row starts... tied to the top of the screen."
+  3. Follow-up corrections on the mockup itself: "put the name on the top side," "add some gaps
+     between each of the rings" (none existed in the first radial draft), and "highlight the
+     outside perimeter of that arc, its currently driving through the middle" (the first "ready"
+     indicator was a floating outer arc, not a border around the segment's actual shape).
+  4. Further correction: "there should be a gap between the 3 sections even when all are full"
+     (round line caps were bulging past their angle and closing the gap at 100% fill) and "have
+     the purple encased around the whole sections perimeter" (the ready highlight needed to be a
+     CLOSED outline tracing outer arc + both straight side cuts + inner arc, not just a partial
+     outer-edge line).
+  5. Architecture ask, confirmed before implementing per the user's explicit "confirm before
+     implementing": "make sure that there is a sort of invisible container that this huds sits
+     in, so when you have to stack multiple of these huds together... you can just stack the full
+     containers side by side." Verified understanding with a 4-player/3-enemy mockup scene before
+     writing any game code.
+  6. Final sizing ask: "i want to be able to stack 7 containers maximum on each side... adjust
+     ratios as you required."
+- **Decided:**
+  1. New `RadialGaugeVisual` (custom Painter2D `VisualElement`, same pattern as the existing
+     `RingVisual`/`DragLineVisual`) draws 3 arcs around a portrait circle: HP the top ~174°, Aura
+     the bottom-left ~84°, Evo the bottom-right ~84°, each pair separated by a 6° gap baked into
+     the TRACK bounds themselves (183-357, 93-177, 3-87 degrees) and drawn with `LineCap.Butt`
+     (not `Round` — round caps were found to bulge past their angle and silently close the gap at
+     100% fill, exactly the bug the user caught). `EvoReady` draws a closed gold outline
+     (`MoveTo`/`Arc`/`LineTo`/`Arc`/`ClosePath`) tracing the Evo band's full annular-sector
+     perimeter — outer arc, both straight radial cuts, inner arc — not a floating arc near it. All
+     radii are fractions of the element's own `resolvedStyle` size, so resizing `.nameplate-gauge`
+     in USS is the only thing needed to retune scale, no C# constant to keep in sync.
+  2. New `BattleHUDController.NameplateRefs`/`BuildNameplate` — one "invisible container" (no
+     background, no border, per the user's explicit architecture ask) built PROCEDURALLY in C#
+     rather than hand-authored in UXML (7 slots x ~14 sub-elements x 2 sides would have meant an
+     enormous, repetitive UXML block) — name on top, `RadialGaugeVisual` + portrait in a
+     `.nameplate-ring-wrap`, 3 small color-coded HP/Aura/Evo stat labels, and a `flex-wrap`
+     `.nameplate-buffs` row underneath holding Regen/Burst icon sockets — wrapping to a new row on
+     its own once the row's width fills, exactly the "first row fills, then the 2nd row starts"
+     behavior asked for.
+  3. `MaxNameplateSlots = 7`, deliberately SEPARATE from `BattleConfig.ActivePartySize` (still 3,
+     the real gameplay cap — Combat_Directive_v0_1_0.md's 3-5 range is still pending, and is a
+     DIFFERENT number from the 7-lane DEPTH system, which is a front-to-back positioning mechanic,
+     not party size — the two got conflated in conversation, worth remembering). This only
+     governs how many nameplate SLOTS the sidebar can display; a real battle today still only
+     ever fills the first 3 (or 1 enemy) — the rest just stay hidden.
+  4. The stage creature system (balls, move wheels, drag-targeting, timing ring) was left
+     completely untouched — the radial nameplate replaces only the status-header sidebar, a
+     separate visual system from the interactive stage.
+  5. Sizing shrunk hard from the first live-tested pass (64px ring, 12px name) to fit 7 per side
+     without overlapping the Battle Log panel: 46px ring, 24px portrait, 10px name, 7px stats,
+     12px buff icons, 2px container padding, 3px margin-bottom, `.status-header` padding 16px ->
+     8px. `EvoStat`'s text/color now share one `SetEvoStatText` helper (gold "ready" matching the
+     ring's own ready outline — the first live pass left the text purple even when ready, an
+     inconsistency caught during the 7-slot cross-check, not by the user this time) so the two
+     readouts never disagree.
+- **Why:** See "Found" above — every shape/spacing/architecture decision was the user's own,
+  arrived at through mockup iteration (Artifact tool) before any game code was written, per this
+  session's established "confirm before implementing" pattern for exploratory/design questions.
+- **Alternatives rejected:** Two earlier radial variants shown as mockup-only, never implemented —
+  (B) a portrait-anchored card with the ring/bars beside a circular portrait rather than around
+  it, (C) a "fused" single-block bar stack (HP/Aura/Burst sharing one border, no gaps) — user
+  picked the arched-ring shape over both once it was drafted. Reparenting buff icons into a
+  separate shared overlay container instead of a per-nameplate wrap row — unnecessary once each
+  nameplate is already an isolated container with its own stable width to wrap within.
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode, `BattleHUDController.Instance.Initialize` called directly with 7
+  synthesized player-side and 7 synthesized enemy-side `BattleParticipant`s (varied HP/Aura/Evo
+  fill, two forced to a full/`ready` Evo gauge, several given active Regen/Burst status to
+  populate the buff row, one slot given both icons at once to confirm they coexist) — bypassing
+  `PartySystem`'s real 3-member cap, since this was a HUD-capacity check only, not a gameplay
+  change. First pass (64px rings) overflowed the 7th slot into the Battle Log panel — screenshotted,
+  cross-compared against the approved mockup reference, and re-sized per the user's "adjust ratios
+  as you required" instruction; re-verified with a byte-for-byte repeat of the same 7v7 setup and
+  confirmed all 14 nameplates (7 player + 7 enemy) render fully within the header, clear of both
+  the stage creatures and the bottom row/End Turn button, with gaps holding at every fill level
+  and the gold ready-outline/text agreeing on both full-gauge examples. 133/133 EditMode tests
+  pass throughout (RadialGaugeVisual/nameplate wiring only — no formula logic touched).
+- **Ref:** Supersedes the `.hp-bar-back`/`.aura-bar-back`/`.burst-bar-back`/`.status-bar`/
+  `.status-icon` system from every prior `[Combat]` status-bar entry in this file — those classes
+  are gone from BattleHUD.uss, replaced by `.nameplate-*`. `SetRegenStatus`/`SetBurstStatus`/
+  `SetBurstFillBar`/`Initialize`/`RefreshBars`'s public signatures are unchanged, so
+  `BattleManager.cs` needed zero edits despite the HUD-side rewrite.
+
+### [Combat] Nameplates size dynamically by how many are actually shown, not fixed for worst-case 7
+- **Found:** User asked directly, after seeing the 7-slot-verified sizing: "do you think the new
+  hud is too small? Should we make it bigger?" The fixed 46px-ring size was calibrated for the
+  WORST case (7 stacked), but real gameplay today only ever shows 3 (`PartySystem.MaxPartySize`)
+  — meaning the common case was rendering unnecessarily tiny (7px stat text) while leaving most of
+  the sidebar's vertical budget empty. Confirmed with a side-by-side mockup (fixed-small vs a
+  bigger "sized for 3" version) before touching code; user confirmed: "it looks a lot more
+  legible... let's do that."
+- **Decided:** New `BattleHUDController.ApplyNameplateSize`, called per-nameplate from
+  `Initialize` using that SIDE's own visible count (player and enemy size independently) — linearly
+  interpolates ring/portrait/name-font/stat-font/buff-icon-size/padding/margin between two
+  calibrated endpoints: `NameplateSizeMinCount` (3) or fewer uses the "Comfortable" size, all the
+  way up to `MaxNameplateSlots` (7) using the already-verified "Compact" size (unchanged numbers
+  from the previous entry). Applied as inline styles (`np.Container.style.*` etc.) since USS can't
+  read a runtime count — the `.nameplate-*` classes still supply the base/fallback values.
+  Deliberately capped Comfortable at 72px (not the 90px shown in the mockup) — 90px would grow
+  `.status-header`'s height for a 3-member party PAST what `.stage-side`'s fixed `top: 480px`
+  clearance was calibrated for (see the header-decoupling entry above), risking overlap with the
+  stage creatures at exactly today's most common party size; 72px stays inside that already-
+  verified-safe budget without needing to also re-touch stage-creature positioning this pass.
+- **Why:** Direct response to the user's question, confirmed via mockup before implementing, per
+  this session's "confirm before implementing" pattern.
+- **Alternatives rejected:** Using the full 90px "comfortable" size shown in the mockup — would
+  require re-deriving `.stage-side`'s clearance offset too (a second system to re-verify) for a
+  further size bump; deferred rather than risk reopening an already-verified-safe interaction for
+  marginal extra size. A scrollable sidebar with one fixed comfortable size throughout — user
+  didn't ask for scrolling, and dynamic sizing means today's actual party (3) never needs it.
+- **Date:** 2026-08-06
+- **Verified:** Live Play Mode, real 3-member party (today's actual max) — screenshot confirmed
+  visibly larger rings/name/stat text than the fixed-46px version, no overlap with the stage
+  creatures below. 133/133 EditMode tests pass (pure sizing/interpolation change, no formula logic
+  touched). Not re-verified at 7 this pass — `t=1` reproduces the exact same numeric values already
+  live-verified in the previous entry, so no behavior change at that endpoint.
+- **Ref:** Builds directly on the previous `[Combat]` radial nameplate entry — same
+  `NameplateRefs`/`BuildNameplate` structures, this just makes their sizing a function of count
+  instead of a single fixed constant.
+
 ### [Combat] Loss-on-defeat bond rule — GDD §21.6 vs §14.5 contradiction, resolved to zero bond loss
 - **Found:** Two separately-Locked GDD sections directly disagree. §21.6 "Loss State": *"Losing a
   battle never reverses XP, stat growth, bond, or evolution state."* §14.5 "Loss Framework"
