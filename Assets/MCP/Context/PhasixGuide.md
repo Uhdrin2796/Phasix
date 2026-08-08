@@ -1,5 +1,5 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.4.0 · 2026-08-04
+**Version:** 1.5.1 · 2026-08-07
 
 > Unity MCP bridge is CoplayDev/unity-mcp (migrated from AnkleBreaker July 2026 — see
 > DECISIONS.md → [Tooling]). Load this file by reading it directly (Claude Code has
@@ -54,7 +54,7 @@
 | EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Done — includes `OnWildEncounterTriggered`/`Fled`/`EngageRequested` |
 | GameManager skeleton | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | GameStrings constants | `GameStrings.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
-| BattleResult stub | `BattleResult.cs` | `Assets/Scripts/Core/` | ✅ Stub (Phase 3 pending) |
+| BattleResult | `BattleResult.cs` | `Assets/Scripts/Core/` | ✅ Done — real class (`Victory`, `PlayerParticipants`, `EnemyParticipants`), built by `BattleManager.EndBattle` |
 | PhasixData SO (species/form template) | `PhasixData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
 | PhasixRuntimeData (per-individual state) | `PhasixRuntimeData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
 | BondSystem (floor logic, session loss cap, 60/80% damping, 100% immunity) | `BondSystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done — 7 EditMode tests, `Assets/Tests/EditMode/` |
@@ -100,20 +100,40 @@ Assets/
                               asmdef CANNOT reference "Assembly-CSharp" by name, see
                               LESSONS_LEARNED.md → [Tooling])
     Core/        ← GameManager, EventBus (+ wild-encounter events), GameStrings, BattleResult
-                   (stub); SaveManager (pending)
+                   (real class, not a stub — see Combat/); SaveManager (pending)
     Player/      ← PlayerTopDownController (Sprint, corner correction), CameraFollow
                    (lookahead proxy)
     Creatures/   ← PhasixData, PhasixRuntimeData, BondSystem, PersonalitySystem,
                    PersonalityStatModifier, PrimalTypeColor, PhasixPlaceholderVisual,
-                   CompanionAI, PartySystem, WildSpawnSystem, WildEncounterCreature,
-                   DebugPartyBootstrap (temp), DebugMovementPresetCycler (debug tool),
-                   StatBlock, EvolutionHistoryEntry, PhasixEnums, PrimalType, StatType,
-                   BondZone, SkillData (stub) — all done; EvolutionManager (pending)
-    Evolution/   ← EvolutionEvaluator, Executor, Pathfinder, WebController ← Phase 3, not yet created
-    Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator ← Phase 3, not yet created
-    World/       ← WorldChunkManager, EncounterTrigger; ZoneManager (pending)
-    UI/          ← EncounterPromptController (first UI Toolkit screen); HUD, PartyScreen,
-                   SkillTreeUI, BondDisplay (pending)
+                   CompanionAI, PartySystem, WildSpawnSystem (incl. skill-seeding, 2026-08),
+                   WildEncounterCreature, CaptureSystem, AuraStatAllocationSystem,
+                   AuraTierCeiling, DebugPartyBootstrap (temp), DebugMovementPresetCycler
+                   (debug tool), StatBlock, EvolutionHistoryEntry, PhasixEnums, PrimalType,
+                   StatType, BondZone, SkillData (stub, + 2026-08 structural wiring fields —
+                   see Combat/) — all done; EvolutionManager (pending — see note below)
+    Combat/      ← ✅ Phase 3 Gate, live in BattleScene_Main (was "not yet created" through
+                   2026-08-04 — corrected 2026-08-07). BattleManager (live turn loop),
+                   BattleEngine, BattleHUDController, BattleParticipant, BattleState/Action/
+                   ActionResult/Outcome/Transition/Config, DamageCalculator, PrimalTypeChart,
+                   EvolutionBurstSystem/Gauge, CaptureSystem (wired), StatusEffectCatalog/
+                   Category/Type, ChainResultCatalog/Type, MasteryBonusCatalog/Type,
+                   ComboEngine/Tier, ComboRuleType/ComboRuleEvaluator (2026-08, new — NOT GDD
+                   content, see DECISIONS.md), SkillTreeCatalog/UnlockSystem, SkillSlotCapacity,
+                   TimedInputConfig, PlaceholderSkillResolver/SkillDatabase/ChosenMove/
+                   ActiveStatusInstance (2026-08, skill-ring wiring), BattleLaneLayout/
+                   StageGizmos (dev-only), RadialGaugeVisual/RingVisual/DragLineVisual (UI
+                   Toolkit custom elements), BattleLogFormatter. No `Evolution/` folder exists
+                   — Evolution Burst (mid-battle) lives here; a full species-evolution-tree
+                   system per Evolution_System_Directive is still pending (Phase 4).
+    World/       ← WorldChunkManager, EncounterTrigger (now skill-database-aware, 2026-08);
+                   ZoneManager (pending)
+    UI/          ← EncounterPromptController (first UI Toolkit screen); BattleHUDController
+                   (see Combat/); BattleSummaryController (2026-08, read-only post-battle recap
+                   — Aura gained/damage dealt/healing done, NOT where Aura is spent); new
+                   PartyMenuController (2026-08, Tab-key overworld menu, currently just the
+                   Aura-spend "+1" cards moved out of the post-battle flow — see DECISIONS.md ->
+                   [Combat/UI]). Old AuraAllocationController (same-session predecessor to
+                   BattleSummaryController) deleted. SkillTreeUI, BondDisplay (pending)
     Audio/       ← AudioManager ← Phase 3, not yet created
     Save/        ← SaveSystem, SaveData ← Phase 3, not yet created
     Editor/      ← PhasixSpriteSetup, PhasixAnimatorGenerator; own
@@ -121,7 +141,15 @@ Assets/
                    needed once split out of the implicit default assembly)
   Tests/
     EditMode/    ← Phasix.Tests.EditMode.asmdef (references Phasix.Runtime, not
-                   Assembly-CSharp) + BondSystemTests.cs (7 tests)
+                   Assembly-CSharp) — 206 tests across 21 files: AuraStatAllocationSystemTests,
+                   BattleEngineTests, BattleLogFormatterTests, BattleParticipantTests,
+                   BondSystemTests, CaptureSystemTests, ChainResultCatalogTests,
+                   ComboEngineTests, ComboRuleEvaluatorTests, DamageCalculatorTests,
+                   EvolutionBurstSystemTests, MasteryBonusCatalogTests,
+                   PlaceholderSkillResolverTests, PrimalTypeChartTests,
+                   ResonanceBonusEvaluatorTests, SkillDatabaseTests, SkillSlotCapacityTests,
+                   SkillTreeUnlockSystemTests, StatusDurationCalculatorTests,
+                   StatusEffectCatalogTests, TimedInputConfigTests
   Prefabs/
     Creatures/   ← Phasix_Placeholder.prefab (companion — Rigidbody2D/Seeker/AIPath/
                    CompanionAI), Phasix_WildEncounter.prefab (stationary-spawn variant, now
@@ -131,16 +159,27 @@ Assets/
   Sprites/       ← Shadow_Ellipse.png, AlertIcon.png — both procedurally generated
                    placeholder-first sprites (soft gradient shadow, wild-creature Alert
                    indicator), added AUD-003/005
+  Scenes/        ← SampleScene.unity (overworld, always loaded), BattleScene_Main.unity
+                   (battle — additively loaded via BattleTransition.StartWildBattle, unloaded
+                   at battle end; overworld stays loaded underneath)
   Data/
     Species/     ← PhasixData SOs — Test_FireType, Test_SteamType (placeholder, no real
-                   roster yet)
-    Skills/      ← SkillData SOs (pending roster)
+                   roster yet; both EvolutionTier=1, AvailableTreeTypes set for skill-seeding)
+    Skills/      ← 36 placeholder SkillData assets (2 per SkillTreeType, real but generic —
+                   "Do not treat as real skill content"), + SkillDatabase.asset (2026-08,
+                   resolves equipped/learned GUIDs to real SkillData at runtime)
     Items/       ← ItemData SOs (pending §22)
     EvolutionBranches/ ← EvolutionBranchData SOs (pending)
-    TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table, pending)
+    TypeCharts/  ← PrimalTypeChart SO + PrimalTypeChart.asset — ✅ wired into BattleManager,
+                   no longer pending
     Aura/        ← AuraTypeData SOs (pending)
-  UI/            ← EncounterPrompt.uxml/.uss, EncounterPromptPanelSettings.asset (320×180
-                   reference resolution, matches the Pixel Perfect Camera)
+  UI/            ← EncounterPrompt.uxml/.uss/PanelSettings (320×180 reference resolution,
+                   matches the Pixel Perfect Camera); BattleHUD.uxml/.uss/PanelSettings;
+                   BattleSummary.uxml/.uss (2026-08, read-only post-battle recap, reuses
+                   AuraAllocationPanelSettings.asset — name is stale, asset itself is fine);
+                   PartyMenu.uxml/.uss (2026-08, Tab-key overworld Aura-spend menu — needs its
+                   own new PanelSettings asset, not yet created as of this doc pass, see
+                   DECISIONS.md -> [Combat/UI] "Blocked" note)
   MCP/
     Context/     ← This file (read directly by Claude Code, no Unity round-trip)
 ```
@@ -164,7 +203,8 @@ layers, undo/redo), `manage_build`, `manage_packages`, `create_script`, `manage_
 
 ### 🔴 High Priority (Phase 2+)
 - **`manage_scriptable_object`, `execute_code`** (scripting_ext group) — every Creatures/Data
-  SO: PhasixData, SkillData, and future EvolutionBranchData/AuraTypeData/PrimalTypeChart assets
+  SO: PhasixData, SkillData, SkillDatabase, PrimalTypeChart (all ✅ wired/populated), and
+  future EvolutionBranchData/AuraTypeData assets
 - **`manage_animation`** — Phasix animator controllers, battle transitions, UI animation
 - **`manage_ui`** (UI Toolkit — UXML/USS/UIDocument) — battle UI, stat allocation UI, bond
   display, evolution menu
@@ -176,8 +216,10 @@ layers, undo/redo), `manage_build`, `manage_packages`, `create_script`, `manage_
   flash, evolution/devolution effects, 16 PPU pixel art import. Confirm whether `manage_vfx`
   targets VFX Graph or legacy Particle System before using it for 2D effects — not yet
   verified which this project's setup prefers.
-- **`run_tests`, `get_test_job`** (testing group) — EditMode tests for damage formula/bond
-  math once those systems exist
+- **`run_tests`, `get_test_job`** (testing group) — 206 EditMode tests exist across 21 files
+  (damage formula, battle engine, capture, evolution burst, status/chain/mastery/combo
+  catalogs, skill resolution, Aura allocation, and more) — run these after any Combat/
+  Creatures change, not just once "those systems exist"
 - **`manage_profiler`** (profiling group) — perf/memory work, low priority until real
   content exists to profile
 
@@ -207,7 +249,17 @@ Flag all pending work with `// TODO: pending design — [topic]`
 > and the tilemap's existing placeholder tiles are unaffected — already fine as they are.
 
 - Species roster — no Phasix designed; use placeholder SOs
-- Skill content — taxonomy locked, individual skills TBD
+- Skill content — taxonomy locked, individual skills TBD. The 36 placeholder `SkillData` assets
+  ARE now clickable/mechanically resolvable in live battle (2026-08, `PlaceholderSkillResolver`
+  — see DECISIONS.md -> [Combat]), but that's generic wiring derived from locked tables, not real
+  skill content — still pending the actual design pass.
+- Combo/Chain/Mastery numeric gameplay effects — `ComboEngine`/`ChainResultCatalog`/
+  `MasteryBonusCatalog` are wired into live battle (detection + battle-log lines using their
+  locked flavor text), but no numeric effect is applied for any of them yet (Combo: the GDD
+  never defines one; Chain/Mastery: their real modifiers need a `DamageCalculator` change,
+  explicitly deferred as separately-scoped follow-up work).
+- Evolution Burst's actual gameplay effect (`ApplyBurstEffects` — what changes about the creature
+  while a burst is active) — status-only today, genuinely undesigned in the GDD.
 - `GameStrings.PoolName` — unnamed pool UI label TBD; reference this constant in all UI strings, never hardcode
 - All NumericalCalibration.md values — pending calibration session
 - Hub count/identity, realm count/emotional identities — pending world design

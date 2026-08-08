@@ -1,0 +1,106 @@
+/* Tab-key overworld menu (2026-08 session — see DECISIONS.md -> [Combat]/[Input]). Card styling
+   ported from the old post-battle Aura Allocation screen (now BattleSummary, read-only) since
+   spending moved here per user direction. 320x180 reference resolution, same PanelSettings scale
+   as every other Phasix UI screen. Text sizes match BattleHUD.uss's .battle-log-entry (13px) —
+   user found the original tiny sizing hard to read, same fix already applied to BattleSummary;
+   cards/buttons sized up to fit the larger text. */
+
+.party-menu-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(10, 10, 14, 0.92);
+    align-items: center;
+    padding-top: 6px;
+}
+
+.party-menu-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-align: middle-center;
+    margin-bottom: 8px;
+}
+
+.party-menu-scroll {
+    width: 100%;
+    flex-grow: 1;
+}
+
+.party-menu-footer {
+    font-size: 13px;
+    color: rgb(170, 170, 175);
+    -unity-text-align: middle-center;
+    margin-top: 6px;
+    margin-bottom: 8px;
+}
+
+.aura-card-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.aura-card {
+    width: 168px;
+    margin: 5px;
+    padding: 8px;
+    background-color: rgba(30, 30, 36, 0.9);
+    border-width: 1px;
+    border-color: rgb(80, 80, 90);
+}
+
+.aura-card-header {
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.aura-card-name {
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-align: middle-center;
+}
+
+.aura-card-aura {
+    font-size: 13px;
+    color: rgb(210, 200, 90);
+    -unity-text-align: middle-center;
+}
+
+.aura-stat-grid {
+    flex-direction: column;
+}
+
+.aura-stat-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.aura-stat-name {
+    font-size: 13px;
+    color: rgb(220, 220, 220);
+    width: 78px;
+}
+
+.aura-stat-value {
+    font-size: 13px;
+    color: rgb(255, 255, 255);
+    width: 26px;
+    -unity-text-align: middle-right;
+}
+
+.aura-stat-button {
+    width: 32px;
+    height: 22px;
+    font-size: 13px;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+}

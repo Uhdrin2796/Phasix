@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/BattleSummary.uss" />
+    <ui:VisualElement name="BattleSummaryRoot" class="battle-summary-root">
+        <ui:VisualElement class="battle-summary-panel">
+            <ui:Label text="Victory!" class="battle-summary-title" />
+            <ui:Label name="AuraGainedLabel" text="Aura Gained: 0" class="battle-summary-stat" />
+            <ui:Label name="DamageDealtLabel" text="Damage Dealt: 0" class="battle-summary-stat" />
+            <ui:Label name="HealingDoneLabel" text="Healing Done: 0" class="battle-summary-stat" />
+            <ui:Button name="ContinueButton" text="Continue" class="battle-summary-continue-button" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

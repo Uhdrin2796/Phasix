@@ -56,6 +56,26 @@ public static class ComboEngine
         return true;
     }
 
+    /// <summary>
+    /// The raw current trailing distinct-tree streak length, counting back from the most recent
+    /// skill until a repeat breaks it — NOT capped at Quad's window of 4 like DetectCombo (though
+    /// in practice it never exceeds 4 either, since BattleParticipant already trims its history
+    /// to that same window). Drives the live skill-wheel combo-counter badge (2026-08 session, see
+    /// DECISIONS.md -> [Combat]) — DetectCombo answers "is a combo satisfied right now," this
+    /// answers "how long is the current streak," which is what a running counter needs.
+    /// </summary>
+    public static int GetDistinctTrailingStreakLength(IReadOnlyList<SkillTreeType> sequence)
+    {
+        var seen = new HashSet<SkillTreeType>();
+        int length = 0;
+        for (int i = sequence.Count - 1; i >= 0; i--)
+        {
+            if (!seen.Add(sequence[i])) break;
+            length++;
+        }
+        return length;
+    }
+
     /// <summary>Instinct-scaled trigger chance (0-100), clamped. Placeholder linear formula — see class doc comment.</summary>
     public static float ComputeTriggerChancePercent(int instinct)
     {

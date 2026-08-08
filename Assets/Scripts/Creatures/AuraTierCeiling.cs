@@ -6,8 +6,11 @@
 /// ceiling increase per Aptitude point per tier" are both open — nothing here is a locked number,
 /// only the shape (ceiling grows with tier, ceiling grows with Aptitude) is.
 ///
-/// Ceiling is checked against baseStats.Total (the Aura-spendable layer) — NOT unnamedPool, which
-/// grows only through devolution and isn't something Aura allocation touches.
+/// Ceiling is checked against PhasixRuntimeData.auraAllocatedPoints — a running count of points
+/// actually purchased through AuraStatAllocationSystem (2026-08 follow-up fix, see DECISIONS.md ->
+/// [Combat]) — NOT baseStats.Total or unnamedPool. baseStats.Total includes whatever stats the
+/// species started with, which isn't "growth"; unnamedPool grows only through devolution and isn't
+/// something Aura allocation touches either way.
 /// </summary>
 public static class AuraTierCeiling
 {

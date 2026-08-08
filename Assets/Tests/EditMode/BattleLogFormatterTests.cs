@@ -110,5 +110,60 @@ namespace Phasix.Tests.EditMode
             StringAssert.DoesNotContain("dodges", line);
             StringAssert.DoesNotContain("parries", line);
         }
+
+        [Test]
+        public void FormatSkillAttack_IncludesSkillNameAndDamage()
+        {
+            var attacker = MakeParticipant(true);
+            var target = MakeParticipant(false);
+
+            string line = BattleLogFormatter.FormatSkillAttack(attacker, target, "Aspect_Placeholder1", damage: 7, typeMultiplier: 1f);
+
+            StringAssert.Contains("Aspect_Placeholder1", line);
+            StringAssert.Contains("7 damage", line);
+        }
+
+        [Test]
+        public void FormatStatusApplied_IncludesStatusAndDuration()
+        {
+            var target = MakeParticipant(true);
+
+            string line = BattleLogFormatter.FormatStatusApplied(target, StatusEffectType.Burn, durationTurns: 4);
+
+            StringAssert.Contains("Burn", line);
+            StringAssert.Contains("4", line);
+        }
+
+        [Test]
+        public void FormatComboDetected_IncludesTier()
+        {
+            var attacker = MakeParticipant(true);
+
+            string line = BattleLogFormatter.FormatComboDetected(attacker, ComboTier.Trio, ComboRuleType.CrossTreeSequence);
+
+            StringAssert.Contains("Trio", line);
+        }
+
+        [Test]
+        public void FormatChainResultTriggered_IncludesLockedEffectTextVerbatim()
+        {
+            var target = MakeParticipant(true);
+
+            string line = BattleLogFormatter.FormatChainResultTriggered(target, ChainResultType.Rend);
+
+            StringAssert.Contains("Rend", line);
+            StringAssert.Contains(ChainResultCatalog.GetEffectDescription(ChainResultType.Rend), line);
+        }
+
+        [Test]
+        public void FormatMasteryBonusTriggered_IncludesLockedTriggerAndEffectTextVerbatim()
+        {
+            var attacker = MakeParticipant(true);
+
+            string line = BattleLogFormatter.FormatMasteryBonusTriggered(attacker, MasteryBonusType.Hemorrhage);
+
+            StringAssert.Contains(MasteryBonusCatalog.GetTriggerDescription(MasteryBonusType.Hemorrhage), line);
+            StringAssert.Contains(MasteryBonusCatalog.GetEffectDescription(MasteryBonusType.Hemorrhage), line);
+        }
     }
 }

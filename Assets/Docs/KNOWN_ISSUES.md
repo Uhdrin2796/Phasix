@@ -7,12 +7,45 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-None open from the external repo audit (`AUDIT_202608.md`) — see `CHANGELOG.md` → "Repo audit
-triage" (2026-08-04) and the Closed Issues section below for the full trail.
+None currently open — see `CHANGELOG.md` → "Repo audit triage" (2026-08-04) and the Closed Issues
+section below for the full trail, including the external repo audit (`AUDIT_202608.md`).
 
 ---
 
 ## Closed Issues
+
+### [EDITOR-001] — Evolution Burst gauge not clickable; nameplate hover not working — CLOSED (fixed)
+**Status:** Closed — fixed, confirmed via `panel.Pick()` hit-testing before/after
+**Affects:** `Assets/UI/BattleHUD.uxml` (element order), `.status-header`/`.stage` in `BattleHUD.uss`
+**Description:** Originally logged as "Evo gauge not clickable" plus separate console spam that
+turned out to be an unrelated oversized `Editor.log` (see `LESSONS_LEARNED.md` → `[Tooling]
+Editor.log grew to 3.75GB...`, closed independently). Re-investigated after a NEW report that
+nameplate hover tooltips (2026-08 bars mockup) weren't triggering at all. Root cause, confirmed via
+`IPanel.Pick(point)` at the nameplate's own on-screen coordinates: `.stage` (`position: relative;
+flex-grow: 1`) fills the ENTIRE `.battle-root`, including the top region the nameplate visually
+occupies, because `.status-header` was pulled out of flex flow (`position: absolute`) specifically
+so party-size changes wouldn't shift `.stage`'s anchor (see the still-valid `.status-header` comment
+in `BattleHUD.uss`). `.status-header` was declared BEFORE `.stage` in `BattleHUD.uxml`, so `.stage`
+— the later sibling — painted and picked ON TOP of it across that whole overlap, invisibly
+swallowing every pointer event meant for the nameplate: `Pick()` at the nameplate's own coordinates
+returned `.stage`, not any nameplate descendant. This was almost certainly the actual cause of the
+original "Evo gauge not clickable" report too, not Editor-process degradation as first suspected —
+same click path, same occluded region.
+**Fix:** Moved `StatusHeader` to AFTER `Stage` in `BattleHUD.uxml`. Since `.status-header` is
+`position: absolute`, this only changes paint/pick z-order, not layout position — `.status-header`
+is now the topmost sibling for hit-testing, so it (and everything inside it: nameplate bars, and
+the Radial style's ring-wrap burst-click target) correctly wins over `.stage`'s invisible backdrop.
+**Verified:** `Pick()` at the nameplate HP bar's exact on-screen center changed from resolving to
+`.stage` (wrong) to resolving to `.nameplate-bar-track`/`.nameplate-bar-hp` (correct, `==track:
+True`) after the reorder. Dispatching a real hover event at the now-correctly-picked element showed
+the tooltip with the right text ("HP: 120/120"), and leaving correctly hid it. Skill-ring orb
+hit-testing was separately confirmed sound (`Pick()` correctly resolves to the exact equipped-skill
+slot once its move wheel is genuinely open) — the user's report of skill-orb hover also not working
+was not reproduced once the wheel-open timing was accounted for; most likely explained by testing
+before the wheel had been opened, or by generalizing from the (real) nameplate bug. 220/220 EditMode
+tests still pass (no coverage change — this is a UXML/USS ordering fix, no C# logic changed besides
+one defensive `pickingMode = Ignore` on the decorative bar-fill element).
+**Closed:** 2026-08-08.
 
 ### [AUD-006] — No camera lookahead or movement bias — CLOSED (fixed)
 **Status:** Closed — fixed, confirmed via live playtest

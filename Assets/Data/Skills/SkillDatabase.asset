@@ -1,0 +1,88 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27cff3449f8b53648b3dfbf5b41899c0, type: 3}
+  m_Name: SkillDatabase
+  m_EditorClassIdentifier: Phasix.Runtime::SkillDatabase
+  _allSkills:
+  - {fileID: 11400000, guid: 75367fa824a6ee44fa2e54e2a9f10e62, type: 2}
+  - {fileID: 11400000, guid: 4710ed198e50eef4c96b25212af44fa0, type: 2}
+  - {fileID: 11400000, guid: 77216138fc5b0c54baf164e093cae1ef, type: 2}
+  - {fileID: 11400000, guid: 10ec634fe7458dc449c1bb2590934c26, type: 2}
+  - {fileID: 11400000, guid: e07b960c26f8a4e40bcea5f776ea617a, type: 2}
+  - {fileID: 11400000, guid: dec53e0ab54c5ec449359abe468ffb27, type: 2}
+  - {fileID: 11400000, guid: 24ad91749d750724e8e45815fc93b27c, type: 2}
+  - {fileID: 11400000, guid: 7fae29ec4deacd54caf17dce48cb5bec, type: 2}
+  - {fileID: 11400000, guid: 71785d18523cddb419caf0c955fd2260, type: 2}
+  - {fileID: 11400000, guid: 4cd749d032279564087c6b10ece22fdb, type: 2}
+  - {fileID: 11400000, guid: ec7ca2bcd372e294b9c99f5f1308f021, type: 2}
+  - {fileID: 11400000, guid: e7319cd6be03a1a499395840f10ba809, type: 2}
+  - {fileID: 11400000, guid: e8942bad5047b65448cd0c7d3bb72742, type: 2}
+  - {fileID: 11400000, guid: eb37f248c531b9540a62d923e4e2229c, type: 2}
+  - {fileID: 11400000, guid: e527b07a21aea3b4fb5f66da0848b406, type: 2}
+  - {fileID: 11400000, guid: e9a651404e0b0ab448b8053f92530c23, type: 2}
+  - {fileID: 11400000, guid: 3ddd913142d22b540a926f6999fda599, type: 2}
+  - {fileID: 11400000, guid: bc4e932f06c76894697c74f8c92b3691, type: 2}
+  - {fileID: 11400000, guid: 3d292a17fc89c244f999cbc62e402b66, type: 2}
+  - {fileID: 11400000, guid: 7c196fa666214c64484180b26c764ebf, type: 2}
+  - {fileID: 11400000, guid: 7711679d73d045c48896023170f5399d, type: 2}
+  - {fileID: 11400000, guid: c5ea51e0c3187df45a39b73a34c75af0, type: 2}
+  - {fileID: 11400000, guid: 7b2ceddbd10d9434bb513895a91b3540, type: 2}
+  - {fileID: 11400000, guid: 34ab43c69f637c24495da56e34243319, type: 2}
+  - {fileID: 11400000, guid: cc25c2889ef64a14aa1ca86cdcaccf4d, type: 2}
+  - {fileID: 11400000, guid: 452ee1f6fb8815d4a88809515f2cb1f7, type: 2}
+  - {fileID: 11400000, guid: fde82e27c0d24c84fba558495d72b894, type: 2}
+  - {fileID: 11400000, guid: cbc690b90b7808b4eb702edd5ad54516, type: 2}
+  - {fileID: 11400000, guid: 6255746de83f78e41a5dd3f64a19f5c2, type: 2}
+  - {fileID: 11400000, guid: 11aa19f652e7cd345a19336afdc01406, type: 2}
+  - {fileID: 11400000, guid: f7804fd1cc34c314fb895424a35aa339, type: 2}
+  - {fileID: 11400000, guid: ab4355ec58a9cb6488630db76e6fd8b7, type: 2}
+  - {fileID: 11400000, guid: 1c1c924674a49a04baf6292d4a9d7f50, type: 2}
+  - {fileID: 11400000, guid: 22f28ccc947262a4b921beddde727c75, type: 2}
+  - {fileID: 11400000, guid: 835460dd057d9fa43bfcdf6e1fa34c38, type: 2}
+  - {fileID: 11400000, guid: a2f72047aedb4f243aacf91a2ed99e79, type: 2}
+  _guids:
+  - 75367fa824a6ee44fa2e54e2a9f10e62
+  - 4710ed198e50eef4c96b25212af44fa0
+  - 77216138fc5b0c54baf164e093cae1ef
+  - 10ec634fe7458dc449c1bb2590934c26
+  - e07b960c26f8a4e40bcea5f776ea617a
+  - dec53e0ab54c5ec449359abe468ffb27
+  - 24ad91749d750724e8e45815fc93b27c
+  - 7fae29ec4deacd54caf17dce48cb5bec
+  - 71785d18523cddb419caf0c955fd2260
+  - 4cd749d032279564087c6b10ece22fdb
+  - ec7ca2bcd372e294b9c99f5f1308f021
+  - e7319cd6be03a1a499395840f10ba809
+  - e8942bad5047b65448cd0c7d3bb72742
+  - eb37f248c531b9540a62d923e4e2229c
+  - e527b07a21aea3b4fb5f66da0848b406
+  - e9a651404e0b0ab448b8053f92530c23
+  - 3ddd913142d22b540a926f6999fda599
+  - bc4e932f06c76894697c74f8c92b3691
+  - 3d292a17fc89c244f999cbc62e402b66
+  - 7c196fa666214c64484180b26c764ebf
+  - 7711679d73d045c48896023170f5399d
+  - c5ea51e0c3187df45a39b73a34c75af0
+  - 7b2ceddbd10d9434bb513895a91b3540
+  - 34ab43c69f637c24495da56e34243319
+  - cc25c2889ef64a14aa1ca86cdcaccf4d
+  - 452ee1f6fb8815d4a88809515f2cb1f7
+  - fde82e27c0d24c84fba558495d72b894
+  - cbc690b90b7808b4eb702edd5ad54516
+  - 6255746de83f78e41a5dd3f64a19f5c2
+  - 11aa19f652e7cd345a19336afdc01406
+  - f7804fd1cc34c314fb895424a35aa339
+  - ab4355ec58a9cb6488630db76e6fd8b7
+  - 1c1c924674a49a04baf6292d4a9d7f50
+  - 22f28ccc947262a4b921beddde727c75
+  - 835460dd057d9fa43bfcdf6e1fa34c38
+  - a2f72047aedb4f243aacf91a2ed99e79

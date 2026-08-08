@@ -1,0 +1,49 @@
+/* Read-only post-battle summary screen (2026-08 session — reworked from the old spend-here-and-
+   now Aura Allocation screen, see DECISIONS.md -> [Combat]). Deliberately small/simple — a single
+   centered panel, no per-creature cards — since it's now pure recap, not an interactive spend
+   screen. 320x180 reference resolution, same PanelSettings scale as every other Phasix UI screen.
+   Text sizes match BattleHUD.uss's .battle-log-title/.battle-log-entry (15px/13px) — user found
+   the original 14px/9px too small to read, sized the box up to fit the larger text instead of
+   shrinking the text to fit the box. */
+
+.battle-summary-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(10, 10, 14, 0.92);
+    align-items: center;
+    justify-content: center;
+}
+
+.battle-summary-panel {
+    width: 220px;
+    padding: 16px;
+    background-color: rgba(30, 30, 36, 0.95);
+    border-width: 1px;
+    border-color: rgb(80, 80, 90);
+    align-items: center;
+}
+
+.battle-summary-title {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(230, 210, 60);
+    -unity-text-align: middle-center;
+    margin-bottom: 10px;
+}
+
+.battle-summary-stat {
+    font-size: 13px;
+    color: rgb(230, 230, 235);
+    -unity-text-align: middle-left;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.battle-summary-continue-button {
+    min-width: 100px;
+    font-size: 13px;
+    margin-top: 10px;
+}

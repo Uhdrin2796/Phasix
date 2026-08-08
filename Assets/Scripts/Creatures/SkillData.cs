@@ -5,6 +5,14 @@ using UnityEngine;
 /// requires the full species roster). Exists only so PhasixRuntimeData's skill lists and
 /// EventBus.OnSkillUsed compile. Do not flesh out skill content here.
 /// TODO: pending design — skill content (GDD §14)
+///
+/// 2026-08 session (see DECISIONS.md -> [Combat]): two STRUCTURAL fields were added so the 36
+/// generic placeholder assets can be clicked and mechanically resolved in live battle without
+/// inventing per-skill balance content — PlaceholderIndex and GrantsComboRule below are wiring,
+/// not game design. Neither carries a hand-picked number or effect; PlaceholderSkillResolver
+/// derives all actual damage/status behavior from data that's already GDD-locked elsewhere
+/// (SkillTreeCatalog, StatusEffectCatalog). Do NOT add real balance fields (power, cost, specific
+/// status assignment) here — that's still genuinely pending the skill design phase.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -14,7 +22,19 @@ public class SkillData : ScriptableObject
     [SerializeField] [TextArea] private string _description;
     [SerializeField] private SkillTreeType _treeType;
 
+    [Header("Placeholder wiring (structural, not balance — see class doc comment)")]
+    [Tooltip("Which of this tree's 2 placeholder skills this is (0 or 1). Used only to pick a " +
+             "deterministic index into a locked status/tree table — never a balance value.")]
+    [SerializeField] private int _placeholderIndex;
+
+    [Tooltip("If not None, equipping this skill grants the owner this alternate combo-detection " +
+             "rule for the rest of the battle (see ComboRuleType, BattleParticipant.ActiveComboRules). " +
+             "Assign by hand per-asset — this is a designer choice, not derived data.")]
+    [SerializeField] private ComboRuleType _grantsComboRule = ComboRuleType.None;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
+    public int PlaceholderIndex => _placeholderIndex;
+    public ComboRuleType GrantsComboRule => _grantsComboRule;
 }

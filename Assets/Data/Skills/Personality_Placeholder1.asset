@@ -16,3 +16,5 @@ MonoBehaviour:
   _description: "Placeholder skill \u2014 content pending species roster design (GDD
     Section 14). Do not treat as real skill content."
   _treeType: 14
+  _placeholderIndex: 0
+  _grantsComboRule: 0

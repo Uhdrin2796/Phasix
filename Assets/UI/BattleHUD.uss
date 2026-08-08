@@ -30,7 +30,12 @@
    shown. */
 .status-header {
     position: absolute;
-    top: 0;
+    /* Pushed down from 0 (2026-08 follow-up — user report: "getting covered by the top") — the
+       overworld's DebugMovementPresetCycler text renders at screen (0,0) and BattleScene_Main
+       loads additively ON TOP of the overworld (both scenes stay active during battle, see
+       BattleTransition's doc comment), so that debug overlay was bleeding through and covering
+       the nameplate's name/top edge. 28px clears its ~2 lines of text with margin to spare. */
+    top: 28px;
     left: 0;
     right: 0;
     flex-direction: row;
@@ -133,6 +138,84 @@
     margin-right: 0;
 }
 
+/* Bars-style nameplate mockup (2026-08 follow-up — user asked for the HP/Aura/Evo readout as "3
+   horizontal rectangles stacked vertically" with current/total shown on hover, instead of the
+   circular gauge; see BattleHUDController.ActiveNameplateStyle for the toggle and
+   NameplateRefs/BuildNameplate for why the Radial classes above are all still intact, not deleted
+   — the user explicitly asked to keep the circular version available to switch back to). Static
+   sizing only (no per-count interpolation like the Radial constants above) — first-pass mockup,
+   not yet tuned against a battle with more than the current 3-member party. */
+.nameplate-name-bars {
+    font-size: 14px;
+}
+
+.nameplate-bars-wrap {
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+/* Unity USS doesn't support :last-child, so the final row's margin-bottom isn't specially
+   suppressed — absorbed by .nameplate-bars-wrap's own margin-bottom below instead of mattering. */
+.nameplate-bar-row {
+    margin-bottom: 4px;
+}
+
+.nameplate-bar-track {
+    position: relative;
+    width: 140px;
+    height: 18px;
+    background-color: rgba(20, 20, 24, 0.85);
+    border-width: 1px;
+    border-color: rgb(70, 70, 75);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.nameplate-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+}
+
+.nameplate-bar-hp .nameplate-bar-fill {
+    background-color: rgb(90, 200, 100);
+}
+
+.nameplate-bar-aura .nameplate-bar-fill {
+    background-color: rgb(90, 140, 230);
+}
+
+.nameplate-bar-evo .nameplate-bar-fill {
+    background-color: rgb(150, 90, 220);
+}
+
+/* .nameplate-bar-evo-ready itself carries no background-color rule — tried that first (compound
+   selector .nameplate-bar-fill.nameplate-bar-evo-ready, matching the descendant rule above's
+   2-selector specificity), but the descendant rule kept winning regardless of source order when
+   verified live, so BattleHUDController.ApplyEvoVisual sets the ready/filling color as an
+   explicit INLINE style instead (always wins over any stylesheet rule — sidesteps the ambiguity
+   entirely). This class still gets added/removed on the fill element purely so other code can
+   query "is this ready" via GetClasses() without needing to compare resolvedStyle colors. */
+
+/* Evo-ready flashing perimeter (2026-08 follow-up — user-directed: "highlighting the perimeter
+   of the evo box and have it flash lightly" — there was previously no attention-grabbing signal
+   that Evolution Burst could be activated). Applied to the TRACK (not the fill, which already
+   goes solid gold via ApplyEvoVisual's inline style, see above) — BattleHUDController.
+   ApplyEvoVisual adds .nameplate-bar-evo-track-ready once, then toggles .nameplate-bar-evo-flash
+   on/off via a repeating schedule (EvoFlashIntervalMs) for as long as the gauge stays ready,
+   alternating the border between two gold shades for a light flash rather than a jarring blink. */
+.nameplate-bar-evo-track-ready {
+    border-color: rgb(230, 210, 60);
+    border-width: 2px;
+}
+
+.nameplate-bar-evo-track-ready.nameplate-bar-evo-flash {
+    border-color: rgb(255, 245, 190);
+}
+
 /* Buff/debuff row — deliberately its own full-width row below the stats, NOT squeezed next to
    the name (2026-08-06, user-directed: "we'll be putting a lot so keeping it underneath makes
    sense so you can just stack from left to right"). flex-wrap means once a row fills the
@@ -144,14 +227,19 @@
     justify-content: center;
 }
 
+/* Sized up from the original 12px (2026-08 follow-up — user-directed: "the icons for buffs and
+   debuffs are too smaller, please increase the size") — Bars-style nameplates never run
+   ApplyNameplateSize's dynamic Comfortable/Compact lerp (see that method's own early-return doc
+   comment), so these were stuck at the Radial style's smallest ("Compact", 7-slot) tier
+   permanently. 20px reads clearly at the nameplate's current fixed size. */
 .nameplate-buff-icon {
     display: none;
     position: relative;
-    width: 12px;
-    height: 12px;
-    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
     border-width: 1px;
-    margin: 0 3px 2px 0;
+    margin: 0 4px 3px 0;
 }
 
 .nameplate-buff-regen {
@@ -173,18 +261,18 @@
     margin: 0;
     padding: 0;
     -unity-text-align: middle-center;
-    font-size: 7px;
+    font-size: 11px;
     -unity-font-style: bold;
     color: rgb(230, 230, 230);
 }
 
 .nameplate-buff-icon-counter {
     position: absolute;
-    right: -2px;
-    bottom: -8px;
+    right: -3px;
+    bottom: -11px;
     margin: 0;
     padding: 0;
-    font-size: 7px;
+    font-size: 10px;
     -unity-font-style: bold;
     color: rgb(255, 255, 255);
     -unity-text-outline-width: 1px;
@@ -337,21 +425,22 @@
     opacity: 0.35;
 }
 
-/* Empty skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark
-   grey, unlabeled placeholder circles distributed one per clock hour around the acting
-   creature, on the SAME radius path as "A"/"C"/"H"/"R"/"K" (.move-option-placeholder,
-   MoveOptionRadius) — user preferred that original spacing over a separate outer ring.
-   Deliberately the SAME size as .move-option-placeholder too (2026-08-06 follow-up — user
-   clarified the model: these 12 are the slots, and "A"/"C"/"H"/"R"/"K" are skills already SLOTTED
-   INTO the 1/11/12/2/3 o'clock positions, not a smaller decoration peeking out from behind a
-   bigger orb) — 7 read as empty (grey), 5 read as filled (colored, lettered), all on one uniform
-   ring. BattleHUD.uxml orders the skill slots BEFORE the move options so "A"/"C"/"H"/"R"/"K" paint
-   on top and fully cover the grey slot underneath at those five positions. No text, no
-   color-coding, no click handler yet on the empty ones — real
-   skill content is still "taxonomy locked, individual skills pending" per CLAUDE.md.
-   BattleHUDController computes each slot's left/top per-instance (PositionSkillSlots) — this
-   class only supplies the fixed visual size/style. Shown/hidden together with the move options
-   (SetMoveOptionsVisible). */
+/* Skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark grey
+   circles distributed one per clock hour around the acting creature, on the SAME radius path as
+   "A"/"C"/"H"/"R"/"K" (.move-option-placeholder, MoveOptionRadius) — user preferred that original
+   spacing over a separate outer ring. Deliberately the SAME size as .move-option-placeholder too
+   (2026-08-06 follow-up — user clarified the model: these 12 are the slots, and "A"/"C"/"H"/"R"/
+   "K" are skills already SLOTTED INTO the 1/11/12/2/3 o'clock positions, not a smaller decoration
+   peeking out from behind a bigger orb) — 5 sit under the built-in moves, the other 7 (hours
+   4-10) are real equipped-skill slots as of the 2026-08 Combo/Status/Chain/Mastery wiring session
+   (BattleHUDController.PopulateSkillRing/SkillRingSlotOffset/SkillRingSlotCount) — colored per
+   the caster's PrimalType same as the stage creature (no per-skill icon exists yet, real skill
+   content is still "taxonomy locked, individual skills pending" per CLAUDE.md), draggable exactly
+   like the built-in moves. BattleHUD.uxml orders the skill slots BEFORE the move options so
+   "A"/"C"/"H"/"R"/"K" paint on top and fully cover the grey slot underneath at those five
+   positions. BattleHUDController computes each slot's left/top per-instance (PositionSkillSlots)
+   — this class only supplies the fixed visual size/style. Shown/hidden together with the move
+   options (SetMoveOptionsVisible). */
 .skill-slot-placeholder {
     position: absolute;
     width: 32px;
@@ -360,6 +449,109 @@
     border-width: 3px;
     border-color: rgb(80, 80, 85);
     border-radius: 16px;
+}
+
+/* Applied to a real skill-ring slot (hours 4-10) that this creature has no equipped skill in —
+   dimmed, matches .skill-slot-placeholder's own empty-grey look but explicitly flagged so a
+   populated slot (which gets no extra class) is visually distinct once skills exist to compare
+   against. 2026-08 session, see DECISIONS.md -> [Combat]. */
+.skill-slot-locked {
+    opacity: 0.4;
+}
+
+/* Real skill-ring orb colors, one per ring position (2026-08 follow-up — user-directed: "select
+   whatever colors you see fit for those"; see BattleHUDController.SkillRingColorCount's doc
+   comment for why POSITION owns the color, not species PrimalType). Deliberately a different
+   palette from .move-option-blue/pink/purple/gold so the skill-ring orbs and the 5 built-in moves
+   stay visually distinct at a glance. Applied via EnableInClassList in PopulateSkillRing — only
+   present while that position actually has a skill equipped, so an empty/locked slot still falls
+   back to .skill-slot-placeholder's neutral grey. Only ring 0 (C1) and 1 (C2) are reachable today
+   (SkillSlotCapacity's Tier 1 equip cap = 2); 2-6 are forward-looking for higher tiers. */
+.skill-ring-color-0 {
+    background-color: rgb(46, 139, 135);
+    border-color: rgb(110, 200, 195);
+}
+
+.skill-ring-color-1 {
+    background-color: rgb(217, 147, 42);
+    border-color: rgb(240, 190, 110);
+}
+
+.skill-ring-color-2 {
+    background-color: rgb(120, 90, 200);
+    border-color: rgb(180, 150, 230);
+}
+
+.skill-ring-color-3 {
+    background-color: rgb(210, 90, 120);
+    border-color: rgb(240, 150, 170);
+}
+
+.skill-ring-color-4 {
+    background-color: rgb(120, 180, 70);
+    border-color: rgb(180, 220, 130);
+}
+
+.skill-ring-color-5 {
+    background-color: rgb(70, 170, 210);
+    border-color: rgb(140, 210, 235);
+}
+
+.skill-ring-color-6 {
+    background-color: rgb(160, 120, 80);
+    border-color: rgb(200, 170, 130);
+}
+
+/* Skill-wheel combo-streak counter (2026-08 session — user-directed: "counter next to the skill
+   on the skill wheel," see DECISIONS.md -> [Combat]). Styled as its own small solid-circle badge
+   — same ICON-shaped language as .nameplate-buff-icon (a colored circle with a bold centered
+   glyph), not a bare floating subscript — user found the original tiny text-only version too hard
+   to read. Sized up from the nameplate's 12px buff icon since the skill slot itself (32px) is
+   much bigger than a nameplate. Pushed out to a clearly separate radius from the orb (right/
+   bottom: -14px, versus the first icon pass's -4px, which still visually touched the orb's edge)
+   per user follow-up — reads as its own distinct marker next to the orb, not an overlapping
+   corner tag. BattleHUDController.SetSkillComboCounter/ClearAllSkillComboCounters own its
+   text/visibility — this class is fixed-position styling only. pickingMode is Ignore in code so
+   it never intercepts the skill slot's own drag click. */
+.skill-combo-badge {
+    position: absolute;
+    right: -14px;
+    bottom: -14px;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgb(230, 150, 230);
+    background-color: rgb(200, 60, 200);
+    -unity-text-align: middle-center;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+}
+
+/* Shared runtime hover tooltip (2026-08 follow-up fix — see BattleHUDController._hudTooltip's
+   doc comment: UI Toolkit's native VisualElement.tooltip never renders in a runtime UIDocument
+   panel, only inside Editor-hosted UI, so the original "richer hover tooltip" pass silently never
+   worked in Play Mode or a build). One shared Label, shown/hidden/repositioned per-frame off
+   pointer events rather than a per-source element — position is set inline in C#
+   (PositionHudTooltip), this class supplies fixed visual styling only. pickingMode is Ignore in
+   code so it never intercepts whatever's underneath it (a skill orb, a nameplate bar). Used by
+   both the skill-ring orbs and the nameplate HP/Aura/Evo bars (see .nameplate-bar-track below). */
+.hud-tooltip {
+    position: absolute;
+    max-width: 220px;
+    padding: 6px 8px;
+    background-color: rgba(10, 10, 14, 0.95);
+    border-width: 2px;
+    border-color: rgb(90, 90, 100);
+    border-radius: 6px;
+    font-size: 13px;
+    color: rgb(230, 230, 235);
+    white-space: normal;
 }
 
 /* Converging-ring action-command timing (2026-08-05, user-directed, Sonny 2-referenced — see

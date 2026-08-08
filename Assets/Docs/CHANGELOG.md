@@ -18,6 +18,343 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-08] Phase 3 — Skill-ring lettering/colors, Evo-ready flash, bigger buff icons, auto-open wheel; plus a real equip-slot bug found along the way
+- **Context:** Same-day follow-up batch, 4 user requests: (1) C1/C2 orbs needed visible lettering
+  like A/C/H/R/K, colors at my discretion; (2) no indicator when Evolution Burst is ready —
+  suggested a flashing perimeter highlight; (3) buff/debuff icons too small; (4) auto-open the
+  first party member's move wheel at the start of every player turn, as a clear "it's your turn"
+  signal, instead of requiring a click first.
+- **Built (1):** New `_playerSkillSlotLabels` — a `Label` per real skill-ring slot, created once in
+  `Awake` reusing `.move-option-label`'s exact styling (same visual language as A/C/H/R/K),
+  text set by `PopulateSkillRing` to the equipped skill's `SkillName`. New `.skill-ring-color-0`
+  through `-6` USS classes (fill + border), one per ring POSITION (not species PrimalType, the
+  prior source) — matches how A/C/H/R/K are colored by fixed position, not by whichever move
+  occupies it. Deliberately a different palette (teal/amber/indigo/rose/lime/cyan/brown) from
+  A/C/H/R/K's green/blue/pink/purple/gold.
+- **Built (2):** `ApplyEvoVisual`'s Bars branch now also toggles `.nameplate-bar-evo-track-ready`
+  (added once on a not-ready→ready transition) and a repeating-schedule-driven
+  `.nameplate-bar-evo-flash` class (`EvoFlashIntervalMs` = 450ms) on the Evo bar's TRACK, for a
+  light flashing perimeter while ready — paused/cleared on the reverse transition. Guarded by a
+  new `NameplateRefs.EvoFlashActive` bool so the schedule only starts/stops on an actual state
+  change, not every stat refresh (which runs far more often than readiness changes).
+- **Fixed along the way (2):** The ready fill color itself (gold vs. the normal purple) was ALSO
+  silently broken — `.nameplate-bar-evo-ready`'s single-class selector loses to `.nameplate-bar-
+  evo .nameplate-bar-fill`'s 2-class descendant selector under USS's CSS-style specificity rules,
+  regardless of declaration order, so the ready color never actually won even though the class was
+  correctly present. Fixed by setting the color as an explicit INLINE style in `ApplyEvoVisual`
+  instead (reusing the existing `NameplateEvoReadyColor`/`NameplateEvoFillingColor` constants the
+  Radial style's stat-text color already used) — inline styles always beat stylesheet rules,
+  sidestepping the specificity question entirely. Caught only because the fix was verified via
+  `resolvedStyle` inspection, not just "the class list looks right."
+- **Built (3):** `.nameplate-buff-icon` raised from 12px to 20px (border-radius 6→10px), label
+  font-size 7→11px, counter font-size 7→10px with its offset adjusted to match — these were stuck
+  at the Radial style's smallest ("Compact", 7-slot) tier permanently, since Bars-style nameplates
+  never run `ApplyNameplateSize`'s dynamic Comfortable/Compact sizing (that method is a deliberate
+  no-op while Bars is active).
+- **Built (4):** `BattleManager.PlayerTurn` now sets `_pendingCreatureClickSlot` to the first alive
+  party member's index right at turn start, before the loop's normal wait-for-a-click branch runs
+  — reuses the exact same wheel-opening code path a real click already goes through, no separate
+  logic to keep in sync.
+- **Found and fixed a real bug (not requested, surfaced by (1) making it visible for the first
+  time):** `WildSpawnSystem.SeedInitialSkills`'s equip-slot filling was sequential-per-tree, not
+  round-robin — with every tree having exactly 2 placeholder skills and Tier 1's 2-slot equip cap,
+  the FIRST unlocked tree alone always exhausted the cap before the SECOND tree's skills were ever
+  considered. For the test species (Mirror + Reaction unlocked, per the original B.8 bootstrap's
+  explicit intent), this meant BOTH equipped skills came from Mirror and Reaction's C2 (the
+  TimedInputStreak combo grant) was learned but never equippable — permanently unreachable in live
+  play despite being correctly wired. Fixed by equipping one skill per unlocked tree per pass,
+  cycling trees until the cap is hit. New `WildSpawnSystemTests.cs` (3 tests) covers the exact
+  regression case plus the single-tree fallback.
+- **Verified:** 223/223 EditMode tests pass (up from 220 — 3 new `WildSpawnSystemTests`). Live: C1
+  (teal) and C2 (amber) both now show correct short lettering with no text overflow (previously
+  C2's slot showed Mirror's un-renamed second skill, overflowing its circle); the move wheel opens
+  automatically with no click at battle start; forcing the Evo gauge to 100%/ready showed the bar
+  turn gold (confirmed via `resolvedStyle.backgroundColor` exactly matching `NameplateEvoReadyColor`)
+  and the track's flash class toggling on a live schedule.
+
+[2026-08-08] Phase 3 — Hover tooltips added to the 5 built-in moves (A/C/H/R/K)
+- **Context:** Same-day follow-up: only the real skill-ring orbs (C1/C2) had a hover tooltip —
+  user reported the 5 built-in moves (Attack, Charge, Heal, Regen, Capture) showed nothing.
+- **Built:** New `BattleHUDController.MoveOptionTooltips` — a static array, index-matched to
+  `MoveOptionsPerSlot`/`MoveOptionClockHours`, built once from the same named constants that
+  actually drive each move in `BattleManager` (`BattleConfig.AttackAuraCost`, `DamageCalculator.
+  BasicAttackPower`, `BattleConfig.ChargeAuraRestore`, `HealAmount`/`HealAuraCost`,
+  `RegenHealPerTurn`/`RegenDurationTurns`/`RegenAuraCost`, and `CaptureSystem.
+  ComputeCaptureChancePercent` called at 0%/100% target HP for Capture's real range) — same
+  "use the real values" standard as the skill-ring tooltip fix, just for the 5 moves that aren't
+  `SkillData`-backed. Registered `PointerEnterEvent`/`PointerLeaveEvent` on each move option
+  element, reusing the same shared `_hudTooltip`/`PositionHudTooltipNear` infrastructure.
+- **Caught a real discrepancy:** Capture's chance range is NOT 10-95% as a naive read of
+  `CaptureSystem`'s clamp ceiling might suggest — with the actual `BaseCaptureChancePercent` (10)
+  and `MaxLowHPBonusPercent` (60) constants, the true achievable range is 10-70%; the 95% clamp
+  never triggers. Computing the range from the real method instead of hand-typing it caught this.
+- **Verified:** 220/220 EditMode tests pass (no coverage change). Live: hovering "A" (Attack) in
+  `BattleScene_Main` correctly showed "Attack / Physical damage — Power 10 / Target: Enemy / Aura
+  Cost: 2" next to the orb (confirmed via Game View screenshot); all 5 tooltip strings queried
+  directly and confirmed correct.
+
+[2026-08-08] Phase 3 — Skill-orb tooltip content now derived from each skill's resolved mechanics
+- **Context:** Same-day follow-up — user asked for the tooltip content itself to "use the values
+  from each skill orb to generate your content," rather than the shared placeholder Description
+  text every one of the 36 assets carries verbatim ("Placeholder skill — content pending species
+  roster design... Do not treat as real skill content" — a dev-facing disclaimer, identical across
+  every skill, not useful in-battle information).
+- **Built:** New `BattleHUDController.BuildSkillTooltipText(SkillData)` — calls
+  `PlaceholderSkillResolver.Resolve(skill)` (already-built, GDD-locked-data-derived resolution used
+  by the actual turn-loop) and formats a per-skill-differentiated summary: damage skills show their
+  resolved Physical/Elemental category and the shared placeholder Power; status skills show the
+  resolved status name and its real duration range from `StatusEffectCatalog` (base range — the
+  exact live value still depends on caster Resonance/target Resolve at cast time, unknowable at
+  hover time since no target is chosen yet), plus Self/Enemy targeting either way. Nothing invented
+  — every line traces to data the resolver already derives from locked tables.
+- **Verified:** 220/220 EditMode tests pass (no coverage change — tooltip content is UI-only,
+  matching existing precedent that MonoBehaviour/UIDocument controllers aren't EditMode-tested
+  here). Queried `BuildSkillTooltipText` directly across 10 placeholder skills spanning 5 different
+  trees — confirmed real differentiation: Corruption/Utility show damage category+power,
+  Reaction/Bond/Personality show distinct applied statuses with correct duration ranges and
+  Self-vs-Enemy targeting matching each status's `IsPositive` flag. Live: hovering C1 in
+  `BattleScene_Main` shows "Elemental damage — Power 8 / Target: Enemy / Aura Cost: 3" positioned
+  next to the orb (confirmed via Game View screenshot).
+
+[2026-08-08] Phase 3 — Skill-orb tooltip repositioned to anchor next to the orb, not the cursor
+- **Context:** Same-day follow-up: after the nameplate occlusion fix, user confirmed nameplate
+  hover now works but skill-orb hover (over an equipped skill in the move wheel, opened by
+  clicking the player creature) still appeared not to. User clarified expected behavior: the
+  tooltip should appear "near/next to the skill we're hovering."
+- **Investigated:** Exhaustively re-verified the skill-orb hover mechanism itself via
+  `IPanel.Pick()`, manually-targeted event dispatch, AND a genuine untargeted `PointerMoveEvent`
+  (the closest scriptable approximation of real mouse movement, letting the panel's own picking
+  resolve the target rather than presetting one) — all three confirmed the tooltip correctly
+  populates and shows. The likely real issue: the original design positioned the tooltip near the
+  *cursor* (a fixed +18/+18 px diagonal offset), and skill-ring orbs sit low/left of the stage
+  creature — a cursor-anchored tooltip there could easily land off-screen, behind another panel
+  element, or just far enough from the orb to go unnoticed, reading as "doesn't work" even though
+  it was technically firing.
+- **Fixed:** `BattleHUDController.PositionHudTooltipNear(VisualElement anchor)` replaces the old
+  cursor-following `PositionHudTooltip(Vector2)` — positions the tooltip immediately to the right
+  of, and top-aligned with, whichever element is hovered (skill orb or nameplate bar), computed
+  once on `PointerEnterEvent` rather than tracked continuously (the anchor doesn't move while
+  hovered, so the `PointerMoveEvent` repositioning handlers on both hover sites were removed as
+  unneeded — a simplification, not just a fix).
+- **Verified:** 220/220 EditMode tests pass (no coverage change). Live: hovering C1 now shows the
+  tooltip flush against the orb's right edge, top-aligned, fully on-screen (confirmed via Game
+  View screenshot) — clearly read as attached to that specific orb.
+
+[2026-08-08] Phase 3 — Fixed nameplate pointer occlusion; closes out the old Evo-gauge-not-clickable issue
+- **Context:** Follow-up to the same-week nameplate work: user reported the HUD needed to move
+  down (overworld debug text was bleeding through and covering it) and that hover wasn't working
+  at all, on both the new nameplate bars and the skill orbs.
+- **Fixed — HUD position:** `.status-header` pushed from `top: 0` to `top: 28px` in `BattleHUD.uss`
+  — the overworld's `DebugMovementPresetCycler` text renders at screen (0,0) and bleeds through
+  since `BattleScene_Main` loads additively on top of the overworld (both stay active).
+- **Fixed — hover:** Root-caused via `IPanel.Pick(point)` (not the earlier session's `SendEvent`-
+  based test, which gave a false positive — see `LESSONS_LEARNED.md`): `.stage` fills the entire
+  `.battle-root` and, being the LATER sibling of `.status-header` in `BattleHUD.uxml`'s document
+  order, silently won pointer picking across their overlap despite having no visible content there
+  — every hover/click meant for the nameplate was being swallowed. Fixed by moving `<StatusHeader>`
+  to after `<Stage>` in the UXML (position-absolute, so this only changes pick/paint z-order, not
+  layout). Also set `pickingMode = Ignore` on the decorative bar-fill element so its parent track
+  is the unambiguous hover target. Skill-ring orb hit-testing was separately confirmed already
+  sound via the same `Pick()` technique — not reproduced as broken once wheel-open timing was
+  accounted for.
+- **Bonus:** This is almost certainly the real cause of the long-open `KNOWN_ISSUES.md`
+  `[EDITOR-001]` "Evolution Burst gauge not clickable" report (same click path, same occluded
+  region) — closed retroactively.
+- **Verified:** 220/220 EditMode tests pass (no coverage change — UXML/USS ordering fix). Live:
+  `Pick()` at the nameplate's on-screen coordinates changed from resolving to `.stage` (wrong) to
+  the nameplate's own bar track (correct); dispatching a hover at the now-correctly-picked element
+  showed the tooltip with the right text, and leaving hid it correctly.
+- **Next:** None — this closes both the hover report and the old Evo-gauge issue. If a user still
+  sees the gauge fail to respond specifically when it's actually full/ready, that would point to
+  `EvolutionBurstSystem.ActivateReady` itself, not this occlusion bug.
+
+[2026-08-07] Phase 3 — Nameplate bars mockup (HP/Aura/Evo), scoped HUD scale-up reverted
+- **Context:** Follow-up correction to the same-day HUD scale-up: the global `PanelSettings.scale`
+  bump enlarged everything, but the user only wanted the health/Aura/Evo readout bigger — the
+  player stage circles and skill wheel should have stayed at their original size. Separately,
+  requested a new mockup for that readout itself: 3 horizontal rectangles stacked vertically (HP,
+  Aura, Evo) instead of the circular radial gauge, with current/total shown on hover — and asked
+  to keep the circular version intact in case of a revert.
+- **Built:** Reverted `BattleHUDPanelSettings.scale` back to 1. Added `BattleHUDController.
+  NameplateStyle` enum (`Radial`/`Bars`) gated by a single `ActiveNameplateStyle` const — currently
+  `Bars`. `BuildNameplate` (now an instance method, was static) branches construction: Radial
+  builds the exact same ring/portrait/gauge/stat-label cluster as before, byte-for-byte unchanged;
+  Bars builds 3 stacked `.nameplate-bar-track`/`.nameplate-bar-fill` rows instead, no numbers shown
+  by default. `RefreshNameplateStats` and a new shared `ApplyEvoVisual` helper (used by both the
+  refresh loop and `SetBurstFillBar`'s independent call site) branch the same way. Generalized the
+  same-day skill-orb tooltip infrastructure (`_skillTooltip` -> `_hudTooltip`, `.skill-tooltip` ->
+  `.hud-tooltip`) so the nameplate bars' hover-to-reveal ("HP: 120/120", "Aura: 24/24", "Evo: 45%"
+  or "Evo: ready") reuses the exact same shown-on-PointerEnter/repositioned-on-PointerMove/
+  hidden-on-PointerLeave Label rather than a second parallel implementation. New USS: `.nameplate-
+  name-bars`, `.nameplate-bars-wrap`, `.nameplate-bar-row/track/fill`, `.nameplate-bar-hp/aura/evo`,
+  `.nameplate-bar-evo-ready`. Nothing about the Radial style's code was deleted — flipping
+  `ActiveNameplateStyle` back to `Radial` is the entire revert.
+- **Verified:** 220/220 EditMode tests pass (unchanged — no test coverage exists for either
+  nameplate visual, matching existing precedent that MonoBehaviour/UIDocument controllers aren't
+  EditMode-tested here). Live Play Mode: player stage circles and skill wheel confirmed back to
+  their pre-scale-up size; nameplate now shows 3 stacked bars (green/blue/dark, correctly full/
+  full/empty for a fresh battle); hovering the HP bar's track correctly showed "HP: 120/120" via
+  the shared tooltip.
+- **Next:** This is an explicit first-pass mockup, not a locked design — the Bars style currently
+  has no party-count-based size interpolation (unlike Radial's Comfortable/Compact lerp) and no
+  species-color accent; revisit either if the user wants after seeing it live.
+
+[2026-08-07] Phase 3 — Runtime skill tooltip fix, battle HUD scale-up, Aura +1 allocation fix
+- **Context:** User playtesting turned up three separate issues in the battle scene: (1) hovering a
+  skill orb showed no tooltip despite the same-day "richer hover tooltip" work; (2) the HUD text
+  read as too small; (3) opening the Tab-key Aura-spend menu and clicking "+1" silently did nothing
+  even with Aura available.
+- **Investigated:** (1) traced to `VisualElement.tooltip` — Unity's native UI Toolkit tooltip only
+  renders inside Editor-hosted UI (Inspector/EditorWindow panels), never in a runtime `UIDocument`
+  panel; the earlier session's implementation compiled and looked correct but was a no-op by
+  design in both Play Mode and a real build. (3) traced to `AuraStatAllocationSystem.
+  TryAllocateStatPoint` gating on `phasix.baseStats.Total >= AuraTierCeiling.ComputeCeiling(...)` —
+  real species `baseStats` (e.g. `Test_FireType`'s Vitality=120) already total well past the
+  tier-1 placeholder ceiling (40) before any Aura is ever spent, so the gate was permanently
+  closed from the very first allocation attempt for any real species; only ever tested in
+  isolation against synthetic zero-baseline `StatBlock`s, which never exposed the mismatch.
+- **Built:** `BattleHUDController` now maintains its own floating `_skillTooltip` Label, shown/
+  hidden/repositioned off `PointerEnterEvent`/`PointerMoveEvent`/`PointerLeaveEvent` on each
+  skill-ring slot instead of the dead `.tooltip` assignment; new `.skill-tooltip` USS class.
+  `BattleHUDPanelSettings.scale` raised from 1 to 1.35 (ConstantPixelSize mode) — a single
+  panel-wide multiplier rather than touching the many individually-tuned pixel constants across
+  `BattleHUD.uss`/`BattleHUDController.cs`. New `PhasixRuntimeData.auraAllocatedPoints` — a
+  running total of points actually purchased via Aura, never touched by baseStats; `
+  AuraStatAllocationSystem.TryAllocateStatPoint`/`GetRemainingCeilingRoom` now gate on this field
+  instead of `baseStats.Total`, matching Progression_Directive_v0_1_0's literal wording ("Stat
+  growth through Common Aura is capped per tier" — growth, not total stat value). Neither
+  placeholder ceiling constant (`BaseCeilingPerTier`/`CeilingIncreasePerAptitudePoint`) changed.
+- **Verified:** 220/220 EditMode tests pass (up from 218 — two new regression tests covering a
+  species whose baseStats already exceed the ceiling). Live Play Mode: hovering an equipped skill
+  orb shows its name/description/Aura cost; HUD text/orbs visibly larger and legible in a Game
+  View screenshot; `AuraStatAllocationSystem.TryAllocateStatPoint` against the real party member's
+  live `PhasixRuntimeData` (baseStats.Total=177, ceiling=40) now succeeds and correctly increments
+  `auraAllocatedPoints`/decrements `commonAura`/adds to the target stat, where it silently failed
+  before the fix.
+- **Next:** No further action needed on these three; flagged for whoever eventually builds
+  devolution to decide whether `auraAllocatedPoints` should reset alongside `baseStats` then.
+
+[2026-08-07] Phase 3 — C1/C2 skill naming, RepeatSameSkill/TimedInputStreak mechanic refinements, richer skill tooltips
+- **Context:** Live-testing feedback on the same-day combo-counter/battle-summary work: (1)
+  console spam (`"Access version should be odd when acquiring lock"`) and the Evo bar not being
+  clickable; (2) the two combo-granting skills should be named C1/C2, with `RepeatSameSkill`
+  restricted to C1 specifically (not "any repeated skill") and `TimedInputStreak` (C2) requiring
+  PERFECT hits specifically (not merely successful ones); (3) the combo badge needed to sit
+  further from the skill orb; (4) skill orbs should show a richer hover tooltip. Full record:
+  DECISIONS.md -> [Combat/UI].
+- **Investigated:** The console error traced to a Unity Editor-process-level issue (no file/
+  line/stack trace, persisted through a clean stop+recompile with no Play Mode involved) — most
+  likely this session's very large number of forced recompiles/domain reloads degraded the
+  Editor process. Recommended a manual Editor restart (confirmed safe — nothing dirty, all work
+  saved). Did not find any code-level regression in the burst-bar click path itself.
+- **Built:** Renamed `Mirror_Placeholder1`/`Reaction_Placeholder1` to `C1`/`C2`.
+  `ComboRuleEvaluator.EvaluateRepeatSameSkill`/`GetRepeatTrailingStreakLength` now take an
+  explicit `grantingSkill` parameter and only count repeats of that specific skill.
+  `BattleParticipant.RecentTimedInputSuccesses`/`RecordTimedInputResult` renamed to
+  `RecentTimedInputPerfects`/`RecordTimedInputPerfect`, fed from `LastTimedInputWasPerfect`
+  instead of `LastTimedInputSuccess` — a non-perfect success now resets the streak same as a
+  miss. `BattleHUDController.PopulateSkillRing` tooltip now shows name + description + Aura
+  cost. `.skill-combo-badge` offset pushed from -4px to -14px for clearer separation from the orb.
+- **Verified:** Live Play Mode — C1/C2 names correct; repeating the OTHER equipped skill produced
+  zero streak and no combo log line; repeating C1 correctly logged "Duo combo" and badged C1's
+  slot; tooltip shows the richer text; badge visually confirmed at the new radius. 218/218
+  EditMode tests pass (up from 214).
+- **Next:** User to restart the Unity Editor and re-test the Evo bar click fresh — if the console
+  error recurs after a real restart, that rules out the "degraded session" theory.
+
+[2026-08-07] Phase 3 — Skill-wheel combo counter; post-battle screen reworked to a read-only summary; Aura spending moved to a new Tab-key menu
+- **Context:** Follow-up to the same-day Combo/Status/Chain/Mastery wiring session, driven by two
+  user asks: (1) combos had zero UI feedback beyond a battle-log line — after exploring "add it
+  to the buff/debuff bar" and "a standalone nameplate indicator," landed on a counter badge
+  directly on the skill wheel; (2) the post-battle Aura Allocation screen was "too small" and
+  spending Aura right after a battle wasn't wanted — it should be a read-only recap (Aura gained,
+  damage dealt, healed), with spending moved to "some menu," specifically the Tab key for now.
+  Full record: DECISIONS.md -> [Combat/UI].
+- **Built:** `ComboEngine.GetDistinctTrailingStreakLength`/`ComboRuleEvaluator.
+  GetRepeatTrailingStreakLength`/`GetTimedInputTrailingStreakLength` (raw current streak length,
+  not the capped Duo/Trio/Quad tier). New `.skill-combo-badge` on each real skill-ring slot
+  (`BattleHUDController.SetSkillComboCounter`/`ClearAllSkillComboCounters`), badging the just-used
+  skill for `CrossTreeSequence`/`RepeatSameSkill` or the granting passive for `TimedInputStreak`
+  (`BattleManager.RefreshComboCounterBadges`, called after every skill use). Deleted
+  `AuraAllocationController`/`AuraAllocation.uxml/.uss`; new `BattleSummaryController`
+  (`BattleSummary.uxml/.uss`) — small read-only panel, Continue only, no spend buttons. New
+  `BattleSummary` data class + `BattleManager` running totals (`_totalDamageDealt`/
+  `_totalHealingDone`, accumulated at every player-side damage/heal call site) and a first real
+  implementation of Aura-drop-on-win (`BattleConfig.AuraRewardOnWin`, flat 15 — `EventBus.
+  OnAuraDropped` had existed as an unwired stub with no producer until now). New
+  `PartyMenuController` (`PartyMenu.uxml/.uss`) in the overworld scene, toggled by Tab — reuses
+  the per-creature "+1" Aura-spend cards ported from the deleted `AuraAllocationController`,
+  adapted to `PhasixRuntimeData` directly since there's no `BattleParticipant` outside battle.
+- **Verified:** Unity MCP reconnected same session. Completed the Editor-side wiring (renamed
+  `UIRoot_AuraAllocation` -> `UIRoot_BattleSummary` with `BattleSummaryController` attached and
+  re-pointed at `BattleSummary.uxml`; created `UIRoot_PartyMenu` in `SampleScene` with a new
+  `PartyMenuPanelSettings.asset`), then live Play Mode: the icon badge showed "2" on exactly the
+  repeated skill's ring slot after using it twice; winning a battle showed the summary screen
+  with correct totals (Aura Gained 15, Damage Dealt 6, Healing Done 0); the Tab menu opened with
+  the real party member's stats and Aura. 214/214 EditMode tests pass (up from 206). Caught and
+  fixed one bad test assertion along the way (`GetDistinctTrailingStreakLength` was correct at 3,
+  the test's expected value of 2 was wrong).
+- **Follow-up:** User found the first-pass text too small to read. Standardized `BattleSummary.
+  uss`/`PartyMenu.uss` on `.battle-log-entry`'s 13px as the body-text baseline (titles ~16px,
+  matching `.battle-log-title`'s 15px), growing both panels/cards to fit. Redesigned the combo
+  badge from a bare floating number into a proper small solid-circle icon, matching
+  `.nameplate-buff-icon`'s visual language (sized up for the bigger 32px skill slot). Re-verified
+  live after each change.
+
+[2026-08-07] Phase 3 — Combo/Status/Chain/Mastery + Aura Allocation wired into live play; PhasixGuide.md doc fix
+- **Context:** Routine "what's next" check surfaced two things: `PhasixGuide.md` was badly stale
+  (claimed `Combat/`/`Evolution/` were "Phase 3, not yet created" — false, Combat/ was fully
+  built). Separately, `ComboEngine`/`StatusEffectCatalog`/`ChainResultCatalog`/
+  `MasteryBonusCatalog` (rules-layer, tested) and `AuraStatAllocationSystem` (progression) had no
+  live call site — `DECISIONS.md` had twice deferred building the skill-selection UI they need.
+  User explicitly chose to override that "wait" decision and build the wiring now, accepting
+  rework once real skill content lands. Full record: DECISIONS.md -> [Combat].
+- **Built:** `PlaceholderSkillResolver` — derives damage-category/status behavior for the 36
+  placeholder `SkillData` assets algorithmically from already-locked tables (`SkillTreeCatalog`,
+  `StatusEffectCatalog`, the damage formula's own Force/Guard/Resonance/Ward split), so nothing
+  per-skill is hand-invented. New `SkillData.PlaceholderIndex`/`GrantsComboRule` structural
+  fields. New `SkillDatabase` (GUID↔SkillData/tree lookups). `BattleHUDController`'s previously-
+  decorative 12-slot skill ring is now half-live — 7 of 12 slots (hours 4-10) are real, draggable
+  equipped-skill slots (`PopulateSkillRing`), the other 5 stay under the built-in A/C/H/R/K moves.
+  New `BattleManager.ResolveSkillAction` resolves a skill drag into damage or a status
+  application, then checks Combo/Chain/Mastery and logs any hit (detection + log only — no
+  numeric bonus for any of them this pass, an explicit scope decision). New active-status
+  tracking on `BattleParticipant` (`ApplyStatus`/`TickStatuses`, ticked once per round). New
+  pluggable combo-rule framework — `ComboRuleType`/`ComboRuleEvaluator`
+  (`RepeatSameSkill`/`TimedInputStreak`) — NEW, user-directed mechanics (not GDD content) letting
+  specific skills grant a creature an alternate combo rule while equipped, alongside the
+  unchanged GDD-locked base cross-tree rule; pre-wired on `Mirror_Placeholder1`/
+  `Reaction_Placeholder1` since those trees' own locked role text fits. New post-battle
+  `AuraAllocationController` (UI Toolkit screen, spends `commonAura` via the already-built
+  `AuraStatAllocationSystem`), shown from a newly-coroutine `BattleManager.EndBattle` on a Won
+  outcome before the scene unloads. `WildSpawnSystem.SeedInitialSkills` (shared by
+  `EncounterTrigger`/`DebugPartyBootstrap`) auto-seeds a species' unlocked trees/skills up to
+  `SkillSlotCapacity`'s locked tier caps — explicit placeholder for a real skill-learning flow.
+- **Fixed (found live):** `Test_FireType`/`Test_SteamType` both had `EvolutionTier` defaulted to
+  0 (never set since Wk 9) — crashed `SkillSlotCapacity.GetTreeCount` the first time anything
+  actually read tier for capacity math. Fixed the test data (tier 1) and added a defensive
+  tier-range guard in `SeedInitialSkills` so a similar gap in future placeholder species can't
+  crash a spawn.
+- **Changed:** `PhasixGuide.md` (v1.4.0 -> v1.5.0) — corrected the false "Combat/Evolution not
+  yet created" claim, added the new `Scenes/`/`SkillDatabase`/`AuraAllocation` entries, updated
+  the test roster and "What Is Pending" section to reflect detection-only Combo/Chain/Mastery.
+- **Verified:** Live Play Mode via `BattleTransition.StartWildBattle` — skill ring showed exactly
+  2 live slots (both Mirror) + 5 locked for the seeded test companion; a Mirror skill resolved
+  real damage with correct type-effectiveness text; using it twice logged a "Duo combo —
+  repeating the same skill" line; applying Bleed+Weaken to the enemy logged "combine into Rend!"
+  with the catalog's exact locked text (confirmed non-repeating on a second identical check);
+  adding a 3rd DoT logged "achieves Hemorrhage!" (confirmed once-per-battle); ending the battle
+  Won showed the Aura Allocation screen with correct party/stat/Aura data, and Continue correctly
+  returned to the overworld with the battle scene unloaded cleanly. 206/206 EditMode tests pass
+  (up from 133 at session start — 73 new tests across `PlaceholderSkillResolverTests`,
+  `ComboRuleEvaluatorTests`, `SkillDatabaseTests`, and additions to `BattleParticipantTests`/
+  `BattleLogFormatterTests`).
+- **Next:** Chain/Mastery's full numeric effects (a `DamageCalculator` modifier) are an explicitly
+  flagged, separately-scoped follow-up. Combo bonus effects remain entirely undesigned (GDD never
+  specifies one). Real skill content/species roster design (Phase 5) will need to replace
+  `PlaceholderSkillResolver`'s derivation and the 36 placeholder assets' structural fields, not
+  extend them.
+
 [2026-08-06] Phase 8 — Free-choice creature selection, staggered stage layout, End Turn button
 - Built: `BattleParticipant.HasActedThisTurn`; `BattleHUDController.PlayerCreatureClicked`/
   `EndTurnClicked` events, `ShowMoveSelectionReadOnly`, `SetEndTurnButtonVisible`,

@@ -1,8 +1,11 @@
+using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Phasix.Tests.EditMode
 {
-    /// <summary>Covers BattleParticipant.SpendAura/RestoreAura (2026-08-05 — see DECISIONS.md -> [Combat]: attack Aura cost, perfect-defense Aura restore) and Heal/ApplyRegen/TickRegen (2026-08-06 — "H"/"R" move options).</summary>
+    /// <summary>Covers BattleParticipant.SpendAura/RestoreAura (2026-08-05 — see DECISIONS.md -> [Combat]: attack Aura cost, perfect-defense Aura restore), Heal/ApplyRegen/TickRegen (2026-08-06 — "H"/"R" move options), and status/combo-history tracking (2026-08 session — Combo/Status/Chain/Mastery wiring).</summary>
     public class BattleParticipantTests
     {
         private static BattleParticipant MakeParticipant(int aura, int vitality = 20)
@@ -189,6 +192,165 @@ namespace Phasix.Tests.EditMode
 
             Assert.AreEqual(1, healed); // clamped, not the full healPerTurn
             Assert.AreEqual(participant.MaxHP, participant.CurrentHP);
+        }
+
+        [Test]
+        public void ApplyStatus_AddsNewEntry()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            participant.ApplyStatus(StatusEffectType.Burn, 4);
+
+            Assert.AreEqual(1, participant.ActiveStatuses.Count);
+            Assert.AreEqual(StatusEffectType.Burn, participant.ActiveStatuses[0].Type);
+            Assert.AreEqual(4, participant.ActiveStatuses[0].TurnsRemaining);
+        }
+
+        [Test]
+        public void ApplyStatus_ReapplyingSameType_OverwritesRatherThanStacks()
+        {
+            var participant = MakeParticipant(aura: 10);
+            participant.ApplyStatus(StatusEffectType.Burn, 4);
+
+            participant.ApplyStatus(StatusEffectType.Burn, 6);
+
+            Assert.AreEqual(1, participant.ActiveStatuses.Count, "Re-casting must refresh the countdown, not add a second timer.");
+            Assert.AreEqual(6, participant.ActiveStatuses[0].TurnsRemaining);
+        }
+
+        [Test]
+        public void ApplyStatus_ZeroOrNegativeDuration_IsIgnored()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            participant.ApplyStatus(StatusEffectType.Burn, 0);
+            participant.ApplyStatus(StatusEffectType.Burn, -1);
+
+            Assert.AreEqual(0, participant.ActiveStatuses.Count);
+        }
+
+        [Test]
+        public void TickStatuses_DecrementsAndRemovesAtZero_ReturningExpiredTypes()
+        {
+            var participant = MakeParticipant(aura: 10);
+            participant.ApplyStatus(StatusEffectType.Burn, 1);
+            participant.ApplyStatus(StatusEffectType.Regenerate, 3);
+
+            List<StatusEffectType> expired = participant.TickStatuses();
+
+            CollectionAssert.AreEquivalent(new[] { StatusEffectType.Burn }, expired);
+            Assert.AreEqual(1, participant.ActiveStatuses.Count);
+            Assert.AreEqual(StatusEffectType.Regenerate, participant.ActiveStatuses[0].Type);
+            Assert.AreEqual(2, participant.ActiveStatuses[0].TurnsRemaining);
+        }
+
+        [Test]
+        public void ActiveStatusTypes_ReflectsOnlyCurrentlyActiveEntries()
+        {
+            var participant = MakeParticipant(aura: 10);
+            participant.ApplyStatus(StatusEffectType.Burn, 1);
+            participant.ApplyStatus(StatusEffectType.Regenerate, 3);
+            participant.TickStatuses(); // Burn expires
+
+            CollectionAssert.AreEquivalent(new[] { StatusEffectType.Regenerate }, participant.ActiveStatusTypes);
+        }
+
+        [Test]
+        public void RecordSkillTreeUse_AppendsAndTrimsToLastFour()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            participant.RecordSkillTreeUse(SkillTreeType.Utility);
+            participant.RecordSkillTreeUse(SkillTreeType.Aura);
+            participant.RecordSkillTreeUse(SkillTreeType.Passive);
+            participant.RecordSkillTreeUse(SkillTreeType.Synergy);
+            participant.RecordSkillTreeUse(SkillTreeType.Reaction);
+
+            Assert.AreEqual(4, participant.RecentSkillTrees.Count);
+            CollectionAssert.AreEqual(
+                new[] { SkillTreeType.Aura, SkillTreeType.Passive, SkillTreeType.Synergy, SkillTreeType.Reaction },
+                participant.RecentSkillTrees);
+        }
+
+        [Test]
+        public void RecordSkillTreeUse_FourDistinctTrees_DetectsQuadViaRealComboEngine()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            participant.RecordSkillTreeUse(SkillTreeType.Utility);
+            participant.RecordSkillTreeUse(SkillTreeType.Aura);
+            participant.RecordSkillTreeUse(SkillTreeType.Passive);
+            participant.RecordSkillTreeUse(SkillTreeType.Synergy);
+
+            Assert.AreEqual(ComboTier.Quad, ComboEngine.DetectCombo(participant.RecentSkillTrees));
+        }
+
+        [Test]
+        public void RecordTimedInputPerfect_AppendsAndTrimsToLastFour()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            participant.RecordTimedInputPerfect(true);
+            participant.RecordTimedInputPerfect(true);
+            participant.RecordTimedInputPerfect(false);
+            participant.RecordTimedInputPerfect(true);
+            participant.RecordTimedInputPerfect(true);
+
+            Assert.AreEqual(4, participant.RecentTimedInputPerfects.Count);
+            CollectionAssert.AreEqual(new[] { true, false, true, true }, participant.RecentTimedInputPerfects);
+        }
+
+        [Test]
+        public void ActiveComboRules_AlwaysIncludesCrossTreeSequence_ByDefault()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            CollectionAssert.Contains(participant.ActiveComboRules, ComboRuleType.CrossTreeSequence);
+            Assert.AreEqual(1, participant.ActiveComboRules.Count);
+        }
+
+        [Test]
+        public void RefreshActiveComboRules_AddsGrantedRule_FromEquippedSkill()
+        {
+            var phasix = new PhasixRuntimeData("test-node-guid") { baseStats = new StatBlock { Vitality = 20, Aura = 10 } };
+            phasix.equippedSkillGuids.Add("guid-mirror-1");
+            var participant = new BattleParticipant(phasix, isPlayerSide: true);
+
+            var skill = ScriptableObject.CreateInstance<SkillData>();
+            SetPrivateField(skill, "_grantsComboRule", ComboRuleType.RepeatSameSkill);
+            var database = ScriptableObject.CreateInstance<SkillDatabase>();
+            SetPrivateField(database, "_allSkills", new List<SkillData> { skill });
+            SetPrivateField(database, "_guids", new List<string> { "guid-mirror-1" });
+
+            participant.RefreshActiveComboRules(database);
+
+            CollectionAssert.Contains(participant.ActiveComboRules, ComboRuleType.CrossTreeSequence);
+            CollectionAssert.Contains(participant.ActiveComboRules, ComboRuleType.RepeatSameSkill);
+
+            Object.DestroyImmediate(skill);
+            Object.DestroyImmediate(database);
+        }
+
+        [Test]
+        public void RefreshActiveComboRules_NoGrantingSkillEquipped_OnlyHasCrossTreeSequence()
+        {
+            var phasix = new PhasixRuntimeData("test-node-guid") { baseStats = new StatBlock { Vitality = 20, Aura = 10 } };
+            var participant = new BattleParticipant(phasix, isPlayerSide: true);
+            var database = ScriptableObject.CreateInstance<SkillDatabase>();
+
+            participant.RefreshActiveComboRules(database);
+
+            Assert.AreEqual(1, participant.ActiveComboRules.Count);
+            CollectionAssert.Contains(participant.ActiveComboRules, ComboRuleType.CrossTreeSequence);
+
+            Object.DestroyImmediate(database);
+        }
+
+        private static void SetPrivateField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(field, $"Expected private field {fieldName} on {target.GetType().Name}.");
+            field.SetValue(target, value);
         }
     }
 }

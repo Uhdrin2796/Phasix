@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -57,6 +59,139 @@ public class BattleParticipant
     /// this flag differently for that specific option, not restructure how it's tracked.
     /// </summary>
     public bool HasActedThisTurn { get; set; }
+
+    /// <summary>
+    /// Trailing-history window shared by every combo-detection rule (cross-tree, repeat-skill,
+    /// timed-input-streak) — matches ComboEngine.DetectCombo's own Quad ceiling (4), not a new
+    /// number. 2026-08 session, see DECISIONS.md -> [Combat].
+    /// </summary>
+    private const int ComboHistoryWindow = 4;
+
+    // --- Active status effects (ChainResultCatalog/MasteryBonusCatalog wiring, 2026-08 session — see DECISIONS.md -> [Combat]) ---
+
+    private readonly List<ActiveStatusInstance> _activeStatuses = new List<ActiveStatusInstance>();
+
+    /// <summary>Currently-active status effects on this participant. Read-only externally — mutate via ApplyStatus/TickStatuses.</summary>
+    public IReadOnlyList<ActiveStatusInstance> ActiveStatuses => _activeStatuses;
+
+    /// <summary>Convenience projection for ChainResultCatalog.TryResolve/MasteryBonusCatalog.EvaluateAll, which take a plain type collection.</summary>
+    public List<StatusEffectType> ActiveStatusTypes => _activeStatuses.Select(s => s.Type).ToList();
+
+    /// <summary>
+    /// MasteryBonusCatalog's own doc comment states it does NOT track "already triggered this
+    /// battle" itself — this is that caller-side bookkeeping, per bonus, per battle.
+    /// </summary>
+    public HashSet<MasteryBonusType> TriggeredMasteryBonusesThisBattle { get; } = new HashSet<MasteryBonusType>();
+
+    /// <summary>Last chain result logged against this participant — lets BattleManager log only a *change*, not every subsequent turn the same pair of statuses stays active.</summary>
+    public ChainResultType? ActiveChainResult { get; set; }
+
+    /// <summary>Starts (or refreshes) a status — overwrite-not-stack on the same type, matching ApplyRegen's existing precedent (re-applying resets the countdown, no independent second timer).</summary>
+    public void ApplyStatus(StatusEffectType type, int durationTurns)
+    {
+        if (durationTurns <= 0) return;
+
+        ActiveStatusInstance existing = _activeStatuses.Find(s => s.Type == type);
+        if (existing != null)
+        {
+            existing.TurnsRemaining = durationTurns;
+            return;
+        }
+
+        _activeStatuses.Add(new ActiveStatusInstance(type, durationTurns));
+    }
+
+    /// <summary>Decrements every active status by one turn and removes any that reach 0. Returns the types that just expired, for logging.</summary>
+    public List<StatusEffectType> TickStatuses()
+    {
+        var expired = new List<StatusEffectType>();
+
+        for (int i = _activeStatuses.Count - 1; i >= 0; i--)
+        {
+            _activeStatuses[i].TurnsRemaining--;
+            if (_activeStatuses[i].TurnsRemaining <= 0)
+            {
+                expired.Add(_activeStatuses[i].Type);
+                _activeStatuses.RemoveAt(i);
+            }
+        }
+
+        return expired;
+    }
+
+    // --- Combo-rule tracking (ComboEngine + the new pluggable ComboRuleEvaluator rules, 2026-08 session — see DECISIONS.md -> [Combat]) ---
+
+    private readonly List<SkillTreeType> _recentSkillTrees = new List<SkillTreeType>();
+    private readonly List<SkillData> _recentSkillsUsed = new List<SkillData>();
+    private readonly List<bool> _recentTimedInputPerfects = new List<bool>();
+
+    /// <summary>Feeds ComboEngine.DetectCombo (GDD §4.2-locked base rule). Only recorded for tree-tagged skill-ring uses, never the 5 built-in A/C/H/R/K moves (no SkillTreeType).</summary>
+    public IReadOnlyList<SkillTreeType> RecentSkillTrees => _recentSkillTrees;
+
+    /// <summary>Feeds ComboRuleEvaluator.EvaluateRepeatSameSkill (checked against the specific granting skill, e.g. "C1" — see BattleManager.FindGrantingSkill).</summary>
+    public IReadOnlyList<SkillData> RecentSkillsUsed => _recentSkillsUsed;
+
+    /// <summary>
+    /// Feeds ComboRuleEvaluator.EvaluateTimedInputStreak. Despite the historical field/method
+    /// naming ("Result"/"success" below), this specifically tracks PERFECT timed-input hits, not
+    /// merely successful ones (2026-08 follow-up, user-directed: "works with any other attacking
+    /// skill that gets perfect, after a miss it rests" — a non-perfect success doesn't extend the
+    /// streak either). Populate from BattleHUDController.LastTimedInputWasPerfect, not
+    /// LastTimedInputSuccess.
+    /// </summary>
+    public IReadOnlyList<bool> RecentTimedInputPerfects => _recentTimedInputPerfects;
+
+    /// <summary>
+    /// Which combo rules currently apply to this participant. CrossTreeSequence is always
+    /// included; RepeatSameSkill/TimedInputStreak are only included if a currently-equipped skill
+    /// grants them (see RefreshActiveComboRules). New, user-directed mechanic — not GDD content.
+    /// </summary>
+    public HashSet<ComboRuleType> ActiveComboRules { get; } = new HashSet<ComboRuleType> { ComboRuleType.CrossTreeSequence };
+
+    public void RecordSkillTreeUse(SkillTreeType tree)
+    {
+        _recentSkillTrees.Add(tree);
+        TrimToWindow(_recentSkillTrees);
+    }
+
+    public void RecordSkillUse(SkillData skill)
+    {
+        _recentSkillsUsed.Add(skill);
+        TrimToWindow(_recentSkillsUsed);
+    }
+
+    /// <summary>Records whether this action's timed input was PERFECT (not merely successful) — see RecentTimedInputPerfects.</summary>
+    public void RecordTimedInputPerfect(bool wasPerfect)
+    {
+        _recentTimedInputPerfects.Add(wasPerfect);
+        TrimToWindow(_recentTimedInputPerfects);
+    }
+
+    private static void TrimToWindow<T>(List<T> list)
+    {
+        while (list.Count > ComboHistoryWindow) list.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// Recomputes ActiveComboRules by scanning this participant's currently-equipped skills for
+    /// any with a non-None SkillData.GrantsComboRule. Call once at battle start — equipped skills
+    /// don't change mid-battle today, so there's no other point this needs re-running.
+    /// </summary>
+    public void RefreshActiveComboRules(SkillDatabase database)
+    {
+        ActiveComboRules.Clear();
+        ActiveComboRules.Add(ComboRuleType.CrossTreeSequence);
+
+        if (database == null) return;
+
+        foreach (string guid in RuntimeData.equippedSkillGuids)
+        {
+            if (database.TryGetByGuid(guid, out SkillData skill) && skill.GrantsComboRule != ComboRuleType.None)
+            {
+                ActiveComboRules.Add(skill.GrantsComboRule);
+            }
+        }
+    }
 
     public string DisplayName => RuntimeData.speciesData != null ? RuntimeData.speciesData.SpeciesName : "???";
 

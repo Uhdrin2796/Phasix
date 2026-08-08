@@ -18,6 +18,9 @@ public class EncounterTrigger : MonoBehaviour
     [Tooltip("Assign Phasix_WildEncounter.prefab.")]
     [SerializeField] private GameObject _wildCreaturePrefab;
 
+    [Tooltip("Assign the project's SkillDatabase asset — used to seed the spawned creature's starting skills (2026-08 session, see DECISIONS.md -> [Combat]). Optional: if left unassigned, the creature simply spawns with no skills seeded.")]
+    [SerializeField] private SkillDatabase _skillDatabase;
+
     [Header("Debug Override (optional)")]
     [Tooltip("Debug-only scene dressing: if checked, overrides the spawned creature's in-world sprite tint instead of using the species' real PrimalType color. Does NOT change the encounter prompt UI swatch, which always reflects the species' actual PrimalType (PhasixPlaceholderVisual.SetColorOverride doc comment explains why). Not for real species content.")]
     [SerializeField] private bool _overrideTintColor;
@@ -31,7 +34,7 @@ public class EncounterTrigger : MonoBehaviour
         if (_possibleSpecies == null || _possibleSpecies.Length == 0) return;
 
         PhasixData species = _possibleSpecies[Random.Range(0, _possibleSpecies.Length)];
-        PhasixRuntimeData runtimeData = WildSpawnSystem.CreateWildInstance(species);
+        PhasixRuntimeData runtimeData = WildSpawnSystem.CreateWildInstance(species, _skillDatabase);
 
         // Parented to this spawn point (not scene-root) — this is what ties the spawned
         // creature to WorldChunkManager's SetActive chunk toggling. An unparented Instantiate

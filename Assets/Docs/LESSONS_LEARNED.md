@@ -271,6 +271,78 @@ Issues that required significant investigation to resolve. Read before debugging
 
 ---
 
+## UI Toolkit
+
+### [UI Toolkit] VisualElement.tooltip is Editor-only — silently never renders in a runtime UIDocument panel
+- **Symptom:** A same-day feature ("richer hover tooltip on skill orbs" — name, description, Aura
+  cost on hover) compiled clean, read correctly on inspection, and shipped — but user playtesting
+  in the actual battle scene found hovering a skill orb showed nothing at all, in both a fresh
+  Play Mode session and (implied, not separately verified) a real build.
+- **Root cause:** The implementation set `VisualElement.tooltip` directly (`slot.tooltip = "...";`)
+  expecting Unity to render an OS-style hover tooltip, the way it does for Editor GUI. Unity's
+  documented behavior: `VisualElement.tooltip` only renders inside Editor-hosted UI — Inspector
+  panels, custom `EditorWindow`s — and is a silent no-op for any runtime `UIDocument` panel
+  (Player build or the Game View in Play Mode alike). Nothing errors, nothing warns; the property
+  can be set and read back correctly, it just never reaches the screen. This is easy to miss
+  because the code "looks" correct and compiles/runs without any signal that the API doesn't do
+  what it does in an Editor context.
+- **Fix:** Build a custom floating `Label` (or similar) that the code shows/hides/repositions
+  itself, driven by `PointerEnterEvent`/`PointerMoveEvent`/`PointerLeaveEvent` on the hovered
+  element — the standard runtime-tooltip pattern for UI Toolkit. See
+  `BattleHUDController._hudTooltip`/`PositionHudTooltip` for a worked example (position
+  computed via `_root.WorldToLocal(evt.position)` plus a fixed cursor offset, same technique
+  already used for `DragLineVisual`'s drag-line positioning).
+- **Date:** August 2026
+- **Key rule:** Never use `VisualElement.tooltip` for anything meant to be seen by a player at
+  runtime — it is an Editor-GUI-only feature that silently does nothing in a `UIDocument` panel.
+  Any hover-feedback requirement in gameplay UI needs a hand-built floating element wired to
+  pointer events instead. Because this class of bug produces no error and looks correct by code
+  review alone, verify any new hover/tooltip feature with an actual live hover test in Play Mode
+  (or a build) before considering it done — reading the code is not enough to catch this one.
+
+### [UI Toolkit] A `position: absolute` sibling declared BEFORE a `position: relative`/`flex-grow` sibling gets silently occluded for pointer picking, even though it paints fine
+- **Symptom:** A same-day new feature (hover tooltips on the nameplate's 3-bar mockup) never
+  triggered in real Play Mode testing, even though an isolated scripted test — directly
+  `SendEvent`-ing a `PointerEnterEvent` straight at the target element — appeared to prove the
+  callback wiring worked. This ALSO turned out to be the true cause of an older, previously
+  misdiagnosed issue: "Evolution Burst gauge not clickable," originally blamed on Editor-process
+  degradation from an unrelated console-spam investigation.
+- **Root cause:** `BattleHUD.uxml` declared `<StatusHeader>` (the nameplate sidebar, `position:
+  absolute`) BEFORE `<Stage>` (`position: relative; flex-grow: 1`) as siblings under the same
+  root. `.stage` had earlier been made to fill the ENTIRE `.battle-root` on purpose (so a
+  changing nameplate count wouldn't shift `.stage`'s anchor point — see that decision's own
+  comment in `BattleHUD.uss`), which means `.stage`'s bounds fully overlap the screen region the
+  nameplate visually sits in. In UI Toolkit, **paint order AND pointer-pick priority both follow
+  document order — a later sibling sits on top of an earlier one for hit-testing across any
+  overlapping region, regardless of which one is visually "on top" (transparent backgrounds don't
+  opt an element out of picking).** Since `.stage` was the LATER sibling, it silently intercepted
+  every pointer event over that shared region — nothing rendered wrong (the nameplate looked
+  completely normal, since `.stage` has no visible background there), so this was invisible to any
+  purely visual check, screenshot included.
+- **Fix:** Reordered `BattleHUD.uxml` so `<StatusHeader>` comes AFTER `<Stage>`. Since
+  `.status-header` is `position: absolute`, this changes ONLY paint/pick z-order, not layout
+  position — confirmed via `IPanel.Pick(worldPoint)` at the nameplate's own on-screen coordinates:
+  before the reorder it returned `.stage`; after, it correctly returned the nameplate's own
+  descendant element.
+- **Why the earlier scripted test gave a false positive:** `VisualElement.SendEvent(evt)` with
+  `evt.target` manually preset delivers the event straight to that target — it does NOT re-run the
+  panel's own hit-testing to confirm the real cursor would actually reach that element. It proves
+  "if this element receives this event, the registered callback does the right thing" — it does
+  NOT prove "a real hovering cursor would actually deliver this event to this element." Only
+  `IPanel.Pick(point)` (or genuine OS-driven input) tests the real picking path.
+- **Date:** August 2026
+- **Key rule:** For ANY two overlapping siblings in a UXML tree where one uses `position: absolute`
+  — check which one is declared LATER, because that one wins picking priority across the overlap,
+  independent of visual stacking/transparency. When verifying a new pointer-interactive UI element,
+  don't just `SendEvent` a hand-built event straight at the element you intended to wire up — call
+  `IPanel.Pick(point)` at that element's own `worldBound.center` first and confirm it actually
+  resolves to that element (or one of its intended descendants), THEN dispatch the event at
+  whatever `Pick()` actually returned. This is the only way to catch a silent occlusion bug like
+  this one, which produces zero errors, zero visual artifacts, and a plausible-looking passing
+  test if you skip the `Pick()` step.
+
+---
+
 ## A* Pathfinding Project
 
 ### [Pathfinding] Configuring AstarPath/GridGraph via script immediately after AddComponent throws NullReferenceException
@@ -657,6 +729,51 @@ Issues that required significant investigation to resolve. Read before debugging
   `Time.realtimeSinceStartup` reads first — it's frequently much larger than the requested sleep,
   and for any test involving sustained velocity/movement, an `EditorApplication.update`-driven
   treadmill is more reliable than tuning sleep durations against an unknown, variable latency.
+
+### [Tooling] Editor.log grew to 3.75GB over one long MCP-automation session and caused an OutOfMemoryException on the next Editor restart
+- **Symptom:** User restarted the Unity Editor (following the domain-reload-spam fix below) and
+  hit a fresh `OutOfMemoryException` in the console immediately after. Stack trace pointed at
+  `UnityEditor.Search.Providers.LogProvider`.
+- **Root cause (two compounding factors, one causing the growth, one causing the crash):**
+  1. **Growth:** `%LOCALAPPDATA%\Unity\Editor\Editor.log` is global (per-machine, not
+     per-project) and is never rotated or truncated mid-session — it only resets when the Editor
+     process itself restarts. Earlier in this same long session, a native engine assertion
+     ("Access version should be odd when acquiring lock" — no file/line/stacktrace, distinct from
+     a C# script error) was firing repeatedly across many forced domain reloads (~35s each,
+     hundreds of reloads over an extended MCP-driven session). Each occurrence is logged
+     unconditionally with no dedup — individually tiny, but compounding over hours of a session
+     that never restarted Unity grew the file to 3.75GB (confirmed via `ls -la` — normal size for
+     this project is ~1MB, matching `Editor-prev.log`).
+  2. **Crash:** Unity's built-in Search feature indexes the Editor log via
+     `LogProvider`, which reads the entire file into memory (`StreamReader.ReadLine()` into a
+     `StringBuilder`) on a background thread. At 3.75GB that read alone throws
+     `OutOfMemoryException` — this is a Unity Editor Search internal, not project code.
+  3. **Side effect, not separately diagnosed but very likely:** the same growing file is probably
+     also why domain reloads throughout the session were taking ~35s instead of a normal few
+     seconds — Search re-indexes an ever-larger file on every reload.
+- **Fix:** Close Unity fully (file is locked while running), then delete or rename/archive
+  `Editor.log`. Unity recreates a fresh, empty one on next launch. Archiving instead of deleting
+  keeps a record: `mv Editor.log Editor-<date>-huge.log`.
+- **Verification:** After reopening Unity, `read_console` showed no more lock-assertion spam and
+  no OOM — only 3 unrelated pre-existing warnings from an unrelated package. New `Editor.log` was
+  ~50KB, confirming the fresh-start behavior.
+- **Note on tooling limits:** Claude Code's auto-mode classifier blocks file operations outside
+  the project directory by default (including editing settings.json to grant an exception to
+  itself) — this file lives outside the project, so an automated agent can flag it and hand over
+  the exact command, but can't delete/archive it directly without the user first adding an
+  explicit permission rule via `/permissions`.
+- **Date:** August 2026
+- **Key rule:** If Editor domain reloads are unusually slow (tens of seconds instead of a few) or
+  an `OutOfMemoryException` traces to `UnityEditor.Search.Providers.LogProvider`, check
+  `%LOCALAPPDATA%\Unity\Editor\Editor.log`'s file size first — it has no automatic cap and only
+  resets on Editor restart, so a long session with recurring console spam (of any kind, not just
+  this specific lock assertion) can silently balloon it into the gigabytes.
+- **Follow-up (same day):** Added a `SessionStart` hook to `~/.claude/settings.json` (global, not
+  project-scoped — the log path is machine-level) that checks `Editor.log`'s size at the start of
+  every Claude Code session and surfaces a system message if it's over 500MB, with the exact
+  archive command to run. Read-only check (`stat` only, no delete/move) — actually clearing the
+  file still needs the user to run the suggested command, or Claude to be granted a Bash
+  permission rule first, per the tooling-limits note above.
 
 ### [Tooling] A domain reload fired mid-Play-Mode and silently reset singletons (PartySystem.Instance, static handoff state), throwing a NullReferenceException in newly-loaded-scene code
 - **Symptom:** Playtesting `BattleManager`'s additive scene load (Roadmap_v2 Mo 5 Wk 1-2): first

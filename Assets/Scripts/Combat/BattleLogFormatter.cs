@@ -52,4 +52,54 @@ public static class BattleLogFormatter
         if (multiplier > 0.5f) return "It's not very effective...";
         return "It's barely effective...";
     }
+
+    /// <summary>
+    /// Formats a placeholder skill-ring attack (2026-08 session — Combo/Status/Chain/Mastery
+    /// wiring, see DECISIONS.md -> [Combat]). Same shape as FormatAttack but names the skill used,
+    /// since a skill attack isn't the generic built-in "Attack" move.
+    /// </summary>
+    public static string FormatSkillAttack(BattleParticipant attacker, BattleParticipant target, string skillName, int damage, float typeMultiplier)
+    {
+        string line = $"{attacker.DisplayName} uses {skillName} on {target.DisplayName} for {damage} damage!";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        return line;
+    }
+
+    /// <summary>Formats a status-effect application from a placeholder skill.</summary>
+    public static string FormatStatusApplied(BattleParticipant target, StatusEffectType status, int durationTurns)
+    {
+        return $"{target.DisplayName} is afflicted with {status} for {durationTurns} turns!";
+    }
+
+    /// <summary>
+    /// Formats a detected combo (2026-08 session — new, user-directed mechanic on top of
+    /// ComboEngine's GDD-locked cross-tree rule; see ComboRuleType/DECISIONS.md -> [Combat]).
+    /// Detection + log only — no numeric bonus is applied for any rule type.
+    /// </summary>
+    public static string FormatComboDetected(BattleParticipant attacker, ComboTier tier, ComboRuleType rule)
+    {
+        string ruleFlavor = rule switch
+        {
+            ComboRuleType.RepeatSameSkill => "repeating the same skill",
+            ComboRuleType.TimedInputStreak => "a streak of perfect timing",
+            _ => "chaining different skill trees",
+        };
+
+        return $"{attacker.DisplayName} triggers a {tier} combo — {ruleFlavor}!";
+    }
+
+    /// <summary>Formats a newly-triggered chain result (GDD §17.8-locked flavor text) — caller only invokes this on a *change*, not every turn the same pair of statuses stays active.</summary>
+    public static string FormatChainResultTriggered(BattleParticipant target, ChainResultType chain)
+    {
+        return $"{target.DisplayName}'s statuses combine into {chain}! {ChainResultCatalog.GetEffectDescription(chain)}";
+    }
+
+    /// <summary>Formats a newly-triggered mastery bonus (GDD §17.9-locked flavor text) — caller only invokes this once per bonus per battle.</summary>
+    public static string FormatMasteryBonusTriggered(BattleParticipant attacker, MasteryBonusType bonus)
+    {
+        return $"{attacker.DisplayName} achieves {bonus}! {MasteryBonusCatalog.GetTriggerDescription(bonus)} {MasteryBonusCatalog.GetEffectDescription(bonus)}";
+    }
 }

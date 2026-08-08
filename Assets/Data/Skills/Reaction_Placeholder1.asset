@@ -12,7 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
   m_Name: Reaction_Placeholder1
   m_EditorClassIdentifier: Phasix.Runtime::SkillData
-  _skillName: Reaction Skill 1 (Placeholder)
+  _skillName: C2
   _description: "Placeholder skill \u2014 content pending species roster design (GDD
     Section 14). Do not treat as real skill content."
   _treeType: 4
+  _placeholderIndex: 0
+  _grantsComboRule: 3

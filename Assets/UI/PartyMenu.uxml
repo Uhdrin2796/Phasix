@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/PartyMenu.uss" />
+    <ui:VisualElement name="PartyMenuRoot" class="party-menu-root">
+        <ui:Label text="Party — Spend Aura" class="party-menu-title" />
+        <ui:ScrollView name="PartyScrollView" class="party-menu-scroll">
+            <ui:VisualElement name="PartyCardContainer" class="aura-card-container" />
+        </ui:ScrollView>
+        <ui:Label text="Press Tab to close" class="party-menu-footer" />
+    </ui:VisualElement>
+</ui:UXML>

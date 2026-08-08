@@ -2,10 +2,6 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <ui:Style src="project://database/Assets/UI/BattleHUD.uss" />
     <ui:VisualElement name="BattleHUDRoot" class="battle-root">
-        <ui:VisualElement name="StatusHeader" class="status-header">
-            <ui:VisualElement name="PlayerStatusList" class="status-list" />
-            <ui:VisualElement name="EnemyStatusList" class="status-list status-list-enemy" />
-        </ui:VisualElement>
         <ui:VisualElement name="Stage" class="stage">
             <ui:VisualElement name="PlayerStageArea" class="stage-side stage-side-player">
                 <ui:VisualElement name="PlayerStageSlot0" class="stage-creature">
@@ -116,6 +112,23 @@
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:Button name="EndTurnButton" text="End Turn" class="end-turn-button" />
+        </ui:VisualElement>
+        <!-- StatusHeader moved AFTER Stage (2026-08 follow-up fix — user report: "all the hover
+             over things are not working at all"). .status-header is position:absolute so this
+             reorder only changes PAINT/PICK z-order, not layout position — but it matters a lot
+             for that: .stage is position:relative/flex-grow:1 and, since .status-header is pulled
+             out of flex flow (see .status-header's own comment in BattleHUD.uss), .stage actually
+             fills the ENTIRE battle-root, including the screen region the nameplate visually sits
+             in. With StatusHeader listed first (original order), .stage — a later sibling —
+             painted/picked ON TOP of it across that whole overlap, silently swallowing every
+             pointer event meant for the nameplate (hover, and very likely also the pre-existing
+             "Evolution Burst gauge not clickable" issue in KNOWN_ISSUES.md's EDITOR-001 — same
+             root cause, not Editor degradation as first suspected). Listing StatusHeader last
+             makes it the topmost sibling for hit-testing, so nameplate hover/clicks now correctly
+             win over .stage's invisible full-screen backdrop. -->
+        <ui:VisualElement name="StatusHeader" class="status-header">
+            <ui:VisualElement name="PlayerStatusList" class="status-list" />
+            <ui:VisualElement name="EnemyStatusList" class="status-list status-list-enemy" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

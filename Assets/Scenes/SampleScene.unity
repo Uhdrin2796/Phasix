@@ -1477,6 +1477,7 @@ MonoBehaviour:
   _possibleSpecies:
   - {fileID: 11400000, guid: 0416ad120fc0de643994d721db91f56c, type: 2}
   _wildCreaturePrefab: {fileID: 6254609230482918134, guid: bcb6a2f7cb7a8f64e8a8b335f4d01e69, type: 3}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
   _overrideTintColor: 1
   _tintColorOverride: {r: 0.651, g: 0.302, b: 1, a: 1}
 --- !u!4 &501279399
@@ -1722,6 +1723,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e71b20c7c729e4243b9b74165cc5c4dd, type: 2}
   - {fileID: 11400000, guid: 0416ad120fc0de643994d721db91f56c, type: 2}
   _wildCreaturePrefab: {fileID: 6254609230482918134, guid: bcb6a2f7cb7a8f64e8a8b335f4d01e69, type: 3}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
   _overrideTintColor: 0
   _tintColorOverride: {r: 1, g: 1, b: 1, a: 1}
 --- !u!4 &523886304
@@ -2422,7 +2424,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690957583}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.22129849, w: 0.97520614}
+  m_LocalRotation: {x: -0, y: -0, z: 0.22129934, w: 0.97520596}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 0.47427186, y: 0.65494686, z: 0.60225}
   m_ConstrainProportionsScale: 0
@@ -2459,6 +2461,74 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1770527993}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &985387503
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 985387506}
+  - component: {fileID: 985387505}
+  - component: {fileID: 985387504}
+  m_Layer: 0
+  m_Name: UIRoot_PartyMenu
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &985387504
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 985387503}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3a9ce05fac984245af4951c122c5a4c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Phasix.Runtime::PartyMenuController
+--- !u!114 &985387505
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 985387503}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
+  m_PanelSettings: {fileID: 11400000, guid: 064dd248a0d6f354eba084d27ffde9de, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: 54e296bef9d84694482bb8f81e2f5139, type: 3}
+  m_SortingOrder: 0
+  m_Position: 0
+  m_WorldSpaceSizeMode: 1
+  m_WorldSpaceWidth: 1920
+  m_WorldSpaceHeight: 1080
+  m_PivotReferenceSize: 0
+  m_Pivot: 0
+  m_WorldSpaceCollider: {fileID: 0}
+--- !u!4 &985387506
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 985387503}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1077382791
 GameObject:
@@ -2605,6 +2675,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DebugPartyBootstrap
   _testSpeciesData: {fileID: 11400000, guid: e71b20c7c729e4243b9b74165cc5c4dd, type: 2}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
 --- !u!114 &1090428282
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2685,6 +2756,7 @@ MonoBehaviour:
   _possibleSpecies:
   - {fileID: 11400000, guid: e71b20c7c729e4243b9b74165cc5c4dd, type: 2}
   _wildCreaturePrefab: {fileID: 6254609230482918134, guid: bcb6a2f7cb7a8f64e8a8b335f4d01e69, type: 3}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
   _overrideTintColor: 1
   _tintColorOverride: {r: 1, g: 0.4353, b: 0.6902, a: 1}
 --- !u!4 &1559289767
@@ -4918,7 +4990,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.12751238
+      value: 0.12751323
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -4926,7 +4998,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.991837
+      value: 0.9918369
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5275,3 +5347,4 @@ SceneRoots:
   - {fileID: 1559289767}
   - {fileID: 501279399}
   - {fileID: 685583655}
+  - {fileID: 985387506}

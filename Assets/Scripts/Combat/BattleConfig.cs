@@ -85,4 +85,26 @@ public static class BattleConfig
     public const float BurstFillPerSkillUse = 15f;
     public const float BurstFillPerTimedInputSuccess = 10f;
     public const float BurstFillPerHitTaken = 10f;
+
+    /// <summary>
+    /// Flat skill power/Aura cost for the 36 placeholder skill-ring skills (2026-08 session, see
+    /// DECISIONS.md -> [Combat]) — PlaceholderSkillResolver derives WHICH mechanic a skill uses,
+    /// but every damage skill deals the same flat power and every skill costs the same flat Aura,
+    /// same category as every other constant in this file. Power sits below DamageCalculator.
+    /// BasicAttackPower (10) so skills read as secondary options, not strictly better than a plain
+    /// Attack; cost sits between AttackAuraCost (2) and HealAuraCost (6), reflecting "does more
+    /// than a plain attack." TODO: pending NumericalCalibration.md. Not playtested.
+    /// </summary>
+    public const int PlaceholderSkillPower = 8;
+    public const int PlaceholderSkillAuraCost = 3;
+
+    /// <summary>
+    /// Flat Common Aura reward granted to each surviving party member on a battle win (2026-08
+    /// session — first real implementation of Progression_Directive_v0_1_0.md's "Common Aura
+    /// drops from all Phasix in battle," which existed only as an unwired EventBus.OnAuraDropped
+    /// stub before this; see DECISIONS.md -> [Combat]). Feeds the post-battle summary screen's
+    /// "Aura Gained" line. Flat and per-individual rather than scaled by the enemy defeated —
+    /// nothing in the Directive specifies a scaling curve yet. TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const int AuraRewardOnWin = 15;
 }

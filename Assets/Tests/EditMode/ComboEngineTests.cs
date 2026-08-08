@@ -79,5 +79,29 @@ namespace Phasix.Tests.EditMode
         {
             Assert.Greater(ComboEngine.ComputeDiscoveryBonusPercent(80f), 0f);
         }
+
+        [Test]
+        public void GetDistinctTrailingStreakLength_MatchesActualStreak()
+        {
+            Assert.AreEqual(0, ComboEngine.GetDistinctTrailingStreakLength(new List<SkillTreeType>()));
+            Assert.AreEqual(1, ComboEngine.GetDistinctTrailingStreakLength(new List<SkillTreeType> { SkillTreeType.Utility }));
+            Assert.AreEqual(3, ComboEngine.GetDistinctTrailingStreakLength(new List<SkillTreeType> { SkillTreeType.Utility, SkillTreeType.Aura, SkillTreeType.Passive }));
+        }
+
+        [Test]
+        public void GetDistinctTrailingStreakLength_BreaksOnRepeat_CountsOnlyTrailingRun()
+        {
+            var sequence = new List<SkillTreeType> { SkillTreeType.Utility, SkillTreeType.Aura, SkillTreeType.Utility, SkillTreeType.Passive };
+
+            Assert.AreEqual(3, ComboEngine.GetDistinctTrailingStreakLength(sequence), "Walking backward from Passive: Passive, Utility, Aura are all distinct (length 3) before the earlier Utility at index 0 repeats and breaks the streak.");
+        }
+
+        [Test]
+        public void GetDistinctTrailingStreakLength_TrailingRepeat_ReturnsOne()
+        {
+            var sequence = new List<SkillTreeType> { SkillTreeType.Utility, SkillTreeType.Utility };
+
+            Assert.AreEqual(1, ComboEngine.GetDistinctTrailingStreakLength(sequence));
+        }
     }
 }

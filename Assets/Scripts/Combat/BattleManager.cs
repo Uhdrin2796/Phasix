@@ -38,11 +38,17 @@ using UnityEngine.SceneManagement;
 /// outlines yellow and becomes clickable; HandleBurstBarClicked (subscribed to
 /// BattleHUDController.BurstBarClicked) calls EvolutionBurstSystem.ActivateReady, which only
 /// succeeds on a genuinely full gauge. Status-only once active — no stat/damage effect, since
-/// "ApplyBurstEffects" is explicitly undesigned in the GDD. ComboEngine/StatusEffectCatalog/
-/// ChainResultCatalog/MasteryBonusCatalog and AuraStatAllocationSystem are DELIBERATELY still not
-/// wired in — DECISIONS.md's [Combat] "Skill tree framework" entry explicitly defers the former
-/// to a future real skill-selection UI, and the latter is a post-battle progression/menu system,
-/// not a mid-battle mechanic.
+/// "ApplyBurstEffects" is explicitly undesigned in the GDD.
+///
+/// 2026-08 session (see DECISIONS.md -> [Combat]): user explicitly overrode the prior "wait for
+/// real skill content" stance and had ComboEngine/StatusEffectCatalog/ChainResultCatalog/
+/// MasteryBonusCatalog wired into live play via a placeholder skill-selection UI (the
+/// BattleHUDController skill ring, hours 4-10) — see ResolveSkillAction/EvaluateCombosAndLog/
+/// EvaluateChainAndMastery below, and PlaceholderSkillResolver for how the 36 generic placeholder
+/// skills get mechanically resolved without inventing balance content. Chain/Mastery are
+/// detection + log only this pass, not their full numeric effects (a separately-scoped follow-up).
+/// AuraStatAllocationSystem remains a post-battle progression system (see the Aura Allocation
+/// screen shown from EndBattle on a Won outcome), not a mid-battle mechanic.
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -50,10 +56,21 @@ public class BattleManager : MonoBehaviour
     [Tooltip("Assign Assets/Data/TypeCharts/PrimalTypeChart.asset. If left empty, damage falls back to a neutral 1.0x type multiplier instead of crashing.")]
     [SerializeField] private PrimalTypeChart _typeChart;
 
+    [Tooltip("Assign the project's SkillDatabase asset — resolves equipped skill GUIDs to real SkillData for the skill ring (2026-08 session, see DECISIONS.md -> [Combat]). If left empty, the skill ring simply shows no equipped skills.")]
+    [SerializeField] private SkillDatabase _skillDatabase;
+
     private BattleState _state;
     private bool _playerActionChosen;
     private BattleParticipant _pendingTarget;
+    private SkillData _pendingSkill; // non-null when the confirmed move was a skill-ring drag, not a built-in move — 2026-08 session, see DECISIONS.md -> [Combat]
     private bool _battleEndedEarly; // set true by a successful Capture — EndBattle already ran, RunBattleLoop must not also call EnemyTurn
+
+    // Running totals for the post-battle summary screen (2026-08 session — replaces the old
+    // spend-here-and-now Aura Allocation screen, see DECISIONS.md -> [Combat]). Player-side only —
+    // damage the ENEMY deals to the player, or Aura/healing the enemy might hypothetically gain,
+    // are not tracked here.
+    private int _totalDamageDealt;
+    private int _totalHealingDone;
 
     // Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md -> [Combat]):
     // set by BattleHUDController's click events, consumed by PlayerTurn's own loop. Plain fields
@@ -82,6 +99,11 @@ public class BattleManager : MonoBehaviour
         List<BattleParticipant> playerSide = BuildPlayerSide();
         var enemySide = new List<BattleParticipant> { new BattleParticipant(enemyData, isPlayerSide: false) };
         _state = new BattleState(playerSide, enemySide);
+
+        // Combo-rule membership doesn't change mid-battle (equipped skills are fixed for the
+        // battle's duration) — computed once here rather than re-checked every skill use.
+        // 2026-08 session, see DECISIONS.md -> [Combat].
+        foreach (BattleParticipant p in playerSide) p.RefreshActiveComboRules(_skillDatabase);
 
         // Overworld stays loaded underneath (additive load, Combat_Directive Part 1) but must not
         // be VISIBLE — otherwise the battle just reads as a HUD floating over the paused overworld
@@ -115,7 +137,7 @@ public class BattleManager : MonoBehaviour
         PartySystem.Instance?.ActiveCompanionAI?.SetPaused(true);
 
         BattleHUDController.Instance.Show();
-        BattleHUDController.Instance.Initialize(playerSide, enemySide);
+        BattleHUDController.Instance.Initialize(playerSide, enemySide, _skillDatabase);
         BattleHUDController.Instance.ClearBattleLog();
 
         // Evolution Burst activation is a free, click-anytime action on the gauge bar itself
@@ -174,11 +196,37 @@ public class BattleManager : MonoBehaviour
         while (true)
         {
             yield return StartCoroutine(PlayerTurn());
-            if (_battleEndedEarly || TryEndBattle()) yield break;
+            if (_battleEndedEarly) yield break; // EndBattle already ran (and was awaited) inside PlayerTurn's Capture branch
+
+            BattleOutcome outcomeAfterPlayerTurn = BattleEngine.CheckOutcome(_state);
+            if (outcomeAfterPlayerTurn != BattleOutcome.InProgress)
+            {
+                yield return StartCoroutine(EndBattle(outcomeAfterPlayerTurn));
+                yield break;
+            }
 
             yield return StartCoroutine(EnemyTurn());
-            if (TryEndBattle()) yield break;
+
+            BattleOutcome outcomeAfterEnemyTurn = BattleEngine.CheckOutcome(_state);
+            if (outcomeAfterEnemyTurn != BattleOutcome.InProgress)
+            {
+                yield return StartCoroutine(EndBattle(outcomeAfterEnemyTurn));
+                yield break;
+            }
+
+            TickAllStatuses();
         }
+    }
+
+    /// <summary>
+    /// Ticks every active status effect (ChainResultCatalog/MasteryBonusCatalog wiring, 2026-08
+    /// session — see DECISIONS.md -> [Combat]) down by one turn, on BOTH sides, once per full
+    /// round. Symmetric — the simplest rule, since nothing in the docs asks for asymmetric decay.
+    /// </summary>
+    private void TickAllStatuses()
+    {
+        foreach (BattleParticipant p in _state.PlayerSide) p.TickStatuses();
+        foreach (BattleParticipant p in _state.EnemySide) p.TickStatuses();
     }
 
     /// <summary>Move option indices, index-matched to BattleHUDController.MoveOptionClockHours/MoveOptionIsSelfOnly — kept in one place so PlayerTurn's switch reads by name, not magic number.</summary>
@@ -218,6 +266,14 @@ public class BattleManager : MonoBehaviour
         _backgroundClickRequested = false;
         BattleHUDController.Instance.SetEndTurnButtonVisible(true);
 
+        // Auto-open the first living party member's move wheel (2026-08 follow-up — user-directed:
+        // "instead of having to click the wheel open, Auto open the phasix that is first in the
+        // roster... so its a good indicator that its the players turn"). Sets the SAME field a
+        // real click would set, so the loop's normal "activeSlot < 0" branch below opens it through
+        // its existing logic — no separate wheel-opening code path to keep in sync.
+        int firstAliveSlot = _state.PlayerSide.FindIndex(p => p.IsAlive);
+        if (firstAliveSlot >= 0) _pendingCreatureClickSlot = firstAliveSlot;
+
         int activeSlot = -1; // -1 = no wheel currently open
         int chosenOptionIndex = -1; // set by ShowMoveSelection's callback once a drag confirms a target
 
@@ -249,12 +305,14 @@ public class BattleManager : MonoBehaviour
                 {
                     _playerActionChosen = false;
                     chosenOptionIndex = -1;
+                    _pendingSkill = null;
                     List<BattleParticipant> aliveEnemiesForWheel = _state.EnemySide.FindAll(e => e.IsAlive);
                     BattleHUDController.Instance.ShowMoveSelection(activeSlot, clicked, aliveEnemiesForWheel,
-                        (optionIndex, chosenTarget) =>
+                        chosen =>
                         {
-                            chosenOptionIndex = optionIndex;
-                            _pendingTarget = chosenTarget; // only meaningful for Attack/Capture; self-only moves ignore it
+                            chosenOptionIndex = chosen.BuiltInOptionIndex ?? -1;
+                            _pendingSkill = chosen.Skill; // non-null for a skill-ring drag, null for a built-in move
+                            _pendingTarget = chosen.Target; // only meaningful for Attack/Capture/skills; self-only built-in moves ignore it
                             _playerActionChosen = true;
                         });
                 }
@@ -317,7 +375,9 @@ public class BattleManager : MonoBehaviour
             if (chosenOptionIndex == MoveOptionHeal)
             {
                 attacker.SpendAura(BattleConfig.HealAuraCost);
+                int hpBeforeHeal = attacker.CurrentHP;
                 attacker.Heal(BattleConfig.HealAmount);
+                _totalHealingDone += attacker.CurrentHP - hpBeforeHeal;
                 BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
                 BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} heals {BattleConfig.HealAmount} HP!");
                 AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
@@ -371,10 +431,10 @@ public class BattleManager : MonoBehaviour
 
                     // Single-enemy battles only (see class doc comment) — capturing the only
                     // enemy IS winning. Ends the battle immediately rather than relying on
-                    // TryEndBattle's HP-based BattleEngine.CheckOutcome, which has no way to
+                    // RunBattleLoop's HP-based BattleEngine.CheckOutcome, which has no way to
                     // detect a capture (the enemy's HP never changed).
                     _battleEndedEarly = true;
-                    EndBattle(BattleOutcome.Won);
+                    yield return StartCoroutine(EndBattle(BattleOutcome.Won));
                     yield break;
                 }
 
@@ -382,6 +442,15 @@ public class BattleManager : MonoBehaviour
 
                 yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
                     "Capture failed!", BattleConfig.AutoMessageDurationSeconds));
+                continue;
+            }
+
+            // Skill-ring drag (2026-08 session — Combo/Status/Chain/Mastery wiring, see
+            // DECISIONS.md -> [Combat]) — _pendingSkill is only ever non-null when the confirmed
+            // move came from a skill-ring slot, never one of the 5 built-in moves above.
+            if (_pendingSkill != null)
+            {
+                yield return StartCoroutine(ResolveSkillAction(attacker, attackerSlotIndex, _pendingSkill, _pendingTarget));
                 continue;
             }
 
@@ -409,6 +478,7 @@ public class BattleManager : MonoBehaviour
 
             BattleEngine.QueueBasicAttack(_state, attacker, _pendingTarget, attackMultiplier, baseDamage);
             List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(results);
             BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
             LogResults(results, typeMultiplier, BattleHUDController.Instance.LastTimedInputSuccess);
 
@@ -457,6 +527,7 @@ public class BattleManager : MonoBehaviour
             int slotIndex = _state.PlayerSide.IndexOf(p);
             int healed = p.TickRegen();
             anyTicked = true;
+            _totalHealingDone += healed;
 
             if (healed > 0) BattleHUDController.Instance.AppendBattleLog($"{p.DisplayName} regenerates {healed} HP!");
             BattleHUDController.Instance.SetRegenStatus(slotIndex, p.RegenTurnsRemaining);
@@ -478,6 +549,15 @@ public class BattleManager : MonoBehaviour
         EvolutionBurstSystem.AddFill(participant.BurstGauge, fillAmount);
         bool ready = !participant.BurstGauge.IsActive && participant.BurstGauge.FillPercent >= EvolutionBurstSystem.TriggerThreshold;
         BattleHUDController.Instance.SetBurstFillBar(slotIndex, participant.BurstGauge.FillPercent, ready);
+    }
+
+    /// <summary>Accumulates player-side damage dealt this battle, for the post-battle summary screen (2026-08 session, see DECISIONS.md -> [Combat]). Only counts results where the ATTACKER is player-side — the Parry counter-attack (attacker = the defending player creature) counts; ordinary enemy attacks against the player don't.</summary>
+    private void AccumulateDamageDealt(List<BattleActionResult> results)
+    {
+        foreach (BattleActionResult result in results)
+        {
+            if (result.Attacker.IsPlayerSide) _totalDamageDealt += result.DamageApplied;
+        }
     }
 
     /// <summary>
@@ -506,6 +586,216 @@ public class BattleManager : MonoBehaviour
             {
                 int slotIndex = _state.PlayerSide.IndexOf(p);
                 BattleHUDController.Instance.SetBurstStatus(slotIndex, p.BurstGauge.RemainingDurationTurns);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves a skill-ring drag (2026-08 session — Combo/Status/Chain/Mastery wiring, see
+    /// DECISIONS.md -> [Combat]). `target` is already correctly resolved to either the enemy or
+    /// the caster's own creature by BattleHUDController's drag-drop hit-test (it uses the same
+    /// PlaceholderSkillResolver.Resolve(skill).SelfTargeted call this method's damage/status split
+    /// also depends on), so no further self-vs-enemy branching is needed here — `target` IS the
+    /// recipient either way.
+    /// </summary>
+    private IEnumerator ResolveSkillAction(BattleParticipant attacker, int attackerSlotIndex, SkillData skill, BattleParticipant target)
+    {
+        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
+
+        attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
+        attacker.RecordSkillTreeUse(skill.TreeType);
+        attacker.RecordSkillUse(skill);
+
+        bool timedInputHappened = false;
+
+        if (resolution.DealsDamage)
+        {
+            float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
+                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+            yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
+                $"{skill.SkillName} — {attacker.DisplayName}", toleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+
+            bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
+            bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
+            // TimedInputStreak (C2) specifically tracks PERFECT hits, not merely successful ones
+            // — user-directed: "works with any... skill that gets perfect, after a miss it
+            // rests." See BattleParticipant.RecentTimedInputPerfects.
+            attacker.RecordTimedInputPerfect(timedPerfect);
+            timedInputHappened = true;
+
+            float attackMultiplier = timedSuccess ? TimedInputConfig.SuccessDamageMultiplier : 1f;
+            int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, resolution.Category, BattleConfig.PlaceholderSkillPower);
+            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(results);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+            foreach (BattleActionResult result in results)
+            {
+                string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, result.DamageApplied, typeMultiplier);
+                BattleHUDController.Instance.AppendBattleLog(line);
+            }
+
+            float attackBurstFill = BattleConfig.BurstFillPerSkillUse
+                + (timedSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
+            AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
+        }
+        else
+        {
+            StatusEffectType status = resolution.AppliedStatus.Value;
+            StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
+            int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
+                attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
+
+            target.ApplyStatus(status, duration);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+            BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatStatusApplied(target, status, duration));
+
+            AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+        }
+
+        // Combo detection across every rule active for this attacker — log only, no numeric bonus
+        // for any rule type (see DECISIONS.md -> [Combat]: neither the GDD nor this session's new
+        // RepeatSameSkill/TimedInputStreak mechanics define a mechanical payoff yet).
+        EvaluateCombosAndLog(attacker, timedInputHappened);
+        RefreshComboCounterBadges(attacker, attackerSlotIndex, skill);
+
+        // Chain/Mastery — detection + log only this pass (full numeric effects are an explicitly
+        // flagged, separately-scoped follow-up).
+        EvaluateChainAndMastery(attacker, target);
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
+    }
+
+    /// <summary>
+    /// Checks every combo rule active for this attacker (CrossTreeSequence always; RepeatSameSkill/
+    /// TimedInputStreak only if a granting skill is equipped — see BattleParticipant.
+    /// ActiveComboRules) and logs any detected tier. includeTimedInputStreak is false for
+    /// status-only skills, which never ran a timed input this action — evaluating it anyway would
+    /// re-check stale history from an earlier turn's damage skill. 2026-08 session, see
+    /// DECISIONS.md -> [Combat].
+    /// </summary>
+    private void EvaluateCombosAndLog(BattleParticipant attacker, bool includeTimedInputStreak)
+    {
+        foreach (ComboRuleType rule in attacker.ActiveComboRules)
+        {
+            if (rule == ComboRuleType.TimedInputStreak && !includeTimedInputStreak) continue;
+
+            ComboTier? tier = rule switch
+            {
+                ComboRuleType.CrossTreeSequence => ComboEngine.DetectCombo(attacker.RecentSkillTrees),
+                ComboRuleType.RepeatSameSkill => ComboRuleEvaluator.EvaluateRepeatSameSkill(attacker.RecentSkillsUsed, FindGrantingSkill(attacker, ComboRuleType.RepeatSameSkill)),
+                ComboRuleType.TimedInputStreak => ComboRuleEvaluator.EvaluateTimedInputStreak(attacker.RecentTimedInputPerfects),
+                _ => null,
+            };
+
+            if (tier.HasValue)
+            {
+                // TODO: pending design — combo bonus effect. Neither the GDD (cross-tree rule) nor
+                // this session's new rules (RepeatSameSkill/TimedInputStreak) define what a combo
+                // mechanically DOES yet — detection + log only.
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatComboDetected(attacker, tier.Value, rule));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the skill-wheel combo-streak badges for this attacker after a skill use (2026-08
+    /// session — user-directed: "counter next to the skill on the skill wheel," see DECISIONS.md
+    /// -> [Combat]). Clears all of this creature's badges first, then re-shows whichever are
+    /// currently >= 2 — simplest way to guarantee a broken streak's stale badge never lingers,
+    /// since the correct target skill can change between calls (e.g. RepeatSameSkill's badge
+    /// moves to whichever skill was just used). CrossTreeSequence/RepeatSameSkill badge the
+    /// just-used skill itself (they're keyed on skill identity/tree); TimedInputStreak — not tied
+    /// to any one skill's identity — badges the passive that grants it instead.
+    /// </summary>
+    private void RefreshComboCounterBadges(BattleParticipant attacker, int attackerSlotIndex, SkillData justUsedSkill)
+    {
+        BattleHUDController.Instance.ClearAllSkillComboCounters(attackerSlotIndex);
+
+        foreach (ComboRuleType rule in attacker.ActiveComboRules)
+        {
+            switch (rule)
+            {
+                case ComboRuleType.CrossTreeSequence:
+                {
+                    int length = ComboEngine.GetDistinctTrailingStreakLength(attacker.RecentSkillTrees);
+                    if (length >= 2) BattleHUDController.Instance.SetSkillComboCounter(attackerSlotIndex, justUsedSkill, length);
+                    break;
+                }
+                case ComboRuleType.RepeatSameSkill:
+                {
+                    // Badge the GRANTING skill itself (e.g. "C1"), not necessarily justUsedSkill —
+                    // the streak is specifically about repeating that one skill (see
+                    // ComboRuleEvaluator.EvaluateRepeatSameSkill's doc comment).
+                    SkillData grantingSkill = FindGrantingSkill(attacker, ComboRuleType.RepeatSameSkill);
+                    int length = ComboRuleEvaluator.GetRepeatTrailingStreakLength(attacker.RecentSkillsUsed, grantingSkill);
+                    if (length >= 2 && grantingSkill != null) BattleHUDController.Instance.SetSkillComboCounter(attackerSlotIndex, grantingSkill, length);
+                    break;
+                }
+                case ComboRuleType.TimedInputStreak:
+                {
+                    int length = ComboRuleEvaluator.GetTimedInputTrailingStreakLength(attacker.RecentTimedInputPerfects);
+                    if (length >= 2)
+                    {
+                        SkillData grantingSkill = FindGrantingSkill(attacker, ComboRuleType.TimedInputStreak);
+                        if (grantingSkill != null) BattleHUDController.Instance.SetSkillComboCounter(attackerSlotIndex, grantingSkill, length);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>Scans attacker's equipped skills for the one that grants `rule` (see SkillData.GrantsComboRule) — used to badge the PASSIVE itself for rules not tied to any one attack skill's identity (TimedInputStreak).</summary>
+    private SkillData FindGrantingSkill(BattleParticipant attacker, ComboRuleType rule)
+    {
+        if (_skillDatabase == null) return null;
+
+        foreach (string guid in attacker.RuntimeData.equippedSkillGuids)
+        {
+            if (_skillDatabase.TryGetByGuid(guid, out SkillData skill) && skill.GrantsComboRule == rule)
+            {
+                return skill;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// ChainResultCatalog/MasteryBonusCatalog detection + logging only (2026-08 session, see
+    /// DECISIONS.md -> [Combat]) — no numeric gameplay effect applied for either, an explicitly
+    /// flagged, separately-scoped follow-up. Chain logs only on a *change* from target's last
+    /// logged result; mastery bonuses log once per bonus per battle via
+    /// TriggeredMasteryBonusesThisBattle.
+    /// </summary>
+    private void EvaluateChainAndMastery(BattleParticipant attacker, BattleParticipant target)
+    {
+        List<StatusEffectType> targetStatuses = target.ActiveStatusTypes;
+
+        if (ChainResultCatalog.TryResolve(targetStatuses, out ChainResultType chain))
+        {
+            if (target.ActiveChainResult != chain)
+            {
+                target.ActiveChainResult = chain;
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatChainResultTriggered(target, chain));
+            }
+        }
+        else
+        {
+            target.ActiveChainResult = null;
+        }
+
+        List<StatusEffectType> selfStatuses = attacker.ActiveStatusTypes;
+        foreach (MasteryBonusType bonus in MasteryBonusCatalog.EvaluateAll(selfStatuses, targetStatuses))
+        {
+            if (attacker.TriggeredMasteryBonusesThisBattle.Add(bonus))
+            {
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatMasteryBonusTriggered(attacker, bonus));
             }
         }
     }
@@ -595,6 +885,7 @@ public class BattleManager : MonoBehaviour
 
                 BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
                 List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
+                AccumulateDamageDealt(counterResults);
                 BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
                 LogResults(counterResults, counterTypeMultiplier, timedInputSuccess: false);
 
@@ -626,22 +917,40 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    /// <summary>Checks the outcome and ends the battle if it's no longer InProgress. Returns whether it ended.</summary>
-    private bool TryEndBattle()
-    {
-        BattleOutcome outcome = BattleEngine.CheckOutcome(_state);
-        if (outcome == BattleOutcome.InProgress) return false;
-
-        EndBattle(outcome);
-        return true;
-    }
-
-    private void EndBattle(BattleOutcome outcome)
+    /// <summary>
+    /// Ends the battle. On a Won outcome, grants each surviving party member a flat Aura reward
+    /// (BattleConfig.AuraRewardOnWin) and blocks on the read-only post-battle summary screen
+    /// (2026-08 session — reworked from the old spend-here-and-now Aura Allocation screen per
+    /// user direction: Aura spending moved to the new Tab-key overworld menu instead; see
+    /// DECISIONS.md -> [Combat]) before hiding the HUD/unloading the scene. A Lost outcome skips
+    /// straight to cleanup, same as before this screen existed.
+    /// </summary>
+    private IEnumerator EndBattle(BattleOutcome outcome)
     {
         var result = new BattleResult(outcome == BattleOutcome.Won, _state.PlayerSide, _state.EnemySide);
 
         if (outcome == BattleOutcome.Won) EventBus.Raise_BattleWon(result);
         else EventBus.Raise_BattleLost(result);
+
+        if (outcome == BattleOutcome.Won)
+        {
+            var summary = new BattleSummary
+            {
+                TotalDamageDealt = _totalDamageDealt,
+                TotalHealingDone = _totalHealingDone,
+            };
+
+            foreach (BattleParticipant p in _state.PlayerSide)
+            {
+                if (!p.IsAlive) continue;
+                p.RuntimeData.commonAura += BattleConfig.AuraRewardOnWin;
+                summary.TotalAuraGained += BattleConfig.AuraRewardOnWin;
+            }
+
+            bool summaryDone = false;
+            BattleSummaryController.Instance.Show(summary, () => summaryDone = true);
+            yield return new WaitUntil(() => summaryDone);
+        }
 
         BattleHUDController.Instance.Hide();
         if (_overworldCamera != null)

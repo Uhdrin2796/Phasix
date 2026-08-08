@@ -10,6 +10,13 @@
 /// Phasix can't be stat-pumped past its tier. AuraCostPerStatPoint is a placeholder 1:1 exchange
 /// rate — the Directive's own pending list includes "Common Aura cost per stat point by tier," so
 /// this is not locked as flat/uniform, just built that way until a real curve exists.
+///
+/// Ceiling check (2026-08 follow-up fix, see DECISIONS.md -> [Combat]): gates against
+/// phasix.auraAllocatedPoints, NOT baseStats.Total. The Directive's own wording is "Stat growth
+/// through Common Aura is capped per tier" — growth, meaning points actually purchased through
+/// this system, not the creature's full stat total including whatever it started with. Gating on
+/// baseStats.Total made every real species (whose innate stats already exceed the tier-1
+/// placeholder ceiling of 40) unable to ever allocate a single point.
 /// </summary>
 public static class AuraStatAllocationSystem
 {
@@ -18,7 +25,7 @@ public static class AuraStatAllocationSystem
 
     /// <summary>
     /// Spends AuraCostPerStatPoint Common Aura to add 1 point to the given stat, if the Phasix has
-    /// enough Aura AND baseStats.Total is below its tier ceiling. Returns false (no-op, no Aura
+    /// enough Aura AND auraAllocatedPoints is below its tier ceiling. Returns false (no-op, no Aura
     /// spent) if either condition fails.
     /// </summary>
     public static bool TryAllocateStatPoint(PhasixRuntimeData phasix, int evolutionTier, StatType stat)
@@ -26,16 +33,17 @@ public static class AuraStatAllocationSystem
         if (phasix.commonAura < AuraCostPerStatPoint) return false;
 
         int ceiling = AuraTierCeiling.ComputeCeiling(evolutionTier, phasix.aptitude);
-        if (phasix.baseStats.Total >= ceiling) return false;
+        if (phasix.auraAllocatedPoints >= ceiling) return false;
 
         phasix.commonAura -= AuraCostPerStatPoint;
         phasix.baseStats = AddToStat(phasix.baseStats, stat, 1);
+        phasix.auraAllocatedPoints += 1;
         return true;
     }
 
     /// <summary>How many more stat points can currently be allocated before hitting the tier ceiling.</summary>
     public static int GetRemainingCeilingRoom(PhasixRuntimeData phasix, int evolutionTier)
-        => System.Math.Max(0, AuraTierCeiling.ComputeCeiling(evolutionTier, phasix.aptitude) - phasix.baseStats.Total);
+        => System.Math.Max(0, AuraTierCeiling.ComputeCeiling(evolutionTier, phasix.aptitude) - phasix.auraAllocatedPoints);
 
     private static StatBlock AddToStat(StatBlock block, StatType stat, int amount)
     {

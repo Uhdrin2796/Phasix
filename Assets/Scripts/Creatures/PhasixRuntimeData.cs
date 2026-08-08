@@ -109,6 +109,20 @@ public class PhasixRuntimeData
     /// <summary>Drives stat growth, farmable from all Phasix. TODO: pending NumericalCalibration.md</summary>
     public int commonAura;
 
+    /// <summary>
+    /// Running total of stat points ever purchased via AuraStatAllocationSystem.TryAllocateStatPoint
+    /// (2026-08 follow-up fix — see DECISIONS.md -> [Combat]). This, not baseStats.Total, is what
+    /// AuraTierCeiling gates: Progression_Directive_v0_1_0.md says "Stat growth through Common Aura
+    /// is capped per tier" — growth, i.e. Aura-purchased points, not the creature's total stat value
+    /// including whatever it started with. Gating on baseStats.Total directly made every allocation
+    /// attempt fail instantly for any species whose innate stats already exceed the tier-1 placeholder
+    /// ceiling (e.g. a 120-Vitality starter against a ceiling of 40) — this field fixes that without
+    /// touching either placeholder ceiling constant, both still pending NumericalCalibration.md.
+    /// Never resets today; devolution isn't built yet, so whether this should reset alongside
+    /// baseStats on devolution is unresolved — flagged for whoever builds that system.
+    /// </summary>
+    public int auraAllocatedPoints;
+
     /// <summary>Key = emotionalType string. Gates evolution, tied to emotional type/region. TODO: pending NumericalCalibration.md</summary>
     public Dictionary<string, int> specificAura = new Dictionary<string, int>();
 

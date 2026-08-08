@@ -2,11 +2,12 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// TEMPORARY manual-test tool — press Tab in Play mode to cycle the active companion
+/// TEMPORARY manual-test tool — press ~ (backquote) in Play mode to cycle the active companion
 /// through the Tier 1 movement presets drafted in DECISIONS.md → [Creatures] "Companion
 /// movement/following pattern archetypes". Lets the presets be compared live, on the
 /// existing placeholder companion, before any of them are tied to a Personality/species
-/// hook.
+/// hook. Rebound from Tab to ~ (2026-08, user-directed) to reserve Tab for a future menu
+/// key — see DECISIONS.md -> [Input].
 ///
 /// DELETE THIS FILE once a real per-species/per-Personality movement hook exists and
 /// applies presets itself — this is scaffolding for side-by-side comparison only.
@@ -119,7 +120,7 @@ public class DebugMovementPresetCycler : MonoBehaviour
             ApplyCurrent();
         }
 
-        if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
+        if (Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame)
         {
             _currentIndex = (_currentIndex + 1) % Presets.Length;
             ApplyCurrent();
@@ -166,7 +167,7 @@ public class DebugMovementPresetCycler : MonoBehaviour
     private void OnGUI()
     {
         if (_companionAI == null) return;
-        string label = $"Movement preset ({_currentIndex + 1}/{Presets.Length}): {Presets[_currentIndex].Name}\nPress Tab to cycle";
+        string label = $"Movement preset ({_currentIndex + 1}/{Presets.Length}): {Presets[_currentIndex].Name}\nPress ~ to cycle";
         GUI.Label(new Rect(10, 10, 500, 40), label);
     }
 }
