@@ -55,6 +55,9 @@ public static class EventBus
     /// <summary>Fires when the player loses a battle. Loss state: currency/item cost only — no Aura/bond loss.</summary>
     public static event Action<BattleResult> OnBattleLost;
 
+    /// <summary>Fires when the player successfully flees a battle via the Flee button (2026-08-10). Distinct from OnBattleLost — fleeing has zero cost, unlike a real loss.</summary>
+    public static event Action<BattleResult> OnBattleFled;
+
     /// <summary>Fires when any Phasix uses a skill in battle.</summary>
     public static event Action<PhasixRuntimeData, SkillData> OnSkillUsed;
 
@@ -66,6 +69,7 @@ public static class EventBus
 
     public static void Raise_BattleWon(BattleResult result)                               => OnBattleWon?.Invoke(result);
     public static void Raise_BattleLost(BattleResult result)                              => OnBattleLost?.Invoke(result);
+    public static void Raise_BattleFled(BattleResult result)                              => OnBattleFled?.Invoke(result);
     public static void Raise_SkillUsed(PhasixRuntimeData phasix, SkillData skill)         => OnSkillUsed?.Invoke(phasix, skill);
     public static void Raise_TimedInputSuccess(PhasixRuntimeData phasix)                  => OnTimedInputSuccess?.Invoke(phasix);
     public static void Raise_DamageTaken(PhasixRuntimeData phasix, int damage)            => OnDamageTaken?.Invoke(phasix, damage);
@@ -101,20 +105,19 @@ public static class EventBus
 
     // -------------------------------------------------------------------------
     // PHASE 2 — Wild Encounter Scaffold (live — wired in WildEncounterCreature.cs)
-    // Wk 14-16 scaffold only — superseded once BattleScene_Main/BattleManager exist (Phase 3)
-    // and the three-layer encounter system (WorldDesign_Directive) replaces this trigger model.
+    // Wk 14-16 scaffold only — superseded once the three-layer encounter system
+    // (WorldDesign_Directive) replaces this trigger model. Contact now auto-engages straight into
+    // BattleScene_Main (2026-08-10, user-directed) — there is no more pre-battle Flee choice, so
+    // OnWildEncounterFled was removed as dead code alongside WildEncounterCreature.HandleFlee.
+    // Fleeing lives entirely inside the battle itself now (BattleManager/EventBus.OnBattleFled).
     // -------------------------------------------------------------------------
 
     /// <summary>Fires the instant the player makes contact with a wild Phasix.</summary>
     public static event Action<PhasixRuntimeData> OnWildEncounterTriggered;
 
-    /// <summary>Fires when the player chooses Flee — the wild Phasix despawns.</summary>
-    public static event Action<PhasixRuntimeData> OnWildEncounterFled;
-
-    /// <summary>Fires when the player chooses Engage. TODO: zero real subscribers until BattleManager exists (Phase 3) — currently resolves identically to Flee.</summary>
+    /// <summary>Fires when contact auto-engages into BattleScene_Main.</summary>
     public static event Action<PhasixRuntimeData> OnWildEncounterEngageRequested;
 
     public static void Raise_WildEncounterTriggered(PhasixRuntimeData phasix)       => OnWildEncounterTriggered?.Invoke(phasix);
-    public static void Raise_WildEncounterFled(PhasixRuntimeData phasix)            => OnWildEncounterFled?.Invoke(phasix);
     public static void Raise_WildEncounterEngageRequested(PhasixRuntimeData phasix) => OnWildEncounterEngageRequested?.Invoke(phasix);
 }

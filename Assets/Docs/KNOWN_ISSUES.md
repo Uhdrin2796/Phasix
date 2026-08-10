@@ -7,23 +7,30 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-### [UI-001] — Skill tree carousel needs a visual pass
-**Status:** Open — flagged by user after live use, not yet scoped
-**Affects:** `Assets/Scripts/UI/OverworldMenuController.cs`, `Assets/UI/OverworldMenu.uss`
-(`.tree-*` classes)
-**Description:** The Skyrim-style paged skill tree (2026-08-09, see `CHANGELOG.md` → "Skill tray
-reworked into a Skyrim-style paged tree carousel") is functionally complete — paging via buttons/
-arrow keys/drag-swipe, node equip/unequip with the "stays visible as a copy" behavior, peek effect
-at the page edges — but the visual presentation is still a plain functional placeholder: colored
-circles for nodes, a thin flat bar for connectors, no constellation-style background/art, small
-260×200px stage. User: "we need to fix the skill tree look." No specific direction given yet on
-what to change (art pass, sizing, background, node styling) — needs a follow-up conversation to
-scope before touching anything.
-**Next:** Ask the user what specifically feels off next session rather than guessing at a fix.
+_(none currently open)_
 
 ---
 
 ## Closed Issues
+
+### [UI-001] — Skill tree carousel needs a visual pass — CLOSED (replaced)
+**Status:** Closed — the paged carousel this issue was about no longer exists
+**Affects:** `Assets/Scripts/UI/OverworldMenuController.cs`, `Assets/UI/OverworldMenu.uss`,
+new `Assets/Scripts/UI/SkillWebEdgeVisual.cs`
+**Description:** Originally flagged (2026-08-09) after live use of the Skyrim-style paged skill
+tree carousel: functionally complete but visually a plain placeholder (colored circles, a thin
+flat connector bar, no atmosphere, a cramped 260×200px stage). User: "we need to fix the skill
+tree look... this looks awful," then shared their original Evolution Web design mockup and asked
+whether the same pan/zoom node-graph concept could work here.
+**Fix:** Not a visual pass on the carousel — the carousel itself was replaced entirely
+(2026-08-09, see `CHANGELOG.md` → "Skill tray reworked again: paged carousel replaced by a
+pan/zoom skill web") with a free pan/zoom web view prototyping the user's Evolution Web concept:
+per-tree colored/glowing node columns connected by `Painter2D`-drawn lines, tier-gated silhouette
+columns for locked trees, wheel-zoom + drag-pan, and a Reset View control.
+**Verified live:** `manage_ui render_ui` screenshot + structural checks (95 nodes, exactly the
+expected 15 unlocked/80 locked split for a real party creature) confirmed the new view renders
+correctly. 249/249 EditMode tests passing.
+**Closed:** 2026-08-09, same session the replacement shipped.
 
 ### [SAVE-001] — Debug "New Game" reset didn't re-seed the party — CLOSED (fixed)
 **Status:** Closed — fixed, confirmed via live Play Mode test

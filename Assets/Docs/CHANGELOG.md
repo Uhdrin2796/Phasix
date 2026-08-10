@@ -16,7 +16,379 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-10] Phase 3 — Two more wild spawn points, completing a symmetric 4-corner layout
+- **Context:** User: "Can we load 2 more phasix onto the map. One in the top right and one in the
+  top left." Scene already had a `Test_WildSpawnPoint_TopLeft` (-10, 6) the user didn't know about
+  — clarified via AskUserQuestion, user's actual intent was top-right + bottom-left, completing a
+  symmetric 4-corner spread around the existing center spawn point.
+- **Built:** Two new `EncounterTrigger` GameObjects in `SampleScene.unity`, following the exact
+  existing convention (same wild creature prefab + SkillDatabase reference, `_overrideTintColor`
+  scene-dressing tint, root-level siblings of the other spawn points — matches, doesn't deviate
+  from, how the pre-existing 3 are set up):
+  - `Test_WildSpawnPoint_TopRight` (10, 6) — Test_SteamType, cyan tint (0.3, 0.85, 0.9) — right
+    column now matches BottomRight's species (Steam).
+  - `Test_WildSpawnPoint_BottomLeft` (-10, -6) — Test_FireType, orange tint (1, 0.6, 0.2) — left
+    column now matches TopLeft's species (Fire).
+  - Room bounds confirmed via `RoomBounds` PolygonCollider2D (x: ±14, y: ±9) before picking
+    coordinates — both new points sit well inside, mirroring the existing BottomRight/TopLeft's
+    distance from center.
+- **Verified live:** Play mode — confirmed 5 `WildEncounterCreature` instances spawn (one per
+  point, correct parent spawn point name and position each); confirmed the existing double-contact
+  guard (`s_encounterInProgress`) still allows exactly one battle at a time even with 5 creatures
+  now in the scene; `manage_ui render_ui` screenshot (camera manually repositioned near the new
+  TopRight point, Cinemachine vcam temporarily disabled for the shot) visually confirms the new
+  cyan-tinted creature renders correctly. 256/256 EditMode tests still passing (scene-only change,
+  no code touched).
+
+[2026-08-10] Phase 3 — Auto-engage on wild contact + in-battle Flee button (replaces pre-battle Flee/Engage prompt)
+- **Context:** User: "When interacting with a phasix instead of flee or engage, automatically
+  engage into combat. Where we have an end turn button, on the opposite side have a flee button,
+  lets make it like 80% success rate for now."
+- **Built:** `WildEncounterCreature.OnTriggerEnter2D` now calls `HandleEngage` directly on contact
+  — the old `EncounterPromptController.Show(species, onFlee, onEngage)` pre-battle choice is
+  retired (unused code, not deleted this pass — flagged as a follow-up). New `FleeButton` in
+  `BattleHUD.uxml`, mirrored opposite `EndTurnButton` (`.flee-button` USS, left side, blue-grey vs.
+  End Turn's red), wired through `BattleHUDController.FleeClicked` to a new
+  `BattleManager._fleeRequested` flag consumed by `PlayerTurn`'s existing wait loop (same pattern
+  as `_endTurnRequested`). A click rolls `BattleConfig.FleeSuccessChance` (0.8) once: success ends
+  the battle immediately via new `BattleOutcome.Fled` (same manual-outcome pattern Capture already
+  uses for Won — no rewards, no summary screen, new `EventBus.OnBattleFled` instead of
+  `OnBattleLost` since a successful flee has zero cost, unlike a real loss); failure still
+  consumes the whole turn and falls through to the normal enemy-turn transition, same as every
+  other single-beat move.
+- **Bug found and fixed during live verification:** The old prompt's guard —
+  `EncounterPromptController.Instance.IsVisible` — turned out to double as a global "an encounter
+  is in progress" lock for the WHOLE battle (set in `Show()`, only cleared in `Resolve()` after
+  the battle ended), not just a "is the prompt currently drawn" check. Removing it alongside the
+  prompt silently dropped that lock too: live-verified 3 wild creatures in the test scene, and a
+  SECOND creature's contact while the first battle was still running additively loaded
+  `BattleScene_Main` a second time, running two `BattleManager`s against one
+  `BattleHUDController.Instance`. Fixed with a new `WildEncounterCreature.s_encounterInProgress`
+  (static bool) covering the same lifetime the old flag had. Full writeup: `LESSONS_LEARNED.md` →
+  [Combat & Encounter Flow].
+- **Verified live:** Play mode — confirmed auto-engage fires straight into `BattleScene_Main` with
+  `EncounterPromptController.IsVisible` never becoming true; confirmed the guard fix blocks a
+  second creature's contact while a battle is active (0 additional scene loads, target creature's
+  own `_contacted` stays false); confirmed a forced-failure flee (seeded `Random.InitState`) logs
+  "Failed to flee!" and lets the enemy's turn play out; confirmed a forced-success flee unloads
+  `BattleScene_Main` immediately, resets `s_encounterInProgress`, and never shows
+  `BattleSummaryController` (Won-only). `manage_ui render_ui` screenshot confirms Flee/End Turn
+  render correctly on opposite sides. 256/256 EditMode tests still passing (no test changes
+  needed — pure UI/flow wiring, no new branchable logic outside what live verification covered).
+- **Next:** `EncounterPromptController.cs` and its UXML/USS/PanelSettings/scene GameObject are now
+  fully unused — flagged as a follow-up cleanup task, not removed this pass to keep this change
+  scoped to what was asked.
+
+[2026-08-10] Phase 3 — DEBUG: Add Party Member button
+- **Context:** User: "can you add a debug where it says: new game to add a party member so i can
+  test it out myself" — multi-Phasix testing (skill web, battle skill ring, etc.) previously
+  required actually winning a real capture in battle first.
+- **Built:** New `DebugAddPartyMemberButton` in `OverworldMenu.uxml`'s `DebugBar`, styled
+  identically to the existing `DebugNewGameButton` (stacks below it). Wired in
+  `OverworldMenuController.Awake()` to a new `DebugAddPartyMember()` method that spawns via
+  `WildSpawnSystem.CreateWildInstance` — the same real entry point every wild/captured creature
+  goes through — then calls `PartySystem.Instance.AddToParty(...)` and refreshes the roster.
+  No-ops with a console warning (mirrors `GameManager.SeedFallbackStarter`'s own pattern) if the
+  party is already full or no species is assigned.
+- **Decided:** Spawns `Test_SteamType` (new `[SerializeField] PhasixData _debugPartyMemberSpecies`
+  on `OverworldMenuController`, assigned in the Inspector) rather than `GameManager`'s Fallback
+  Starter species (`Test_FireType`) — keeps a debug-added member visually/mechanically distinct
+  from the slot-0 starter for testing purposes.
+- **Verified live:** Play mode, invoked the real button's click handler directly (party started at
+  1/3 filled) — confirmed slot 1 fills correctly, then slot 2, then the 3/3-full case logs a
+  warning and no-ops without throwing. `manage_ui render_ui` screenshot confirms both debug buttons
+  render correctly stacked. 256/256 EditMode tests still passing (no test changes needed — this is
+  a debug-only UI affordance, not a system with new branching logic to cover).
+
+[2026-08-10] Phase 3 — Found it: battle scene's skill ring showed full skill NAMES, not codes — root cause of the "2nd Phasix" report
+- **Context:** Following up on the unreproduced "2nd Phasix skill web shows all descriptions"
+  report (previous entry) — user clarified: "its like the name of the skill is just overlaying,
+  can we just make it in the battle scene that no names of skills should be there? only... during
+  the hover over... and the letter that the skill has like C1, C2, etc." This reframed the whole
+  investigation — it was never about the Party menu's skill web (which already used short codes),
+  it was the BATTLE SCENE's own skill ring the whole time.
+- **Root cause:** `BattleHUDController.PopulateSkillRing` set each orb's permanent label to the
+  full `SkillData.SkillName` (e.g. "Utility Skill 1 (Placeholder)") — unlike the Party menu's
+  skill web/equip wheel, which already switched to a short `{tree-initial}{index}` code
+  (`GetShortSkillLabel`) back in an earlier 2026-08 follow-up. For a creature with a full
+  12-skill loadout, several long placeholder names crowded around the small clock-face orbs and
+  visibly overlapped — exactly what the user described. The earlier "2nd Phasix" report was
+  almost certainly this same thing: the captured creature likely had a different/fuller loadout
+  than the original starter, making the overlap far more visible on it specifically, with no
+  connection to captures, new battles, or duplicate UI elements at all — all of which were red
+  herrings chased across the previous investigation.
+- **Fixed:** Extracted the short-code logic into new `Assets/Scripts/Combat/SkillLabelFormatter.cs`
+  (`GetShortLabel(skill, database)`) — the one shared source for BOTH the Party menu and the
+  battle scene now, same pattern as `SkillTreeColor`. `OverworldMenuController`'s own copy was
+  removed in favor of calling through to it; `BattleHUDController.PopulateSkillRing` now calls it
+  too instead of using `skill.SkillName` directly.
+- **Verified live:** Force-equipped a full 12-skill loadout on the player's active Phasix, started
+  a real battle, and read every orb's resolved label text directly — all 12 are now short 2-
+  character codes (`A1`, `A2`, `B1`, `B2`, `E1`, `E2`, `X1`, `X2`, etc.), none of them the long
+  placeholder names. `manage_ui render_ui` screenshot confirms: no overlapping/crowded text
+  anywhere on the ring, all 12 orbs cleanly legible with their tree-matched colors intact.
+  256/256 EditMode tests still passing.
+- **Lesson for next time:** The previous session's investigation (see the two entries above this
+  one) spent significant effort chasing duplicate-tooltip/capture-flow theories based on an
+  under-specified initial description ("all the descriptions are showing"). The user's later,
+  more concrete description ("the name of the skill is just overlaying... in the battle scene")
+  immediately pointed at the real, much simpler cause. When a visual bug report is ambiguous
+  between "multiple things are visible at once" and "one thing is too long/wrong," ask for the
+  more specific framing early rather than assuming the more complex (duplication) interpretation.
+
 ## Log
+
+[2026-08-09] Phase 3 — Regen/Burst nameplate icons get hover tooltips (never had any)
+- **Context:** User: "i tried using the regen ability that restores 4 health and the buff icon
+  shows but no hover over description. Need one for that... looks like not just buff/debuff but
+  anything in that bar that would indicate a multi turn output should have the hoverover."
+- **Fixed:** Confirmed via research (not assumption) that `BuildBuffIcon`'s `RegenIcon`/`BurstIcon`
+  never had `HudTooltip.RegisterHover` wiring at all — unlike the generic `StatusIcons` pool below
+  them in the same row, which already had it. Added `RegenTooltipText`/`BurstTooltipText` to
+  `NameplateRefs`, registered hover on both icons in `BuildNameplate`, and set the text alongside
+  the icon's own display/counter in `SetRegenStatus`/`SetBurstStatus` so it's always current.
+  Regen's tooltip cites `BattleConfig.RegenHealPerTurn` (the real, locked heal-per-tick constant —
+  2 HP — same number `BattleManager.ApplyRegen` actually applies), not an invented figure. Burst's
+  tooltip deliberately doesn't claim a stat effect — `EvolutionBurstSystem.ApplyBurstEffects` is
+  still genuinely undesigned (see DECISIONS.md's own "Open note" entry) — just states it's active
+  and shows turns remaining, matching what's actually known/locked.
+- **Verified live:** Called `SetRegenStatus(0, 4)`/`SetBurstStatus(0, 2)` on a real battle
+  instance and read back the resulting tooltip text: `"Regen\nHeals 2 HP per turn\n4 turns
+  remaining"` / `"Evolution Burst\nActive — 2 turns remaining"`, both correctly picked up by
+  `HudTooltip.Show()`. 256/256 EditMode tests still passing.
+
+[2026-08-09] Phase 3 — Battle HUD follow-up: tooltip snug-fit, real bug found in buff/debuff hover
+- **Context:** Two reports after the previous tooltip-clamping pass: (1) "the placement of the
+  hover for the enemy is a little far from the left side." (2) "when hovering over the buffs or
+  debuffs on both player and enemy are both not showing up" — contradicting the prior session's
+  conclusion that this already worked; that conclusion turned out to be based on an incomplete
+  test (calling `HudTooltip.Show()` directly, which proved the DATA was correct but never actually
+  exercised the real `PointerEnterEvent` hover path).
+- **Fixed (1):** `HudTooltip.PositionNear`'s left-flip used the USS `.hud-tooltip` `max-width`
+  (220px) as the placement value, not just an overflow-check estimate — for short text (e.g. "HP:
+  110/110", 91px real width), this left a large, clearly visible gap between the tooltip and its
+  anchor. `Show()` now places a first-frame estimate immediately (using the 220px worst case, so
+  the tooltip isn't stuck invisible for a frame), then re-snaps to the label's REAL resolved width/
+  height via a one-shot `GeometryChangedEvent` once UI Toolkit's next layout pass resolves it.
+- **Found and fixed (2), a genuine bug:** Live-tested properly this time (`IPanel.Pick()` at the
+  status icon's own screen coordinates — same diagnostic technique used for the earlier EDITOR-001
+  nameplate-hover bug). `BuildStatusIconSlot`'s `letterLabel`/`counter` children are absolutely
+  positioned covering the icon's ENTIRE area, and neither had `pickingMode = PickingMode.Ignore`
+  set — so one of THEM, not the icon itself, was the actual pick target, and
+  `HudTooltip.RegisterHover(icon, ...)` never fired. The sibling function
+  `BuildNameplateBarRow` already had the identical fix on its own decorative `fill` child, with an
+  explicit comment explaining exactly this failure mode — `BuildStatusIconSlot` was just never
+  given the same treatment. Fixed both labels; also applied the same preventive fix to
+  `BuildBuffIcon` (Regen/Burst icons), which have the same unprotected-label shape even though
+  neither currently has a tooltip registered on it.
+- **Verified live:** `IPanel.Pick()` at the HP track's own coordinates also returned null in this
+  headless test harness — confirming `Pick()` itself isn't reliably invokable this way here (a
+  limitation of the automated test path, not evidence against the fix), so this fix is grounded in
+  the code-level match to `BuildNameplateBarRow`'s already-working, already-documented pattern
+  rather than an automated hover-trigger proof. The tooltip snug-fit fix WAS directly verified
+  numerically: before the fix, the HP tooltip's real 91px-wide box left a ~129px gap before
+  touching the anchor; after, its right edge lands exactly `AnchorGap` (8px) from the anchor, on
+  both the initial-guess and re-snapped placements. `manage_ui render_ui` screenshot confirms the
+  tooltip sitting snug against the enemy nameplate. 256/256 EditMode tests still passing.
+
+[2026-08-09] Phase 3 — Battle scene sync: shared skill-tree color, tooltip screen-edge clamping, buff/debuff hover confirmed working
+- **Context:** Three reports after playtesting the skill web + wheel color-sync fix: (1) "i want
+  the skill wheel in skill tree menu to sync up with the battle scene. The battle scene now looks
+  out of date. Main things we should have is matching colors then the hover over description."
+  (2) "the text when hovering over the enemy HP, aura etc appears out of screen and should be on
+  the left side." (3) "The hover over for buffs/debuffs also underneath the evo bar does not exist
+  currently. lets build that in as well."
+- **Fixed (1):** New `Assets/Scripts/Combat/SkillTreeColor.cs` — the one shared color source for
+  the Party menu's skill web, its equip wheel, AND the battle scene's skill ring now. Previously
+  each had its own scheme: the web used per-tree procedural color, the Party menu's wheel had
+  briefly matched it, but the battle ring still used the original `ring % 7` POSITION-based
+  `.skill-ring-color-N` palette. `BattleHUDController.PopulateSkillRing` now calls
+  `SkillTreeColor.ApplyVisual(slot, skill?.TreeType)`, identical to both Party-menu call sites.
+  Removed the now-fully-dead `.skill-ring-color-0..6` USS rules and the unused
+  `SkillRingColorCount` constant. Hover **description** text needed no fix — both screens already
+  called the same `BattleHUDController.BuildSkillTooltipText`, confirmed via code research before
+  touching anything.
+- **Fixed (2):** `HudTooltip.PositionNear` previously always placed the tooltip 8px to the right
+  of the hovered element with zero screen-edge awareness — harmless for player-side anchors (left
+  half of the screen) but the enemy nameplate sits at the panel's right edge
+  (`.status-list-enemy`), so its bars' tooltips always overflowed. Now flips to the LEFT of the
+  anchor whenever the right placement would exceed the panel's width (using the `.hud-tooltip`
+  USS `max-width: 220px` as a pre-layout worst-case estimate, since real rendered width isn't
+  known until after `Show()`'s text assignment triggers a layout pass), and clamps vertically too.
+  This is a single shared fix point — benefits every `HudTooltip` consumer at once (nameplate
+  bars, status icons, both skill rings, the skill web's nodes).
+- **Investigated (3), turned out already built:** Live-tested directly — applied a real `Burn`
+  status to a wild enemy mid-battle, force-refreshed the HUD, and confirmed the status icon
+  rendered with a working tooltip (`"Burn (Elemental)\n3 turns remaining"`) once shown
+  programmatically. The hover wiring (`RegisterHover` on each pooled status icon slot) and content
+  building (`RefreshStatusIcons`) already existed from an earlier 2026-08 session — the user never
+  saw it because it hit the exact same off-screen bug as (2), being anchored to the same
+  right-edge enemy nameplate. Fixing (2) makes it visible for free. Added one small enrichment
+  since the data was already available and unused: tooltip text now shows `Buff`/`Debuff`
+  (`StatusEffectCatalog.Entry.IsPositive`) alongside the category, e.g. `"Burn (Debuff ·
+  Elemental)"` — no new/invented status content, just surfacing an existing field.
+- **Verified live:** Started a real wild battle, applied `Burn` to the enemy, and read
+  `HudTooltip`'s resolved position directly: the enemy HP bar's anchor sits at world x=1762 in a
+  1920px-wide panel — before the fix this would have placed the tooltip at `left=1910`
+  (`1910+220=2130`, 210px off-screen); after the fix it correctly flips to `left=1534`
+  (`1534+220=1754`, fully on-screen). Same math confirmed for the status icon tooltip
+  (`left=1592`, no overflow). `manage_ui render_ui` screenshot confirms all three fixes together:
+  distinct tree-matched colors across all 6 equipped orbs (no longer the flat 7-bucket scheme),
+  the enemy HP tooltip rendering fully on-screen, and the Burn status icon with its "3 turns"
+  counter visible under the bars. 256/256 EditMode tests still passing (no test-covered logic
+  changed — pure visual/positioning fixes).
+
+[2026-08-09] Phase 3 — Skill web follow-up #2: tree is now the master color source for the equip wheel
+- **Context:** User: "when dragging and dropping the color in the skill tree does not match the
+  color that gets applied when its on the scroll wheel... lets have the skill tree be the master
+  color, so whatever color is on the tree... on the wheel should match." The web view colored
+  nodes per-TREE (procedural HSV); the equip wheel still colored orbs per-SKILL (a GUID hash into
+  `BattleHUD.uss`'s 7-bucket `.skill-ring-color-N` palette) — an older, separate convention from
+  before the web view existed. Same equipped skill could show two different colors across the two
+  views.
+- **Fixed:** Extracted the web node's tint/border application into one shared
+  `OverworldMenuController.ApplyTreeColorVisual(element, treeType)`, called by BOTH the web nodes
+  and the equip wheel's `RefreshSkillArea` loop (keyed off the equipped skill's own `TreeType`).
+  The wheel no longer has an independent color source at all — structurally can't drift from the
+  tree again. Removed the now-fully-unused `ApplySkillColor`/`GetSkillColorClass`/
+  `SkillColorClasses` (the per-skill palette). `BattleHUD.uss`'s `.skill-ring-color-0..6` classes
+  themselves are untouched — `BattleHUDController`'s own, unrelated position-based battle-scene
+  ring coloring still uses them independently.
+- **Verified live:** Equipped a real Utility-tree skill into wheel slot 3, then read both the web
+  node's and the wheel orb's `resolvedStyle.borderTopColor`/`backgroundColor` — numerically
+  identical (`RGBA(0.428, 0.580, 0.950, 1.000)` border, `RGBA(0.267, 0.320, 0.463, 1.000)` fill on
+  both). `manage_ui render_ui` screenshot confirms visually. 256/256 EditMode tests still passing
+  (pure visual change, no new logic to cover).
+
+[2026-08-09] Phase 3 — Skill web follow-up: positional equip slots, wider debug tree pool, Unlock All
+- **Context:** Live testing of the new skill web (previous entry below) surfaced three issues:
+  (1) user: "when i add skills from the tree to the wheel it just adds it to the next open spot
+  instead of where im dragging and dropping it to"; (2) "I also see a total of 3 trees available
+  even at the tier 5 debug view"; (3) "in the tier 5 debug seems that i dont have full access to
+  all slots" — later confirmed to be the same root cause as (1), not a separate cap bug.
+- **Fixed (1):** `equippedSkillGuids` was a strictly compact, front-packed list — dropping onto an
+  empty physical slot always appended to the next open spot, and `Unequip` shifted every later
+  skill down one position (`List.Remove` removes by value). `SkillLoadoutSystem` now treats it as
+  sparse: an empty string (`""`) entry means "no skill in this physical slot." `TryEquipAt`/
+  `SwapEquipped` land EXACTLY at the target index (auto-extending with empty gaps as needed);
+  `Unequip` clears its slot in place. Every existing reader (`OverworldMenuController`,
+  `BattleHUDController`, `BattleManager`, `BattleParticipant`) already resolves guids via
+  `SkillDatabase.TryGetByGuid`, which already treats `""` as "not found" (existing tested
+  behavior), so no reader needed to change — only the mutation methods. New private
+  `CountEquipped` (real non-empty count) replaces `.Count` everywhere it was being used as a cap
+  proxy, since list length can now exceed the real equipped count once gaps exist.
+- **Fixed (2):** Root cause was placeholder test data, not logic — `Test_FireType.asset`'s
+  `AvailableTreeTypes` only ever listed 2 of the 18 GDD trees (Mirror, Reaction), so
+  `GetEffectiveUnlockedTrees`'s debug-tier branch (`AvailableTreeTypes.Take(GetTreeCount(tier))`)
+  could never return more than 2 regardless of tier. Expanded it to all 18 GDD trees via
+  `SerializedObject` (same approach as the SkillDatabase registration earlier this session) — tier
+  5 now genuinely shows up to `GetTreeCount(5) == 7` unlocked trees.
+- **Built (3, user request — "can we also have an unlock all debug so im able to see
+  everything?"):** New `PhasixRuntimeData.DebugUnlockAllTrees` (bool, session-only, never
+  persisted) — an "Unlock All: ON/OFF" toggle button in the web header. Independent of the tier
+  stepper: tier still governs equip SLOT capacity; this only controls which TREES render as
+  unlocked. `SkillTreeUnlockSystem.GetEffectiveUnlockedTrees` checks it first, ahead of
+  `DebugTierOverride`, returning all 18 GDD trees unconditionally when active. Toggling it (and
+  the tier stepper) now also calls `ApplyDefaultFraming()` — the unlocked-column span changes, so
+  the view re-centers rather than staying framed on a now-stale subset.
+- **Verified live:** Simulated the exact reported bug — drop skill A onto physical slot 9, then
+  skill B onto slot 0 — both landed exactly where dropped (slot 0 unaffected by the slot-9 drop),
+  then unequipping slot 9 left slot 0 untouched (previously this would have shifted). With Unlock
+  All + Tier 5 debug active on the real party creature: 95/95 nodes rendered as unlocked (was
+  15/95), confirmed via `manage_ui render_ui` screenshot. Real `unlockedTreeTypes` save data
+  confirmed never touched by either debug toggle.
+- **Test count:** 256/256 EditMode tests passing (was 249 — 7 new: sparse-slot positional
+  behavior, cap-uses-real-count-not-list-length, and DebugUnlockAllTrees priority/coverage).
+
+[2026-08-09] Phase 3 — Skill tray reworked again: paged carousel replaced by a pan/zoom skill web
+- **Context:** User, after live use of the paged carousel (previous entry below): "we need to fix
+  the skill tree look... this looks awful." Separately, user shared their original design mockup
+  for an **Evolution Web** (`evolution_web.html` — a pannable/zoomable node graph with glowing
+  gradient nodes, curved/dashed gradient edges, fog-of-war discovery states, a filter bar, and BFS
+  "plan mode" pathfinding) and asked whether the same concept could work in Unity. Researched
+  Unity 6000.3.11f1's live `Painter2D` API via `unity_reflect` (not training-data assumption) and
+  confirmed near feature-parity with the mockup's Canvas 2D techniques (`QuadraticCurveTo`,
+  `SetDashPattern` + `dashOffset`, `strokeFillGradient`/`fillGradient` linear+radial gradients,
+  even a native `Blur` USS filter), and that the project already has an established local
+  convention for this (`DragLineVisual.cs`, `RadialGaugeVisual.cs`). Decided (AskUserQuestion) to
+  prototype the pan/zoom web-graph interaction against the **skill tree first** — no Phase 4 data
+  blocker, unlike the real Evolution Web (`EvolutionNodeSO`/`EvolutionBranchSO`/`EvolutionGraphSO`
+  are blocked behind resolving `Evolution_System_Directive_v1_1_0.md`'s internal inconsistencies
+  first, per `DECISIONS.md`) — then reuse the same component for Evolution once that's unblocked.
+- **Built:** `OverworldMenuController.BuildSkillArea` replaces the paged carousel with a free
+  pan/zoom **skill web**: every `SkillTreeType` is a column (`TrayDisplayTreeOrder` order, Standard
+  first), its skills a vertical row of real `VisualElement` nodes connected by a straight line —
+  drawn by new `Assets/Scripts/UI/SkillWebEdgeVisual.cs` (`Painter2D` overlay, same
+  `generateVisualContent`/`MarkDirtyRepaint()` convention as `DragLineVisual`) sitting behind the
+  nodes so native hover/click/`HudTooltip` keep working. Nodes are real elements (not hand-rolled
+  hit-testing like the mockup's own `getHoveredNode()`), positioned inside one "world" container
+  whose `style.scale`/`style.translate` drive pan (drag) and wheel-zoom (centered on the cursor) —
+  verified live before building on top of it that a parent's transform correctly cascades to a
+  child's own `Painter2D`-painted content, not just normal laid-out children. A tree not currently
+  unlocked (`SkillTreeUnlockSystem.GetEffectiveUnlockedTrees`, see below) renders as a dim,
+  non-interactive silhouette column (no label, no color, no hover/drag) instead of a fully
+  browsable one — reuses the mockup's Discovered/Sighted visual language, driven by tier-gating
+  rather than true fog-of-war (skills aren't "encountered in the wild"). Per-tree node/edge color
+  is computed procedurally (HSV hue rotated by the golden-angle conjugate per column index)
+  instead of extending `BattleHUD.uss`'s existing 7-bucket per-SKILL palette — keeps the shared
+  battle-wheel file completely untouched, zero regression surface, and needs no hand-authored
+  19-class palette for what's still placeholder content. Added a **Reset View** button (snaps
+  pan/zoom back to a default framing centered/scaled on the creature's unlocked trees) and
+  **no keyboard pan/zoom** (confirmed with user — mouse drag + wheel only, matching the mockup;
+  drops the old carousel's arrow-key paging, which has no clean free-pan equivalent).
+- **Built (debug tool, user-requested mid-session):** A debug tier stepper (`◀ Tier N ▶`, 1-5) in
+  the web header lets the creature's EFFECTIVE tier be walked live to preview unlocks/slot
+  capacity without a real (Phase 4, unbuilt) evolution. `PhasixRuntimeData.DebugTierOverride`
+  (`int?`, session-only, never persisted to save data) — never writes to `speciesData` (a
+  ScriptableObject, must stay read-only at runtime per CLAUDE.md's hard architecture rule).
+- **Fixed (found while building the debug tier control):** `SkillLoadoutSystem.TryEquip`/
+  `TryEquipAt` never checked `unlockedTreeTypes` at all before this — any learned skill from any
+  tree could be equipped regardless of lock state; the carousel UI just never happened to expose a
+  path to try. Both now take the skill's `SkillTreeType` and reject equipping from a tree that
+  isn't unlocked (`SkillTreeType.Standard` exempt — always available, not one of the 18 GDD trees).
+  New `SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime)` is the single source of truth for
+  BOTH the web view's display AND this equip gate (returns the real `unlockedTreeTypes` normally,
+  or `speciesData.AvailableTreeTypes.Take(SkillSlotCapacity.GetTreeCount(overrideTier))` — the
+  exact same selection `WildSpawnSystem.SeedInitialSkills` already uses for real seeding — while a
+  debug override is active) so the override can never desync "looks unlocked" from "actually
+  equippable." Wheel-slot interactivity (drag/right-click/hover) is now also checked at USE time
+  against the current `maxSlots`, not decided once at BUILD time — necessary once tier could change
+  live without leaving the detail view, otherwise a slot tier-locked at open time could never
+  become usable after the debug stepper raised the tier, despite its visual state already updating.
+- **Built (data, user-requested — "add more placeholders... to see what it could look like at
+  scale"):** Generated 3 more placeholder `SkillData` assets per GDD tree (54 new assets,
+  `{TreeType}_Placeholder3/4/5.asset`, following the existing naming/field convention exactly) so
+  every one of the 18 GDD trees now has 5 (was 2) — 95 total registered skills (was 41), a uniform
+  19-column x 5-row grid for the web view to actually preview at scale. Confirmed safe via
+  `PlaceholderSkillResolver.cs`: `PlaceholderIndex` isn't capped at 0/1, `GetStatusForSkill`
+  already wraps it via modulo against each status category's option list (4+ members each), so
+  indices 2/3/4 resolve to valid, deterministic status flavors with zero code changes — no new
+  design content invented, same as the existing 36. Registered into `SkillDatabase._allSkills` and
+  re-ran its `RebuildGuidIndex` context menu via `execute_code` (54/54 resolved real GUIDs, 0
+  empty).
+- **Verified live (Play mode):** Real party creature ("Test Fire Placeholder", Mirror+Reaction
+  unlocked) — web view rendered 95 nodes, exactly 15 unlocked (3 unlocked trees × 5) / 80 locked,
+  matching `GetEffectiveUnlockedTrees` exactly. `ApplyDefaultFraming` produced a genuinely computed
+  non-identity transform (scale 0.65, translate (-323.53, -2.24)), confirming the auto-fit-to-
+  unlocked-span logic runs, not just a hardcoded default. Stepping `DebugTierOverride` to 5 live
+  updated the header to "Tier 5 (debug)" and cleared all wheel-slot tier-locking (12/12 usable, was
+  8/12 at real tier 3) with zero console errors. Directly reproduced and confirmed the fix for the
+  specific gap found during plan review: built an isolated species/runtime where a tree was
+  available but NOT in the real `unlockedTreeTypes` — `SkillLoadoutSystem.TryEquip` correctly
+  failed before setting `DebugTierOverride`, then correctly succeeded after, with the real
+  `unlockedTreeTypes` list provably unchanged afterward (still just its original single entry) —
+  the override never leaks into persisted progression. `manage_ui render_ui` screenshot confirmed
+  the visual result: colored/labeled nodes for unlocked columns, dim unlabeled silhouettes for
+  locked columns, connector lines, and the new header controls all rendering correctly.
+- **Test count:** 249/249 EditMode tests passing (was 239 — 10 new: `SkillLoadoutSystemTests` gate
+  coverage + `SkillTreeUnlockSystemTests` for `GetEffectiveUnlockedTrees`). `WildSpawnSystemTests`/
+  `SkillDatabaseTests` needed no changes — both build fully synthetic, isolated fixtures already
+  independent of the real `SkillDatabase.asset`'s registered count.
+- **Next:** Visual/pixel tuning (exact stage size, node styling, glow intensity) is expected to
+  keep iterating — this is placeholder-content scaffolding, not a final art pass. Once
+  `Evolution_System_Directive_v1_1_0.md`'s internal inconsistencies are resolved, the same
+  `SkillWebEdgeVisual`/world-container pattern is the intended starting point for the real
+  Evolution Web (Phase 4).
 
 [2026-08-09] Phase 3 — Equipping a skill from its tree no longer removes it from that tree
 - **Context:** User: "when attaching a skill from a tree into the skill wheel. It shouldnt

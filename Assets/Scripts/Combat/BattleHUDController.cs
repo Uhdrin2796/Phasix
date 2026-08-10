@@ -302,8 +302,10 @@ public class BattleHUDController : MonoBehaviour
 
         public VisualElement RegenIcon;
         public Label RegenCounter;
+        public string RegenTooltipText;
         public VisualElement BurstIcon;
         public Label BurstCounter;
+        public string BurstTooltipText;
 
         // Generic status-effect (debuff/buff) icon pool (2026-08 follow-up — user report: "on
         // application for debuffs i dont see any debuffs on the enemy hud" — BattleParticipant.
@@ -338,24 +340,13 @@ public class BattleHUDController : MonoBehaviour
 
     /// <summary>
     /// [slotIndex][ringIndex 0..SkillSlotCount-1] — lettering label on each skill-ring slot,
-    /// showing the equipped skill's SkillName (2026-08 follow-up — user-directed: "make sure the
-    /// orb has the lettering like all the other orbs and is visible"). Reuses
-    /// `.move-option-label`'s exact styling (position/centering/font/color), one uniform visual
-    /// language across every slot. Created once per slot in Awake like the combo badge;
-    /// PopulateSkillRing just updates `.text` (empty for a locked slot).
+    /// showing the equipped skill's SHORT code via SkillLabelFormatter (2026-08-10 follow-up —
+    /// full SkillName was here originally, but visibly overlapped for a full loadout; see
+    /// PopulateSkillRing's own comment). Reuses `.move-option-label`'s exact styling (position/
+    /// centering/font/color), one uniform visual language across every slot. Created once per slot
+    /// in Awake like the combo badge; PopulateSkillRing just updates `.text` (empty for a locked slot).
     /// </summary>
     private readonly Label[][] _playerSkillSlotLabels = new Label[BattleConfig.ActivePartySize][];
-
-    /// <summary>
-    /// Fill+border color per skill-ring position (2026-08 follow-up — user-directed: "select
-    /// whatever colors you see fit for those"), index-matched to ring position 0..SkillSlotCount-1
-    /// — the POSITION owns the color (position 0 = whichever skill is equipped first, etc.),
-    /// consistent regardless of what kind of skill (tree-based or a Standard built-in move)
-    /// happens to occupy it. USS classes are `.skill-ring-color-0` etc. (see BattleHUD.uss) — only
-    /// the first few positions are reachable at low tiers (SkillSlotCapacity's T1 cap = 2), the
-    /// rest are forward-looking for higher tiers, wrapping via `% SkillRingColorCount`.
-    /// </summary>
-    private const int SkillRingColorCount = 7;
 
     /// <summary>
     /// Fires with the clicked player slot index whenever a nameplate's radial gauge ring is
@@ -381,6 +372,14 @@ public class BattleHUDController : MonoBehaviour
     public event Action EndTurnClicked;
 
     /// <summary>
+    /// Fires from the always-visible-during-the-player's-turn Flee button (2026-08-10, user-
+    /// directed — opposite side of End Turn, ~80% success rate: BattleConfig.FleeSuccessChance).
+    /// Same "just a request flag, BattleManager.PlayerTurn's own loop resolves it" pattern as
+    /// EndTurnClicked — see BattleManager's _fleeRequested field.
+    /// </summary>
+    public event Action FleeClicked;
+
+    /// <summary>
     /// Fires on a pointer-down that lands directly on the empty Stage background — not on a
     /// creature, an orb, or any other Stage child, all of which either StopPropagation (orbs) or
     /// are checked by `evt.target` here (2026-08-06, user-directed: "clicking outside of that
@@ -391,6 +390,7 @@ public class BattleHUDController : MonoBehaviour
     public event Action StageBackgroundClicked;
 
     private Button _endTurnButton;
+    private Button _fleeButton;
 
     /// <summary>
     /// Per-slot "already acted this turn" flag (2026-08-06, user-directed — see DECISIONS.md ->
@@ -573,6 +573,12 @@ public class BattleHUDController : MonoBehaviour
         _endTurnButton.clicked += () => EndTurnClicked?.Invoke();
         _endTurnButton.style.display = DisplayStyle.None;
 
+        // Opposite side of End Turn (2026-08-10, user-directed) — same visibility lifecycle,
+        // driven by BattleManager via SetFleeButtonVisible alongside SetEndTurnButtonVisible.
+        _fleeButton = _root.Q<Button>("FleeButton");
+        _fleeButton.clicked += () => FleeClicked?.Invoke();
+        _fleeButton.style.display = DisplayStyle.None;
+
         _battleLogScrollView = _root.Q<ScrollView>("BattleLogScrollView");
         _battleLogContent = _root.Q<VisualElement>("BattleLogContent");
 
@@ -683,6 +689,14 @@ public class BattleHUDController : MonoBehaviour
         np.BurstIcon = burstIcon;
         np.BurstCounter = burstCounter;
 
+        // 2026-08-09 follow-up — user: "i tried using the regen ability... the buff icon shows
+        // but no hover over description. Need one for that... anything in that bar that would
+        // indicate a multi turn output should have the hoverover." Regen/Burst never had tooltip
+        // wiring at all (unlike the generic StatusIcons pool below) — text is set alongside the
+        // icon's own display/counter in SetRegenStatus/SetBurstStatus so it's always current.
+        _tooltip.RegisterHover(regenIcon, () => np.RegenTooltipText);
+        _tooltip.RegisterHover(burstIcon, () => np.BurstTooltipText);
+
         // Generic status-effect icon pool (2026-08 follow-up — see NameplateRefs' own doc
         // comment). Letter/color/tooltip are all set dynamically by RefreshStatusIcons since,
         // unlike Regen/Burst, any of the 28 StatusEffectType values could occupy a given slot.
@@ -712,10 +726,18 @@ public class BattleHUDController : MonoBehaviour
 
         var letterLabel = new Label();
         letterLabel.AddToClassList("nameplate-buff-icon-label");
+        // Decorative — same reasoning as BuildNameplateBarRow's fill element (2026-08-09 follow-up
+        // — user: "hovering over the buffs or debuffs on both player and enemy are both not
+        // showing up"). .nameplate-buff-icon-label is absolutely positioned covering the ENTIRE
+        // icon, so without this it — not `icon` — was the actual pick target, and HudTooltip's
+        // RegisterHover(icon, ...) never fired. `icon` (its parent) is the intended, unambiguous
+        // hover target.
+        letterLabel.pickingMode = PickingMode.Ignore;
         icon.Add(letterLabel);
 
         var counter = new Label();
         counter.AddToClassList("nameplate-buff-icon-counter");
+        counter.pickingMode = PickingMode.Ignore; // same reasoning as letterLabel above
         icon.Add(counter);
 
         parent.Add(icon);
@@ -751,10 +773,12 @@ public class BattleHUDController : MonoBehaviour
 
         var letterLabel = new Label(letter);
         letterLabel.AddToClassList("nameplate-buff-icon-label");
+        letterLabel.pickingMode = PickingMode.Ignore; // preventive — matches the identical fix on BuildStatusIconSlot's labels, in case a hover tooltip is ever registered on RegenIcon/BurstIcon
         icon.Add(letterLabel);
 
         var counter = new Label();
         counter.AddToClassList("nameplate-buff-icon-counter");
+        counter.pickingMode = PickingMode.Ignore;
         icon.Add(counter);
 
         parent.Add(icon);
@@ -902,7 +926,12 @@ public class BattleHUDController : MonoBehaviour
             np.StatusIcons[i].style.display = DisplayStyle.Flex;
             np.StatusIconLabels[i].text = instance.Type.ToString().Substring(0, 1);
             np.StatusIconCounters[i].text = instance.TurnsRemaining.ToString();
-            np.StatusIconTooltipText[i] = $"{instance.Type} ({entry.Category})\n{instance.TurnsRemaining} turn{(instance.TurnsRemaining == 1 ? "" : "s")} remaining";
+            // 2026-08-09 follow-up — user report of no debuff hover text turned out to be the same
+            // HudTooltip off-screen bug (fixed there), not missing wiring — this was already built.
+            // Added the Buff/Debuff label here since StatusEffectCatalog.Entry.IsPositive was
+            // already available and unused in this string — no new/invented status content.
+            string polarity = entry.IsPositive ? "Buff" : "Debuff";
+            np.StatusIconTooltipText[i] = $"{instance.Type} ({polarity} · {entry.Category})\n{instance.TurnsRemaining} turn{(instance.TurnsRemaining == 1 ? "" : "s")} remaining";
 
             foreach (string c in StatusCategoryColorClasses) np.StatusIcons[i].RemoveFromClassList(c);
             np.StatusIcons[i].AddToClassList(StatusCategoryColorClasses[(int)entry.Category]);
@@ -1172,14 +1201,21 @@ public class BattleHUDController : MonoBehaviour
             // off _playerSkillSlotSkills by the PointerEnterEvent handler registered in Awake —
             // nothing to set here beyond keeping that array current, which the line above already does.
 
-            // Lettering (2026-08 follow-up — see _playerSkillSlotLabels' doc comment): shows the
-            // equipped skill's own SkillName, empty for a locked slot.
-            _playerSkillSlotLabels[slotIndex][ring].text = skill != null ? skill.SkillName : string.Empty;
+            // Lettering (2026-08-10 follow-up — user: "no names of skills should be there... only
+            // during the hover over... and the letter that the skill has like C1, C2, etc." A full
+            // 12-skill loadout's real SkillName strings visibly overlapped/crowded the small
+            // clock-face orbs; SkillLabelFormatter is the same short-code source the Party menu's
+            // skill web/equip wheel already used, so both screens can't diverge again). Empty for
+            // a locked slot; full name/description still lives in the hover tooltip only.
+            _playerSkillSlotLabels[slotIndex][ring].text = skill != null ? SkillLabelFormatter.GetShortLabel(skill, skillDatabase) : string.Empty;
 
-            // Fill/border color owned by RING POSITION, not species PrimalType (2026-08 follow-up
-            // — user-directed: "select whatever colors you see fit for those" — see
-            // SkillRingColorCount's doc comment for why position-owned, matching A/C/H/R/K).
-            slot.EnableInClassList($"skill-ring-color-{ring % SkillRingColorCount}", skill != null);
+            // Fill/border color is the skill's own TREE color (2026-08-09 follow-up — user: "i want
+            // the skill wheel in skill tree menu to sync up with the battle scene... matching
+            // colors" — supersedes the original ring-POSITION-owned scheme this slot used, see
+            // SkillTreeColor's own doc comment). SkillTreeColor is the one shared color source for
+            // the Party menu's skill web, its equip wheel, and this battle ring — none has its own
+            // independent palette anymore.
+            SkillTreeColor.ApplyVisual(slot, skill?.TreeType);
         }
     }
 
@@ -1282,6 +1318,12 @@ public class BattleHUDController : MonoBehaviour
         _endTurnButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
     }
 
+    /// <summary>Shows/hides the Flee button (2026-08-10, user-directed), same lifecycle as SetEndTurnButtonVisible — visible only during the player's own turn.</summary>
+    public void SetFleeButtonVisible(bool visible)
+    {
+        _fleeButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
     /// <summary>
     /// Shows/updates/hides a player's Regen status icon and its bottom-right countdown subscript
     /// (2026-08-06, user-directed — see DECISIONS.md -> [Combat]: "a countdown counter is better
@@ -1293,6 +1335,11 @@ public class BattleHUDController : MonoBehaviour
         bool active = turnsRemaining > 0;
         _playerNameplates[slotIndex].RegenIcon.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
         _playerNameplates[slotIndex].RegenCounter.text = active ? turnsRemaining.ToString() : "";
+        // BattleConfig.RegenHealPerTurn is the real, locked heal-per-tick value (see BattleManager's
+        // ApplyRegen call site) — not invented text, same number the actual tick applies.
+        _playerNameplates[slotIndex].RegenTooltipText = active
+            ? $"Regen\nHeals {BattleConfig.RegenHealPerTurn} HP per turn\n{turnsRemaining} turn{(turnsRemaining == 1 ? "" : "s")} remaining"
+            : string.Empty;
     }
 
     /// <summary>Shows/updates/hides a player's Evolution Burst status icon and countdown — same pattern as SetRegenStatus (2026-08-06, wiring EvolutionBurstSystem into the live loop). turnsRemaining &lt;= 0 hides the icon.</summary>
@@ -1301,6 +1348,12 @@ public class BattleHUDController : MonoBehaviour
         bool active = turnsRemaining > 0;
         _playerNameplates[slotIndex].BurstIcon.style.display = active ? DisplayStyle.Flex : DisplayStyle.None;
         _playerNameplates[slotIndex].BurstCounter.text = active ? turnsRemaining.ToString() : "";
+        // No specific in-battle effect exists to describe yet — EvolutionBurstSystem's
+        // ApplyBurstEffects is still status-only/undesigned (see DECISIONS.md's own "Open note"
+        // entry) — so this deliberately doesn't claim a stat bonus that doesn't exist.
+        _playerNameplates[slotIndex].BurstTooltipText = active
+            ? $"Evolution Burst\nActive — {turnsRemaining} turn{(turnsRemaining == 1 ? "" : "s")} remaining"
+            : string.Empty;
     }
 
     /// <summary>

@@ -107,4 +107,12 @@ public static class BattleConfig
     /// nothing in the Directive specifies a scaling curve yet. TODO: pending NumericalCalibration.md.
     /// </summary>
     public const int AuraRewardOnWin = 15;
+
+    /// <summary>
+    /// Chance a Flee attempt succeeds (2026-08-10, user-directed: "lets make it like 80% success
+    /// rate for now"). Rolled once per click via BattleManager.PlayerTurn — a failed attempt still
+    /// consumes the acting side's whole turn (same as End Turn), same convention as every other
+    /// "uses the turn regardless of outcome" move in this file. Placeholder value, not playtested.
+    /// </summary>
+    public const float FleeSuccessChance = 0.8f;
 }

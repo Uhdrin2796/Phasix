@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -31,5 +33,54 @@ public static class SkillTreeUnlockSystem
     private static void Unlock(PhasixRuntimeData phasix, SkillTreeType treeType)
     {
         if (!phasix.unlockedTreeTypes.Contains(treeType)) phasix.unlockedTreeTypes.Add(treeType);
+    }
+
+    /// <summary>All 18 GDD taxonomy trees (every SkillTreeType value except Standard, which isn't part of the taxonomy — see that value's own doc comment), in enum-declaration order.</summary>
+    private static readonly SkillTreeType[] AllGddTrees = System.Enum.GetValues(typeof(SkillTreeType))
+        .Cast<SkillTreeType>()
+        .Where(t => t != SkillTreeType.Standard)
+        .ToArray();
+
+    /// <summary>
+    /// Single source of truth for "which of the 18 GDD skill trees count as unlocked right now" —
+    /// used by BOTH the Party menu's skill web view (display) and SkillLoadoutSystem's equip gate
+    /// (2026-08, added alongside the debug tier control), so a tier override can never desync the
+    /// two (display shows a tree as unlocked but equipping from it still silently fails).
+    ///
+    /// Checked in priority order:
+    /// 1. DebugUnlockAllTrees (2026-08-09 follow-up — user: "can we also have an unlock all
+    ///    debug so im able to see everything?") — every one of the 18 GDD trees, unconditionally,
+    ///    ignoring both the real unlockedTreeTypes and any DebugTierOverride/species tree list.
+    ///    Independent of tier on purpose: this is purely "let me see every tree," while
+    ///    DebugTierOverride separately still governs equip SLOT capacity.
+    /// 2. DebugTierOverride — simulates what WOULD be unlocked at that tier by reusing the exact
+    ///    same selection WildSpawnSystem.SeedInitialSkills already uses for real seeding —
+    ///    speciesData.AvailableTreeTypes.Take(SkillSlotCapacity.GetTreeCount(tier)) — rather than
+    ///    inventing a second, independent ordering.
+    /// 3. Otherwise, the real, save-persisted unlockedTreeTypes.
+    ///
+    /// Neither debug branch reads or writes the real unlockedTreeTypes list, so both are always
+    /// safe to toggle repeatedly while debugging — nothing here can leak into persisted progression.
+    ///
+    /// SkillTreeType.Standard is intentionally never included/checked here — it isn't one of the
+    /// 18 GDD taxonomy trees (see SkillTreeType.Standard's own doc comment) and is always available
+    /// regardless of tier or unlock state; callers must not gate Standard against this list.
+    /// </summary>
+    public static IReadOnlyList<SkillTreeType> GetEffectiveUnlockedTrees(PhasixRuntimeData runtime)
+    {
+        if (runtime == null) return System.Array.Empty<SkillTreeType>();
+
+        if (runtime.DebugUnlockAllTrees) return AllGddTrees;
+
+        if (runtime.DebugTierOverride.HasValue)
+        {
+            if (runtime.speciesData == null || runtime.speciesData.AvailableTreeTypes == null)
+                return System.Array.Empty<SkillTreeType>();
+
+            int treeCount = SkillSlotCapacity.GetTreeCount(runtime.DebugTierOverride.Value);
+            return runtime.speciesData.AvailableTreeTypes.Take(treeCount).ToList();
+        }
+
+        return runtime.unlockedTreeTypes;
     }
 }

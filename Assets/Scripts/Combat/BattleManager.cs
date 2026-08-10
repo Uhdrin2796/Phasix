@@ -49,6 +49,13 @@ using UnityEngine.SceneManagement;
 /// detection + log only this pass, not their full numeric effects (a separately-scoped follow-up).
 /// AuraStatAllocationSystem remains a post-battle progression system (see the Aura Allocation
 /// screen shown from EndBattle on a Won outcome), not a mid-battle mechanic.
+///
+/// 2026-08-10 follow-up (see DECISIONS.md -> [Combat]): the old pre-battle Flee/Engage choice
+/// (EncounterPromptController) is retired — WildEncounterCreature now auto-engages on contact.
+/// Fleeing moved INTO the battle itself: a Flee button opposite End Turn, ~80% success
+/// (BattleConfig.FleeSuccessChance) rolled once per click in PlayerTurn. Success ends the battle
+/// early via EndBattle(BattleOutcome.Fled) — same manual-outcome pattern Capture already uses for
+/// Won; failure still consumes the whole turn, same as every other single-beat move in this file.
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -79,6 +86,10 @@ public class BattleManager : MonoBehaviour
     private int _pendingCreatureClickSlot = -1;
     private bool _endTurnRequested;
     private bool _backgroundClickRequested;
+
+    // Flee button (2026-08-10, user-directed — opposite side of End Turn, ~80% success rate).
+    // Same "just a request flag consumed by PlayerTurn's own loop" pattern as _endTurnRequested.
+    private bool _fleeRequested;
 
     private Camera _overworldCamera;
     private int _overworldCullingMask;
@@ -154,6 +165,7 @@ public class BattleManager : MonoBehaviour
         // place (the coroutine) instead of splitting it across event callbacks.
         BattleHUDController.Instance.PlayerCreatureClicked += slot => _pendingCreatureClickSlot = slot;
         BattleHUDController.Instance.EndTurnClicked += () => _endTurnRequested = true;
+        BattleHUDController.Instance.FleeClicked += () => _fleeRequested = true;
         BattleHUDController.Instance.StageBackgroundClicked += () => _backgroundClickRequested = true;
 
         StartCoroutine(RunBattleLoop());
@@ -256,9 +268,11 @@ public class BattleManager : MonoBehaviour
         foreach (BattleParticipant p in _state.PlayerSide) p.HasActedThisTurn = false;
 
         _endTurnRequested = false;
+        _fleeRequested = false;
         _pendingCreatureClickSlot = -1;
         _backgroundClickRequested = false;
         BattleHUDController.Instance.SetEndTurnButtonVisible(true);
+        BattleHUDController.Instance.SetFleeButtonVisible(true);
 
         // Auto-open the first living party member's move wheel (2026-08 follow-up — user-directed:
         // "instead of having to click the wheel open, Auto open the phasix that is first in the
@@ -270,14 +284,14 @@ public class BattleManager : MonoBehaviour
 
         int activeSlot = -1; // -1 = no wheel currently open
 
-        while (!_endTurnRequested)
+        while (!_endTurnRequested && !_fleeRequested)
         {
             if (_state.EnemySide.TrueForAll(e => !e.IsAlive)) yield break; // wiped mid-turn — battle is already over, TryEndBattle picks this up right after PlayerTurn returns
 
             if (activeSlot < 0)
             {
-                yield return new WaitUntil(() => _endTurnRequested || _pendingCreatureClickSlot >= 0);
-                if (_endTurnRequested) break;
+                yield return new WaitUntil(() => _endTurnRequested || _fleeRequested || _pendingCreatureClickSlot >= 0);
+                if (_endTurnRequested || _fleeRequested) break;
 
                 // A background click that landed while nothing was selected is a no-op (nothing
                 // to close) — clear it here so it can't linger and instantly close the wheel
@@ -318,11 +332,12 @@ public class BattleManager : MonoBehaviour
             int openedSlot = activeSlot;
             yield return new WaitUntil(() =>
                 _endTurnRequested ||
+                _fleeRequested ||
                 _playerActionChosen ||
                 _backgroundClickRequested ||
                 (_pendingCreatureClickSlot >= 0 && _pendingCreatureClickSlot != openedSlot));
 
-            if (_endTurnRequested) break;
+            if (_endTurnRequested || _fleeRequested) break;
 
             if (_backgroundClickRequested)
             {
@@ -357,7 +372,31 @@ public class BattleManager : MonoBehaviour
         }
 
         BattleHUDController.Instance.SetEndTurnButtonVisible(false);
+        BattleHUDController.Instance.SetFleeButtonVisible(false);
         BattleHUDController.Instance.HideMoveSelection();
+
+        // Flee resolution (2026-08-10, user-directed — ~80% success rate, BattleConfig.
+        // FleeSuccessChance). A successful attempt ends the battle immediately, same manual-
+        // outcome pattern the Capture built-in move already uses (_battleEndedEarly + EndBattle).
+        // A FAILED attempt still consumes the whole turn — same "uses the turn regardless of
+        // outcome" convention as every other single-beat move — so it just falls through to the
+        // normal end-of-turn ticks/enemy-turn transition below, exactly as if End Turn was pressed.
+        if (_fleeRequested)
+        {
+            bool fleeSuccess = Random.value < BattleConfig.FleeSuccessChance;
+            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                fleeSuccess ? "Got away safely!" : "Couldn't get away!", BattleConfig.AutoMessageDurationSeconds));
+
+            if (fleeSuccess)
+            {
+                BattleHUDController.Instance.AppendBattleLog("Fled from battle!");
+                _battleEndedEarly = true;
+                yield return StartCoroutine(EndBattle(BattleOutcome.Fled));
+                yield break;
+            }
+
+            BattleHUDController.Instance.AppendBattleLog("Failed to flee!");
+        }
 
         // Regen and Evolution Burst both tick once per player turn, for EVERY alive party member
         // (not just whoever acted this turn) — see TickPlayerRegen/TickPlayerBurst.
@@ -950,14 +989,18 @@ public class BattleManager : MonoBehaviour
     /// (BattleConfig.AuraRewardOnWin) and blocks on the read-only post-battle summary screen
     /// (2026-08 session — reworked from the old spend-here-and-now Aura Allocation screen per
     /// user direction: Aura spending moved to the new Tab-key overworld menu instead; see
-    /// DECISIONS.md -> [Combat]) before hiding the HUD/unloading the scene. A Lost outcome skips
-    /// straight to cleanup, same as before this screen existed.
+    /// DECISIONS.md -> [Combat]) before hiding the HUD/unloading the scene. Lost and Fled outcomes
+    /// both skip straight to cleanup, same as before this screen existed — a successful Flee is
+    /// deliberately NOT treated as a Loss (see EventBus.OnBattleFled's own doc comment): zero
+    /// currency/item cost, matching CLAUDE.md's "Loss state" rule only actually applying to a real
+    /// Lost outcome.
     /// </summary>
     private IEnumerator EndBattle(BattleOutcome outcome)
     {
         var result = new BattleResult(outcome == BattleOutcome.Won, _state.PlayerSide, _state.EnemySide);
 
         if (outcome == BattleOutcome.Won) EventBus.Raise_BattleWon(result);
+        else if (outcome == BattleOutcome.Fled) EventBus.Raise_BattleFled(result);
         else EventBus.Raise_BattleLost(result);
 
         if (outcome == BattleOutcome.Won)

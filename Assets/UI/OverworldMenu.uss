@@ -38,6 +38,7 @@
     border-color: rgb(200, 80, 80);
     padding: 4px 10px;
     margin: 0;
+    margin-top: 4px;
 }
 
 .overworld-menu-root {
@@ -252,13 +253,16 @@
     border-color: rgb(90, 90, 100);
 }
 
-/* --- Skill tree carousel (2026-08 follow-up #6 — user: "make it so its a vertical tree that
-   allows a player to swipe left and right to see the tree. Similar to how skyrims skill tree
-   mechanic is.") Replaces the flat grouped tray (.skill-tray-label/.skill-tray-scroll/
-   .skill-tray-row/.skill-tray-group-label, all removed here) with one paged vertical node column
-   per SkillTreeType — see OverworldMenuController.BuildSkillArea's own doc comment. */
+/* --- Skill web view (2026-08 follow-up #8 — prototype of the user's Evolution Web concept,
+   mockup: evolution_web.html, built against the skill tree first since it has no Phase 4 data
+   blocker — see OverworldMenuController.BuildSkillArea's own doc comment and DECISIONS.md ->
+   [UI]). Replaces the paged carousel this same file previously shipped and retired the same
+   session ("this looks awful") — that section's classes (.tree-stage/.tree-strip/.tree-page/
+   .tree-page-empty-label/.tree-node-column/.tree-node-connector) are gone. .tree-nav-button/
+   .tree-nav-label are KEPT and reused for the new debug tier stepper + Reset View button — same
+   look, different purpose. */
 
-.tree-nav-header {
+.web-header {
     flex-direction: row;
     align-items: center;
     justify-content: center;
@@ -284,84 +288,60 @@
     -unity-text-align: middle-center;
 }
 
-/* Fixed-size viewport clipping .tree-strip — OverworldMenuController's TreeStageWidth/Height
-   constants must match these px values (kept in sync manually, see that constant's own comment). */
-.tree-stage {
-    width: 260px;
-    height: 200px;
+/* Fixed-size clipped viewport — OverworldMenuController's WebStageWidth/Height constants must
+   match these px values (kept in sync manually, same convention the old carousel used). The
+   pannable/zoomable .web-world lives inside, sized to the full logical node-grid extent. */
+.web-stage {
+    width: 640px;
+    height: 340px;
     overflow: hidden;
     align-self: center;
+    background-color: rgba(6, 8, 11, 0.55);
+    border-width: 1px;
+    border-color: rgb(60, 60, 70);
+    /* No "cursor: pan" here — confirmed via Unity Manual (USS common properties, Cursor section):
+       cursor KEYWORDS only work in the Editor UI, not runtime UI (this is a scene UIDocument).
+       A custom pan-cursor texture would be needed for a real runtime cursor change; not worth it
+       for a placeholder-content view. */
 }
 
-/* Positioned via inline style.left by the controller (PageTo/SetStripPosition) to center the
-   current page; width is also set in code (TreePageWidth * page count). transition-property/
-   duration give page-to-page changes an animated slide — the controller zeroes duration during a
-   live drag so the strip tracks the pointer 1:1, then restores it (StyleKeyword.Null, falling
-   back to this rule) on release so the commit/snap-back animates smoothly. */
-.tree-strip {
+/* Width/height set in code (WorldWidth/WorldHeight). Pan/zoom are applied as inline
+   style.translate/style.scale by the controller (ApplyWorldTransform) — a genuine transform, not
+   a layout position change, so it cascades to every child including the Painter2D-drawn edge
+   overlay's own content (verified live before this was built on top of the assumption). */
+.web-world {
     position: absolute;
+    left: 0;
     top: 0;
-    flex-direction: row;
-    transition-property: left;
-    transition-duration: 0.2s;
-    transition-timing-function: ease-out;
 }
 
-/* Narrower than .tree-stage (210px in a 260px stage) so the previous/next page's edges peek in —
-   confirmed via AskUserQuestion: "show a tree as a page, with the other adjacent trees slightly
-   showing." */
-.tree-page {
-    width: 210px;
-    height: 200px;
-    align-items: center;
+.web-nodes-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
 }
 
-.tree-page-empty-label {
-    font-size: 12px;
-    color: rgb(140, 140, 148);
-    -unity-text-align: middle-center;
-    white-space: normal;
-    margin-top: 16px;
-    padding: 0 10px;
+/* No dedicated visual rules beyond the shared .skill-slot-placeholder base — per-tree color is
+   applied procedurally (OverworldMenuController.GetTreeColor) as inline style, not a USS class,
+   so a marker class here is mostly semantic/for future tuning. */
+.skill-web-node {
 }
 
-.tree-node-column {
-    width: 100%;
-    align-items: center;
-}
-
-/* Straight placeholder connector between vertically stacked nodes — a plain background bar, not
-   DragLineVisual's Painter2D line (that class is built for the arbitrary-angle drag-to-equip
-   line; a fixed vertical segment between stacked nodes doesn't need it). No real branching/
-   prerequisite data exists yet (SkillData.cs), so every tree renders as one straight chain for
-   now — "the finer details of what unlocks into what" is still pending real skill-tree design. */
-.tree-node-connector {
-    width: 3px;
-    height: 14px;
-    background-color: rgb(110, 110, 120);
-}
-
-/* Tray icons reuse the same 32x32 orb sizing as the equipped ring (.skill-slot-placeholder) so
-   dragging one into a ring slot doesn't require any size transition — deliberately NOT shrunk
-   smaller, per the text-legibility floor this menu holds every element to. .skill-slot-placeholder
-   itself is `position: absolute` (correct for the ring, wrong for a flex-wrapped tray row) — the
-   controller sets `position: Relative` as an inline style on each tray icon to override it
-   (established project convention: an inline style always wins over any stylesheet rule,
-   sidestepping cascade-specificity ambiguity — see BattleHUDController.ApplyEvoVisual's own note
-   on this). Color itself (.skill-ring-color-N) is applied by the controller per skill identity,
-   not by this class — see OverworldMenuController.ApplySkillColor. */
+/* Tray/web icons reuse the same 32x32 orb sizing as the equipped ring (.skill-slot-placeholder).
+   .skill-slot-placeholder itself is `position: absolute` (correct here — nodes are absolutely
+   positioned within .web-world by design, unlike the old flex-wrapped tray). Color itself is
+   applied by the controller per skill/tree identity, not by this class. */
 .skill-tray-icon {
     margin: 4px;
 }
 
 /* A skill currently equipped elsewhere on the wheel stays visible in its tree (2026-08 follow-up
    #7 — user: "it shouldnt disappear from the tree, it should act more as a copy from the tree
-   assuming its unlocked") — dimmed and outlined so it still reads as "already placed" rather than
-   an identical, freely-equippable duplicate. Dragging it again is harmless (SkillLoadoutSystem
+   assuming its unlocked") — outlined so it still reads as "already placed" rather than an
+   identical, freely-equippable duplicate. Dragging it again is harmless (SkillLoadoutSystem
    already refuses to equip the same skill into two slots), this is purely a visual cue. */
 .skill-tray-icon-equipped {
-    opacity: 0.55;
-    border-width: 2px;
+    border-width: 3px;
     border-color: rgb(255, 255, 255);
 }
 

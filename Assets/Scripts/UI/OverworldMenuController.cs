@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -58,11 +59,34 @@ using UnityEngine.UIElements;
 /// to build for them (BuiltInMoveLetters/BuiltInMoveColorClasses) are gone.
 ///
 /// 2026-08 follow-up #5: the tray is now GROUPED by SkillTreeType (a header + wrapped icon row per
-/// tree, TrayDisplayTreeOrder) instead of one flat wrapped list of the whole catalog — user: "when
+/// tree, SkillTreeColor.DisplayOrder) instead of one flat wrapped list of the whole catalog — user: "when
 /// click into the skill menu... everything is just listed out... id like them to be on their own
 /// tree. we can do the finer details of what unlocks into what later but id like to be able to
 /// separate them out already." Pure display grouping by each skill's EXISTING TreeType tag — no
 /// new unlock/progression logic, real skill-tree content is still pending (CLAUDE.md).
+///
+/// 2026-08 follow-up #6/#7 (superseded, see the pan/zoom web entry below): the flat grouped tray
+/// was briefly replaced by a Skyrim-style PAGED carousel (buttons/arrows/drag-swipe between one
+/// tree per page). Retired the same session it shipped — user, after live use: "we need to fix
+/// the skill tree look... this looks awful." Kept only as changelog/decisions history.
+///
+/// 2026-08 follow-up #8 (current): the tray is now a free pan/zoom WEB VIEW, prototyping the
+/// user's original Evolution Web concept (mockup: evolution_web.html) against the skill tree
+/// first — no Phase 4 data blocker here, unlike Evolution — see DECISIONS.md -> [UI] for the full
+/// architecture writeup. Every skill tree is a COLUMN (SkillTreeColor.DisplayOrder order, Standard
+/// first), its skills a vertical row of nodes connected by a straight line, all drawn by
+/// SkillWebEdgeVisual (Painter2D, same convention as DragLineVisual) sitting behind the real
+/// VisualElement nodes so native hover/click/HudTooltip keeps working. A tree not yet unlocked
+/// (SkillTreeUnlockSystem.GetEffectiveUnlockedTrees) renders as a dim, non-interactive silhouette
+/// column instead of a fully browsable one — reusing the mockup's Discovered/Sighted visual
+/// language, driven by tier-gating rather than true fog-of-war (skills aren't "encountered in the
+/// wild"). SkillLoadoutSystem.TryEquip/TryEquipAt now also enforce this same unlock check for
+/// real, not just cosmetically in the UI (closes a gap found while building this — previously
+/// nothing checked unlockedTreeTypes at the equip layer at all). A debug tier stepper lets the
+/// creature's EFFECTIVE tier (PhasixRuntimeData.DebugTierOverride) be walked 1-5 live to preview
+/// unlocks/slot capacity without a real (Phase 4, unbuilt) evolution — GetEffectiveUnlockedTrees
+/// is the single source of truth both this view and the equip gate read, so the debug override
+/// never desyncs "looks unlocked" from "actually equippable."
 ///
 /// Save tab: 3 slots, click to overwrite (SaveSystem.Save via GameManager.SaveToSlot) — save-only,
 /// no explicit "load a different slot" UI (auto-continue from the newest slot happens on boot,
@@ -70,7 +94,7 @@ using UnityEngine.UIElements;
 ///
 /// Always-visible debug "New Game" button lives OUTSIDE the Tab-toggled menu root (DebugBar in
 /// OverworldMenu.uxml) so it renders whether or not the menu is open — calls
-/// GameManager.Instance.ResetToNewGame().
+/// GameManager.Instance?.ResetToNewGame().
 ///
 /// Text sizing floor (2026-08 follow-up — user: "make sure font size is similar to standard font
 /// size like whats in the battle log"): every label/button in OverworldMenu.uss is >= 13px body /
@@ -80,36 +104,16 @@ using UnityEngine.UIElements;
 public class OverworldMenuController : MonoBehaviour
 {
     [Header("Skill Resolution")]
-    [Tooltip("Assign Assets/Data/Skills/SkillDatabase.asset — resolves equipped/learned skill guids to SkillData for the Party detail view's skill ring and tray.")]
+    [Tooltip("Assign Assets/Data/Skills/SkillDatabase.asset — resolves equipped/learned skill guids to SkillData for the Party detail view's skill ring and web.")]
     [SerializeField] private SkillDatabase _skillDatabase;
 
-    // Skill-identity color palette — BattleHUD.uss defines .skill-ring-color-0..6. Unlike battle
-    // (where the class is picked by ring POSITION), here it's picked by a stable hash of the
-    // skill's own GUID, so a given skill always shows the same color everywhere it appears (ring
-    // orb or tray icon), regardless of which slot it currently occupies.
-    private static readonly string[] SkillColorClasses =
-    {
-        "skill-ring-color-0", "skill-ring-color-1", "skill-ring-color-2", "skill-ring-color-3",
-        "skill-ring-color-4", "skill-ring-color-5", "skill-ring-color-6",
-    };
+    [Header("Debug")]
+    [Tooltip("Species spawned by the DEBUG: Add Party Member button — deliberately a different species than GameManager's Fallback Starter (Test_FireType) so a debug-added member looks/plays distinctly from slot 0. Assign a test asset from Assets/Data/Species/.")]
+    [SerializeField] private PhasixData _debugPartyMemberSpecies;
 
-    // 2026-08 follow-up #5 — user: "everything is just listed out... id like them to be on their
-    // own tree." Display order for the tray's per-tree groups — Standard first (the 5 always-
-    // available built-in moves, see BuiltInMoveType, are the closest thing to a baseline every
-    // creature has), then the 18 GDD tree types in their PhasixEnums.cs declaration order. Groups
-    // with zero unequipped skills for this creature are simply skipped (RefreshSkillArea), not
-    // shown empty. This is a pure DISPLAY grouping by each skill's existing TreeType tag — which
-    // specific skill unlocks into which other is still pending real skill-tree design (CLAUDE.md
-    // "Actual skill content" pending item), not something this array decides.
-    private static readonly SkillTreeType[] TrayDisplayTreeOrder =
-    {
-        SkillTreeType.Standard,
-        SkillTreeType.Utility, SkillTreeType.Aura, SkillTreeType.Passive, SkillTreeType.Synergy,
-        SkillTreeType.Reaction, SkillTreeType.Bond, SkillTreeType.Aspect, SkillTreeType.Resource,
-        SkillTreeType.Corruption, SkillTreeType.Mirror, SkillTreeType.Evolve, SkillTreeType.Territory,
-        SkillTreeType.Memory, SkillTreeType.Fusion, SkillTreeType.Personality, SkillTreeType.Typing,
-        SkillTreeType.Bastion, SkillTreeType.Phantom,
-    };
+    // Column display order for the skill web now lives on SkillTreeColor.DisplayOrder (2026-08-09
+    // follow-up — shared with the battle scene's skill ring, see that class's own doc comment) —
+    // one canonical order for both layout here and color everywhere a skill is shown.
 
     // Full 12-position wheel, same radius/clock-hour math as BattleHUDController's own skill ring
     // (SkillSlotCount/SkillSlotRadius there) — user: "the skill wheel in the party configurator
@@ -131,29 +135,32 @@ public class OverworldMenuController : MonoBehaviour
     // WheelRadius (95) plus an orb's own half-size (16) on every side.
     private const float WheelCenter = 120f;
 
-    // 2026-08 follow-up #6 — user: "make it so its a vertical tree that allows a player to swipe
-    // left and right to see the tree. Similar to how skyrims skill tree mechanic is." TreeStage is
-    // the visible viewport; TreePageWidth is deliberately narrower than TreeStageWidth so the
-    // previous/next tree pages peek in at the edges (confirmed via AskUserQuestion: "show a tree
-    // as a page, with the other adjacent trees slightly showing"). Matches OverworldMenu.uss's
-    // .tree-stage/.tree-page px values — keep both in sync if either changes.
-    private const float TreeStageWidth = 260f;
-    private const float TreeStageHeight = 200f;
-    private const float TreePageWidth = 210f;
+    // 2026-08 follow-up #8 — skill web view. WorldWidth/Height are the logical full extent of the
+    // 19-column x 5-row node grid (every GDD tree now has exactly 5 placeholders, Standard has its
+    // 5 real built-ins — a uniform grid, no ragged columns). WebStageWidth/Height is the fixed,
+    // clipped viewport the player actually sees; the "world" container inside it is what pans
+    // (style.translate) and zooms (style.scale) — see BuildSkillArea's own comment for the
+    // transform-around-center math this depends on (verified live against a throwaway
+    // parent/child VisualElement pair before this was built on top of the assumption).
+    private const float WebColumnSpacing = 90f;
+    private const float WebRowSpacing = 56f;
+    private const float WebLeftPadding = 40f;
+    private const float WebTopPadding = 40f;
+    private const float WebNodeSize = 32f; // matches .skill-slot-placeholder's fixed size
+    private const float WebStageWidth = 640f;
+    private const float WebStageHeight = 340f;
+    private const float WebMinScale = 0.4f;
+    private const float WebMaxScale = 2.2f;
+    private const int WebMaxRowsPerColumn = 5;
+    private static readonly float WorldWidth = WebLeftPadding * 2f + SkillTreeColor.DisplayOrder.Length * WebColumnSpacing;
+    private static readonly float WorldHeight = WebTopPadding * 2f + WebMaxRowsPerColumn * WebRowSpacing;
 
     private VisualElement _root;
     private HudTooltip _tooltip;
     private bool _isOpen;
 
-    // Set by BuildSkillArea while the Party detail view is showing a skill tree carousel, cleared
-    // implicitly by the _partyDetailView.style.display guard in Update() once the player leaves
-    // that view — see Update()'s own comment for why this is polled (Keyboard.current, matching
-    // this file's existing Tab-key pattern) rather than a UI Toolkit KeyDownEvent registered on
-    // the long-lived _root (which would need manual unregister bookkeeping across every ShowDetail
-    // rebuild to avoid stacking duplicate handlers; polling sidesteps that entirely).
-    private System.Action<int> _treePageStepAction;
-
     private Button _debugNewGameButton;
+    private Button _debugAddPartyMemberButton;
     private VisualElement _menuRoot;
 
     private Button _tabButtonParty, _tabButtonSave, _tabButtonBag, _tabButtonOptions;
@@ -173,6 +180,9 @@ public class OverworldMenuController : MonoBehaviour
 
         _debugNewGameButton = _root.Q<Button>("DebugNewGameButton");
         _debugNewGameButton.clicked += () => GameManager.Instance?.ResetToNewGame();
+
+        _debugAddPartyMemberButton = _root.Q<Button>("DebugAddPartyMemberButton");
+        _debugAddPartyMemberButton.clicked += DebugAddPartyMember;
 
         _menuRoot = _root.Q<VisualElement>("OverworldMenuRoot");
 
@@ -206,16 +216,10 @@ public class OverworldMenuController : MonoBehaviour
             if (_isOpen) Close();
             else Open();
         }
-
-        // Left/Right arrow-key paging for the skill tree carousel (2026-08 follow-up #6) — only
-        // while the Party detail view is actually the visible one (_partyDetailView.style.display
-        // is toggled by ShowDetail/ShowRoster), so keys don't silently page an invisible/torn-down
-        // tree while the menu is closed or a different tab/view is showing.
-        if (_isOpen && _treePageStepAction != null && _partyDetailView.style.display == DisplayStyle.Flex && Keyboard.current != null)
-        {
-            if (Keyboard.current.leftArrowKey.wasPressedThisFrame) _treePageStepAction(-1);
-            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame) _treePageStepAction(1);
-        }
+        // No keyboard pan/zoom for the skill web (confirmed with user, 2026-08 follow-up #8) —
+        // mouse drag + wheel zoom only, matching the Evolution Web reference mockup exactly. This
+        // intentionally drops the old carousel's arrow-key paging; free-form pan/zoom has no clean
+        // keyboard equivalent that isn't its own separate feature.
     }
 
     private void Open()
@@ -259,6 +263,44 @@ public class OverworldMenuController : MonoBehaviour
             PhasixRuntimeData phasix = PartySystem.Instance != null ? PartySystem.Instance.GetSlot(i) : null;
             if (phasix != null) _partyCardContainer.Add(BuildRosterCard(phasix));
         }
+    }
+
+    /// <summary>
+    /// DEBUG: Add Party Member (2026-08-10 follow-up — user: "can you add a debug where it says:
+    /// new game to add a party member so i can test it out myself") — lets multi-Phasix scenarios
+    /// (skill web, battle skill ring, etc.) be tested without first winning a real capture. Spawns
+    /// via the same WildSpawnSystem.CreateWildInstance entry point every real creature goes
+    /// through (identical seeded unlockedTreeTypes/learnedSkillGuids/equippedSkillGuids), so it
+    /// exercises the real path rather than a hand-built shortcut. Uses _debugPartyMemberSpecies
+    /// (Test_SteamType by default) rather than GameManager's Fallback Starter species so a
+    /// debug-added member is visibly distinct from the slot-0 starter. No-ops with a console
+    /// warning if the party is already full (PartySystem.AddToParty returns -1) — mirrors
+    /// SeedFallbackStarter's own no-op-with-warning pattern for a missing species reference.
+    /// </summary>
+    private void DebugAddPartyMember()
+    {
+        if (_debugPartyMemberSpecies == null)
+        {
+            Debug.LogWarning("[OverworldMenuController] DEBUG: Add Party Member — no Debug Party Member Species assigned in the Inspector.");
+            return;
+        }
+
+        if (PartySystem.Instance == null)
+        {
+            Debug.LogWarning("[OverworldMenuController] DEBUG: Add Party Member — no PartySystem.Instance found.");
+            return;
+        }
+
+        PhasixRuntimeData runtime = WildSpawnSystem.CreateWildInstance(_debugPartyMemberSpecies, _skillDatabase);
+        int slot = PartySystem.Instance.AddToParty(runtime);
+        if (slot < 0)
+        {
+            Debug.LogWarning("[OverworldMenuController] DEBUG: Add Party Member — party is full.");
+            return;
+        }
+
+        Debug.Log($"[OverworldMenuController] DEBUG: Added {_debugPartyMemberSpecies.SpeciesName} to party slot {slot}.");
+        RefreshRoster();
     }
 
     private VisualElement BuildRosterCard(PhasixRuntimeData phasix)
@@ -388,23 +430,25 @@ public class OverworldMenuController : MonoBehaviour
 
     /// <summary>
     /// Builds the full 12-position skill wheel (replica of BattleHUDController's skill ring — see
-    /// the class doc comment) plus a scrollable tray of the ENTIRE SkillDatabase catalog below it.
-    /// All drag/drop/right-click state is local to this one call (closures over `runtime`/`tier`/
-    /// the wheel element arrays) since only one detail view is ever open at a time — rebuilt fresh
-    /// every ShowDetail call, same as the rest of this class.
+    /// the class doc comment) plus a pan/zoom skill WEB below it (2026-08 follow-up #8 — prototype
+    /// of the user's Evolution Web concept, built against the skill tree first since it has no
+    /// Phase 4 data blocker). All drag/pan/zoom/right-click state is local to this one call
+    /// (closures over `runtime`/`tier`/the wheel and world elements) since only one detail view is
+    /// ever open at a time — rebuilt fresh every ShowDetail call, same as the rest of this class.
+    ///
+    /// `maxSlots`/`effectiveTier` are MUTABLE locals, not fixed at build time — the debug tier
+    /// stepper can change PhasixRuntimeData.DebugTierOverride without leaving this view, so every
+    /// place that used to read a tier-derived value once now re-reads these each RefreshSkillArea
+    /// call, and every wheel slot's interactivity is checked at USE time (inside its own handler)
+    /// against the current maxSlots rather than decided once at BUILD time — otherwise a slot that
+    /// was tier-locked when the view first opened would never become usable after the debug
+    /// stepper raises the tier, even though its visual state (RefreshSkillArea's own loop) already
+    /// updates correctly.
     /// </summary>
     private VisualElement BuildSkillArea(PhasixRuntimeData runtime, int tier)
     {
-        // The wheel always renders all 12 physical equip positions (replica of battle's own,
-        // which does the same regardless of tier) but only `maxSlots` of them ever accept a
-        // skill — SkillLoadoutSystem.TryEquipAt already enforces this internally, but before this
-        // fix the UI gave no visual signal WHY a drop beyond the cap silently failed, reading as
-        // broken rather than tier-gated (2026-08 follow-up — user: "i cant drag and drop the new
-        // skills onto the open placeholders either, but i can swap them with the existing C1 and
-        // C2"). Slots at equip-index >= maxSlots now get a distinct .skill-slot-tier-locked look,
-        // no drag/right-click registration, and an explanatory hover tooltip instead. All 12
-        // become reachable once a creature hits Tier 5 (SkillSlotCapacity.GetActiveSlotRange).
-        int maxSlots = SkillSlotCapacity.GetActiveSlotRange(tier).max;
+        int maxSlots = SkillSlotCapacity.GetActiveSlotRange(runtime.DebugTierOverride ?? tier).max;
+        int effectiveTier = runtime.DebugTierOverride ?? tier;
 
         var column = new VisualElement();
         column.AddToClassList("detail-skill-column");
@@ -420,85 +464,170 @@ public class OverworldMenuController : MonoBehaviour
         var dragLine = new DragLineVisual { style = { display = DisplayStyle.None } };
         ringArea.Add(dragLine);
 
-        // 2026-08 follow-up #6 — user: "make it so its a vertical tree that allows a player to
-        // swipe left and right to see the tree. Similar to how skyrims skill tree mechanic is."
-        // Replaces the flat grouped tray (follow-up #5) with a paged, per-SkillTreeType vertical
-        // node column — one tree visible at a time, TrayDisplayTreeOrder's fixed order/count (19
-        // pages, ALWAYS present even when a tree has 0 unequipped skills right now — confirmed via
-        // AskUserQuestion: "show a tree as a page" — so the page count/order never shifts as the
-        // player equips things). Node vertical order within a page is just the order skills of
-        // that tree already appear in SkillDatabase.AllSkills — no prerequisite/branch data exists
-        // yet (see TreeStageWidth's own comment + SkillData.cs), so this is a straight placeholder
-        // chain, not real branching.
-        var navHeader = new VisualElement();
-        navHeader.AddToClassList("tree-nav-header");
-        column.Add(navHeader);
-
-        var prevPageButton = new Button { text = "◀" };
-        prevPageButton.AddToClassList("tree-nav-button");
-        navHeader.Add(prevPageButton);
-
-        var treeNameLabel = new Label();
-        treeNameLabel.AddToClassList("tree-nav-label");
-        navHeader.Add(treeNameLabel);
-
-        var treePageCountLabel = new Label();
-        treePageCountLabel.AddToClassList("tree-nav-label");
-        navHeader.Add(treePageCountLabel);
-
-        var nextPageButton = new Button { text = "▶" };
-        nextPageButton.AddToClassList("tree-nav-button");
-        navHeader.Add(nextPageButton);
-
-        var treeStage = new VisualElement();
-        treeStage.AddToClassList("tree-stage");
-        column.Add(treeStage);
-
-        var treeStrip = new VisualElement();
-        treeStrip.AddToClassList("tree-strip");
-        treeStrip.style.width = TreePageWidth * TrayDisplayTreeOrder.Length;
-        treeStage.Add(treeStrip);
-
-        var treePages = new VisualElement[TrayDisplayTreeOrder.Length];
-        for (int p = 0; p < TrayDisplayTreeOrder.Length; p++)
-        {
-            var page = new VisualElement();
-            page.AddToClassList("tree-page");
-            treeStrip.Add(page);
-            treePages[p] = page;
-        }
-
         var equipSlots = new VisualElement[WheelEquipSlotCount];
         var equipLabels = new Label[WheelEquipSlotCount];
 
         int dragSourceEquipIndex = -1;
         string dragSourceTraySkillGuid = null;
-        int currentTreePageIndex = 0;
+        SkillTreeType dragSourceTraySkillTree = SkillTreeType.Standard;
 
-        void UpdateTreeNavLabels()
+        // --- Web header: debug tier stepper + Reset View (2026-08 follow-up #8) ---
+
+        var webHeader = new VisualElement();
+        webHeader.AddToClassList("web-header");
+        column.Add(webHeader);
+
+        var tierPrevButton = new Button { text = "◀" };
+        tierPrevButton.AddToClassList("tree-nav-button");
+        webHeader.Add(tierPrevButton);
+
+        var tierLabel = new Label();
+        tierLabel.AddToClassList("tree-nav-label");
+        webHeader.Add(tierLabel);
+
+        var tierNextButton = new Button { text = "▶" };
+        tierNextButton.AddToClassList("tree-nav-button");
+        webHeader.Add(tierNextButton);
+
+        var resetViewButton = new Button { text = "Reset View" };
+        resetViewButton.AddToClassList("tree-nav-button");
+        webHeader.Add(resetViewButton);
+
+        // Unlock All debug toggle (2026-08-09 follow-up — user: "can we also have an unlock all
+        // debug so im able to see everything?"). Independent of the tier stepper: tier still
+        // governs equip SLOT capacity; this only controls which TREES render as unlocked. Label
+        // reflects current state so it reads as a toggle, not a one-shot action.
+        var unlockAllButton = new Button();
+        unlockAllButton.AddToClassList("tree-nav-button");
+        webHeader.Add(unlockAllButton);
+
+        // --- Web stage: fixed clipped viewport containing the pannable/zoomable world ---
+
+        var webStage = new VisualElement();
+        webStage.AddToClassList("web-stage");
+        column.Add(webStage);
+
+        var webWorld = new VisualElement();
+        webWorld.AddToClassList("web-world");
+        webWorld.style.width = WorldWidth;
+        webWorld.style.height = WorldHeight;
+        webStage.Add(webWorld);
+
+        var edgeOverlay = new SkillWebEdgeVisual();
+        edgeOverlay.style.width = WorldWidth;
+        edgeOverlay.style.height = WorldHeight;
+        webWorld.Add(edgeOverlay);
+
+        var webNodesLayer = new VisualElement();
+        webNodesLayer.AddToClassList("web-nodes-layer");
+        webNodesLayer.style.width = WorldWidth;
+        webNodesLayer.style.height = WorldHeight;
+        webWorld.Add(webNodesLayer);
+
+        float worldScale = 1f;
+        Vector2 worldTranslate = Vector2.zero;
+
+        void ApplyWorldTransform()
         {
-            treeNameLabel.text = TrayDisplayTreeOrder[currentTreePageIndex].ToString();
-            treePageCountLabel.text = $"{currentTreePageIndex + 1} / {TrayDisplayTreeOrder.Length}";
-            prevPageButton.SetEnabled(currentTreePageIndex > 0);
-            nextPageButton.SetEnabled(currentTreePageIndex < TrayDisplayTreeOrder.Length - 1);
+            webWorld.style.scale = new Scale(new Vector3(worldScale, worldScale, 1f));
+            webWorld.style.translate = new Translate(worldTranslate.x, worldTranslate.y, 0f);
         }
 
-        void SetStripPosition(int index)
+        // Reusable "world point (wx,wy) currently under screen point (sx,sy)" solve/re-solve pair
+        // — the transform is a scale around webWorld's own center (its default USS transform
+        // origin) composed with a translate, matching the exact math verified live before this
+        // view was built: after = (before - worldCenter) * scale + worldCenter + translate.
+        Vector2 WorldCenter() => new Vector2(WorldWidth / 2f, WorldHeight / 2f);
+
+        Vector2 ScreenToWorld(Vector2 screen)
         {
-            treeStrip.style.left = -(index * TreePageWidth) + (TreeStageWidth - TreePageWidth) / 2f;
+            Vector2 c = WorldCenter();
+            return new Vector2(
+                (screen.x - c.x - worldTranslate.x) / worldScale + c.x,
+                (screen.y - c.y - worldTranslate.y) / worldScale + c.y);
         }
 
-        // Shared by the nav buttons, arrow keys (Update()'s _treePageStepAction), and a committed
-        // drag-swipe past its threshold — every paging input funnels through here.
-        void PageTo(int index)
+        void SetTransformKeepingWorldPointAtScreen(Vector2 worldPoint, Vector2 screenPoint, float newScale)
         {
-            currentTreePageIndex = Mathf.Clamp(index, 0, TrayDisplayTreeOrder.Length - 1);
-            UpdateTreeNavLabels();
-            SetStripPosition(currentTreePageIndex);
+            Vector2 c = WorldCenter();
+            worldScale = newScale;
+            worldTranslate = new Vector2(
+                screenPoint.x - c.x - (worldPoint.x - c.x) * worldScale,
+                screenPoint.y - c.y - (worldPoint.y - c.y) * worldScale);
+            ApplyWorldTransform();
         }
+
+        // Default framing: centered on the currently-unlocked columns (Standard always counts),
+        // scaled down just enough to fit their span in the stage if it's wider than the viewport.
+        // Recomputed fresh each call (not cached) since which trees are unlocked can change live
+        // via the debug tier stepper.
+        void ApplyDefaultFraming()
+        {
+            IReadOnlyList<SkillTreeType> unlocked = SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime);
+            int minCol = -1, maxCol = -1;
+            for (int c = 0; c < SkillTreeColor.DisplayOrder.Length; c++)
+            {
+                bool isUnlocked = SkillTreeColor.DisplayOrder[c] == SkillTreeType.Standard || unlocked.Contains(SkillTreeColor.DisplayOrder[c]);
+                if (!isUnlocked) continue;
+                if (minCol < 0) minCol = c;
+                maxCol = c;
+            }
+            if (minCol < 0) { minCol = 0; maxCol = 0; }
+
+            float spanPx = (maxCol - minCol + 1) * WebColumnSpacing;
+            float fitScale = Mathf.Clamp(WebStageWidth / Mathf.Max(spanPx, WebColumnSpacing), WebMinScale, 1f);
+
+            float centerX = WebLeftPadding + ((minCol + maxCol) / 2f) * WebColumnSpacing + WebNodeSize / 2f;
+            float centerY = WebTopPadding + ((WebMaxRowsPerColumn - 1) / 2f) * WebRowSpacing + WebNodeSize / 2f;
+
+            SetTransformKeepingWorldPointAtScreen(new Vector2(centerX, centerY),
+                new Vector2(WebStageWidth / 2f, WebStageHeight / 2f), fitScale);
+        }
+
+        resetViewButton.clicked += ApplyDefaultFraming;
+
+        webStage.RegisterCallback<WheelEvent>(evt =>
+        {
+            Vector2 screenPos = evt.localMousePosition;
+            Vector2 worldPointUnderCursor = ScreenToWorld(screenPos);
+            float factor = evt.delta.y > 0f ? 0.9f : 1.1f;
+            float newScale = Mathf.Clamp(worldScale * factor, WebMinScale, WebMaxScale);
+            SetTransformKeepingWorldPointAtScreen(worldPointUnderCursor, screenPos, newScale);
+        });
+
+        bool isPanning = false;
+        Vector2 panStartPointer = Vector2.zero;
+        Vector2 panStartTranslate = Vector2.zero;
+
+        webStage.RegisterCallback<PointerDownEvent>(evt =>
+        {
+            if (evt.button != 0) return;
+            isPanning = true;
+            panStartPointer = evt.position;
+            panStartTranslate = worldTranslate;
+            webStage.CapturePointer(evt.pointerId);
+        });
+        webStage.RegisterCallback<PointerMoveEvent>(evt =>
+        {
+            if (!isPanning) return;
+            Vector2 delta = (Vector2)evt.position - panStartPointer;
+            worldTranslate = panStartTranslate + delta;
+            ApplyWorldTransform();
+        });
+        webStage.RegisterCallback<PointerUpEvent>(evt =>
+        {
+            if (!isPanning) return;
+            isPanning = false;
+            webStage.ReleasePointer(evt.pointerId);
+        });
 
         void RefreshSkillArea()
         {
+            effectiveTier = runtime.DebugTierOverride ?? tier;
+            maxSlots = SkillSlotCapacity.GetActiveSlotRange(effectiveTier).max;
+            tierLabel.text = $"Tier {effectiveTier}" + (runtime.DebugTierOverride.HasValue ? " (debug)" : "");
+            unlockAllButton.text = runtime.DebugUnlockAllTrees ? "Unlock All: ON" : "Unlock All: OFF";
+
             for (int i = 0; i < WheelEquipSlotCount; i++)
             {
                 SkillData skill = null;
@@ -512,31 +641,24 @@ public class OverworldMenuController : MonoBehaviour
                 equipLabels[i].text = skill != null ? GetShortSkillLabel(skill) : string.Empty;
                 equipSlots[i].EnableInClassList("skill-slot-locked", skill == null);
                 equipSlots[i].EnableInClassList("skill-slot-tier-locked", i >= maxSlots);
-                ApplySkillColor(equipSlots[i], skill != null ? guid : null);
+                // The skill tree is the master color source (2026-08-09 follow-up — user: "the
+                // skill tree be the master color... on the wheel should match", then "i want the
+                // skill wheel in skill tree menu to sync up with the battle scene") — SkillTreeColor
+                // is now the one shared color source for the web, this wheel, AND the battle
+                // scene's own skill ring (BattleHUDController), keyed off the skill's TreeType.
+                SkillTreeColor.ApplyVisual(equipSlots[i], skill?.TreeType);
             }
 
             // Every skill in the database — including the 5 Standard built-in moves, real
             // equippable SkillData now (2026-08 follow-up, see BuiltInMoveType) — flows through
             // here, no special-casing (see the class doc comment). Grouped by SkillTreeType, one
-            // page per tree, rebuilt fresh on every refresh (same "clear and rebuild" pattern the
-            // flat tray used) — currentTreePageIndex is NOT reset here, so equipping/unequipping a
-            // skill re-centers on whatever page the player was already viewing.
-            //
-            // 2026-08 follow-up #7 — user: "when attaching a skill from a tree into the skill
-            // wheel. It shouldnt disappear from the tree, it should act more as a copy from the
-            // tree assuming its unlocked." Equipped skills are NO LONGER filtered out of their
-            // tree page — every skill in the database always shows here, dimmed/outlined
-            // (.skill-tray-icon-equipped) if currently equipped. Dragging an already-equipped
-            // node still just no-ops on drop — SkillLoadoutSystem.TryEquipAt/TryEquip already
-            // refuse to equip a skill that's already in equippedSkillGuids, so a skill can never
-            // occupy two wheel slots at once even though its tree "copy" stays visible.
+            // column per tree, rebuilt fresh on every refresh.
             var byTree = new Dictionary<SkillTreeType, List<(SkillData skill, string guid)>>();
             if (_skillDatabase != null)
             {
                 foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
                 {
                     if (skill == null) continue;
-
                     if (!byTree.TryGetValue(skill.TreeType, out var list))
                     {
                         list = new List<(SkillData, string)>();
@@ -546,116 +668,99 @@ public class OverworldMenuController : MonoBehaviour
                 }
             }
 
-            for (int p = 0; p < TrayDisplayTreeOrder.Length; p++)
+            IReadOnlyList<SkillTreeType> unlockedTrees = SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime);
+
+            webNodesLayer.Clear();
+            var edgeColumns = new List<SkillWebEdgeVisual.ColumnEdges>();
+
+            for (int c = 0; c < SkillTreeColor.DisplayOrder.Length; c++)
             {
-                VisualElement page = treePages[p];
-                page.Clear();
-                byTree.TryGetValue(TrayDisplayTreeOrder[p], out var skillsInTree);
+                SkillTreeType treeType = SkillTreeColor.DisplayOrder[c];
+                bool unlocked = treeType == SkillTreeType.Standard || unlockedTrees.Contains(treeType);
+                Color treeColor = SkillTreeColor.GetByIndex(c);
 
-                if (skillsInTree == null || skillsInTree.Count == 0)
+                byTree.TryGetValue(treeType, out var skillsInTree);
+                int count = skillsInTree?.Count ?? 0;
+                var centers = new Vector2[count];
+
+                for (int r = 0; r < count; r++)
                 {
-                    var emptyLabel = new Label("No skills available to equip");
-                    emptyLabel.AddToClassList("tree-page-empty-label");
-                    page.Add(emptyLabel);
-                    continue;
-                }
+                    float x = WebLeftPadding + c * WebColumnSpacing;
+                    float y = WebTopPadding + r * WebRowSpacing;
+                    centers[r] = new Vector2(x + WebNodeSize / 2f, y + WebNodeSize / 2f);
 
-                var nodeColumn = new ScrollView(ScrollViewMode.Vertical);
-                nodeColumn.AddToClassList("tree-node-column");
-                page.Add(nodeColumn);
+                    (SkillData skill, string guid) = skillsInTree[r];
 
-                for (int i = 0; i < skillsInTree.Count; i++)
-                {
-                    (SkillData skill, string guid) = skillsInTree[i];
+                    var node = new VisualElement();
+                    node.AddToClassList("skill-slot-placeholder");
+                    node.AddToClassList("skill-web-node");
+                    node.style.position = Position.Absolute;
+                    node.style.left = x;
+                    node.style.top = y;
 
-                    if (i > 0)
+                    if (!unlocked)
                     {
-                        var connector = new VisualElement();
-                        connector.AddToClassList("tree-node-connector");
-                        nodeColumn.Add(connector);
+                        // Tier-gated silhouette (mockup's "Sighted" state, driven by tier instead
+                        // of true fog-of-war — see the class doc comment) — no label, no color, no
+                        // interactivity at all.
+                        node.AddToClassList("skill-slot-tier-locked");
+                        webNodesLayer.Add(node);
+                        continue;
                     }
 
-                    var icon = new VisualElement();
-                    icon.AddToClassList("skill-slot-placeholder");
-                    icon.AddToClassList("skill-tray-icon");
-                    icon.style.position = Position.Relative; // overrides .skill-slot-placeholder's absolute positioning — inline always wins, see OverworldMenu.uss's note
-                    icon.EnableInClassList("skill-tray-icon-equipped", runtime.equippedSkillGuids.Contains(guid));
-                    ApplySkillColor(icon, guid);
+                    SkillTreeColor.ApplyVisual(node, treeType);
+                    node.EnableInClassList("skill-tray-icon-equipped", runtime.equippedSkillGuids.Contains(guid));
 
                     var label = new Label(GetShortSkillLabel(skill));
                     label.AddToClassList("move-option-label");
                     label.pickingMode = PickingMode.Ignore;
-                    icon.Add(label);
+                    node.Add(label);
 
                     string capturedGuid = guid;
                     SkillData capturedSkill = skill;
-                    int capturedPageIndex = p;
-                    icon.RegisterCallback<PointerDownEvent>(evt =>
+                    SkillTreeType capturedTreeType = treeType;
+                    node.RegisterCallback<PointerDownEvent>(evt =>
                     {
                         if (evt.button != 0) return;
-                        // Peeking neighbor-page slivers are inert for equip purposes even though
-                        // they're technically in the DOM (see the class doc comment's node-gating
-                        // note) — deliberately does NOT StopPropagation here, so a press starting
-                        // on a non-current page's node still bubbles up to treeStage's swipe-drag
-                        // handler below instead of silently doing nothing.
-                        if (capturedPageIndex != currentTreePageIndex) return;
-                        evt.StopPropagation();
-                        BeginTrayDrag(capturedGuid, icon, evt);
+                        evt.StopPropagation(); // don't let this also start a webStage pan drag
+                        BeginTrayDrag(capturedGuid, capturedTreeType, node, evt);
                     });
-                    icon.RegisterCallback<PointerEnterEvent>(evt => _tooltip.Show(BattleHUDController.BuildSkillTooltipText(capturedSkill), icon));
-                    icon.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
+                    node.RegisterCallback<PointerEnterEvent>(evt => _tooltip.Show(BattleHUDController.BuildSkillTooltipText(capturedSkill), node));
+                    node.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
 
-                    nodeColumn.Add(icon);
+                    webNodesLayer.Add(node);
                 }
+
+                edgeColumns.Add(new SkillWebEdgeVisual.ColumnEdges
+                {
+                    NodeCenters = centers,
+                    TreeColor = treeColor,
+                    Unlocked = unlocked,
+                });
             }
 
-            UpdateTreeNavLabels();
-            SetStripPosition(currentTreePageIndex);
+            edgeOverlay.Columns = edgeColumns;
+            edgeOverlay.Refresh();
         }
 
-        prevPageButton.clicked += () => PageTo(currentTreePageIndex - 1);
-        nextPageButton.clicked += () => PageTo(currentTreePageIndex + 1);
-        _treePageStepAction = delta => PageTo(currentTreePageIndex + delta);
-
-        // Real drag-swipe (confirmed via AskUserQuestion — "Buttons + keys + real drag gesture").
-        // Registered on treeStage (the viewport), not individual pages/nodes — a press that starts
-        // on a node either StopPropagation's (current-page node, begins an equip-drag instead) or
-        // bubbles here unhandled (peeking-page node, see that handler's own comment), so this and
-        // the equip-drag path are mutually exclusive by construction, no extra disambiguation flag
-        // needed. transitionDuration is zeroed for the live 1:1 drag-follow and restored
-        // (StyleKeyword.Null → falls back to .tree-strip's USS transition) so the commit/snap-back
-        // on release animates smoothly.
-        float dragStartPointerX = 0f;
-        float dragStartStripLeft = 0f;
-        bool isDraggingStrip = false;
-
-        treeStage.RegisterCallback<PointerDownEvent>(evt =>
+        tierPrevButton.clicked += () =>
         {
-            if (evt.button != 0) return;
-            isDraggingStrip = true;
-            dragStartPointerX = evt.position.x;
-            dragStartStripLeft = treeStrip.resolvedStyle.left;
-            treeStrip.style.transitionDuration = new List<TimeValue> { new TimeValue(0f) };
-            treeStage.CapturePointer(evt.pointerId);
-        });
-        treeStage.RegisterCallback<PointerMoveEvent>(evt =>
+            runtime.DebugTierOverride = Mathf.Clamp((runtime.DebugTierOverride ?? tier) - 1, 1, 5);
+            RefreshSkillArea();
+            ApplyDefaultFraming(); // unlocked-column span can change with tier — reframe so the view isn't left centered on a now-stale subset
+        };
+        tierNextButton.clicked += () =>
         {
-            if (!isDraggingStrip) return;
-            treeStrip.style.left = dragStartStripLeft + (evt.position.x - dragStartPointerX);
-        });
-        treeStage.RegisterCallback<PointerUpEvent>(evt =>
+            runtime.DebugTierOverride = Mathf.Clamp((runtime.DebugTierOverride ?? tier) + 1, 1, 5);
+            RefreshSkillArea();
+            ApplyDefaultFraming();
+        };
+        unlockAllButton.clicked += () =>
         {
-            if (!isDraggingStrip) return;
-            isDraggingStrip = false;
-            treeStage.ReleasePointer(evt.pointerId);
-            treeStrip.style.transitionDuration = StyleKeyword.Null;
-
-            float totalDelta = evt.position.x - dragStartPointerX;
-            float swipeThreshold = TreePageWidth / 4f;
-            if (totalDelta <= -swipeThreshold) PageTo(currentTreePageIndex + 1);      // dragged left -> next page
-            else if (totalDelta >= swipeThreshold) PageTo(currentTreePageIndex - 1); // dragged right -> previous page
-            else PageTo(currentTreePageIndex);                                       // under threshold -> snap back
-        });
+            runtime.DebugUnlockAllTrees = !runtime.DebugUnlockAllTrees;
+            RefreshSkillArea();
+            ApplyDefaultFraming();
+        };
 
         void StartDragLine(VisualElement source, PointerDownEvent evt)
         {
@@ -676,10 +781,11 @@ public class OverworldMenuController : MonoBehaviour
             StartDragLine(equipSlots[equipIndex], evt);
         }
 
-        void BeginTrayDrag(string skillGuid, VisualElement source, PointerDownEvent evt)
+        void BeginTrayDrag(string skillGuid, SkillTreeType treeType, VisualElement source, PointerDownEvent evt)
         {
             dragSourceEquipIndex = -1;
             dragSourceTraySkillGuid = skillGuid;
+            dragSourceTraySkillTree = treeType;
             StartDragLine(source, evt);
         }
 
@@ -703,6 +809,7 @@ public class OverworldMenuController : MonoBehaviour
             _root.ReleasePointer(evt.pointerId);
             int fromEquipIndex = dragSourceEquipIndex;
             string fromTraySkill = dragSourceTraySkillGuid;
+            SkillTreeType fromTraySkillTree = dragSourceTraySkillTree;
             EndDragCleanup();
 
             for (int j = 0; j < maxSlots; j++)
@@ -711,38 +818,21 @@ public class OverworldMenuController : MonoBehaviour
 
                 if (fromEquipIndex >= 0)
                 {
-                    if (fromEquipIndex != j)
-                    {
-                        if (j < runtime.equippedSkillGuids.Count)
-                        {
-                            SkillLoadoutSystem.SwapEquipped(runtime, fromEquipIndex, j);
-                        }
-                        else
-                        {
-                            // Target is empty (within cap, no skill to swap with) — SwapEquipped
-                            // requires BOTH indices to already hold a skill, so it silently no-ops
-                            // here otherwise (2026-08 follow-up bugfix — user: "i still cant drag
-                            // and drop skills into the open slots that dont have any skills
-                            // equipped... i can only drag and drop into slots that already have
-                            // skills on them"). equippedSkillGuids is a compact, front-packed
-                            // list — there's no real "slot 4" independent of the list's current
-                            // length — so dropping onto any empty position moves the dragged
-                            // skill to the end of that compact block instead, giving a visible,
-                            // predictable result rather than a silent no-op.
-                            string movingGuid = runtime.equippedSkillGuids[fromEquipIndex];
-                            runtime.equippedSkillGuids.RemoveAt(fromEquipIndex);
-                            runtime.equippedSkillGuids.Add(movingGuid);
-                        }
-                    }
+                    // SwapEquipped (2026-08-09 follow-up — user: "it just adds it to the next open
+                    // spot instead of where im dragging and dropping it to") now lands EXACTLY at
+                    // the dropped position whether or not it was previously empty — equippedSkillGuids
+                    // is sparse (empty-string gap entries), not compact/front-packed, so no special
+                    // "moves to the end" fallback is needed for an empty target anymore.
+                    if (fromEquipIndex != j) SkillLoadoutSystem.SwapEquipped(runtime, fromEquipIndex, j);
                 }
                 else if (fromTraySkill != null)
                 {
-                    // Dragging from the full-catalog tray equips a skill this creature may not
-                    // have "learned" yet — learn it first so SkillLoadoutSystem's own "equip
-                    // requires learned" contract stays intact (equipped is always a subset of
-                    // learned, everywhere else in the codebase).
+                    // Dragging from the web equips a skill this creature may not have "learned"
+                    // yet — learn it first so SkillLoadoutSystem's own "equip requires learned"
+                    // contract stays intact (equipped is always a subset of learned, everywhere
+                    // else in the codebase).
                     if (!runtime.learnedSkillGuids.Contains(fromTraySkill)) runtime.learnedSkillGuids.Add(fromTraySkill);
-                    SkillLoadoutSystem.TryEquipAt(runtime, fromTraySkill, j, tier);
+                    SkillLoadoutSystem.TryEquipAt(runtime, fromTraySkill, fromTraySkillTree, j, effectiveTier);
                 }
                 RefreshSkillArea();
                 return;
@@ -758,10 +848,6 @@ public class OverworldMenuController : MonoBehaviour
             PositionWheelSlot(slot, physIndex);
             ringArea.Add(slot);
 
-            // Every physical position is a real equip slot now (WheelEquipSlotOffset/Count span
-            // the full WheelSlotCount — see those constants' own comments); positions beyond this
-            // creature's CURRENT tier cap are handled by the maxSlots check just below instead of
-            // a separate "permanently decorative" branch.
             int equipIndex = physIndex - WheelEquipSlotOffset;
             equipSlots[equipIndex] = slot;
 
@@ -773,33 +859,44 @@ public class OverworldMenuController : MonoBehaviour
 
             int capturedEquipIndex = equipIndex;
 
-            if (capturedEquipIndex >= maxSlots)
-            {
-                // Beyond this creature's tier cap — permanently inert, not a drag source or a
-                // valid drop target (see OnDragUp's `j < maxSlots` bound). Hover explains why,
-                // rather than the drop just silently failing.
-                string lockedTooltip = GetTierLockedTooltip(capturedEquipIndex);
-                slot.RegisterCallback<PointerEnterEvent>(evt => _tooltip.Show(lockedTooltip, slot));
-                slot.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
-                continue;
-            }
+            // equippedSkillGuids is sparse (2026-08-09 follow-up) — an index within Count can
+            // still be an empty "" gap entry, so every "does this physical slot actually hold a
+            // skill" check needs both bounds.
+            bool HasEquippedSkill(int index) => index < runtime.equippedSkillGuids.Count
+                && !string.IsNullOrEmpty(runtime.equippedSkillGuids[index]);
 
             void UnequipThisSlot()
             {
-                if (capturedEquipIndex >= runtime.equippedSkillGuids.Count) return;
+                if (!HasEquippedSkill(capturedEquipIndex)) return;
                 SkillLoadoutSystem.Unequip(runtime, runtime.equippedSkillGuids[capturedEquipIndex]);
                 RefreshSkillArea();
             }
 
+            // Interactivity is gated at USE time against the current (mutable) maxSlots, not at
+            // build time — the debug tier stepper can raise/lower maxSlots without this loop
+            // re-running, so a slot that starts tier-locked must still become usable the moment
+            // maxSlots grows past it, and vice versa.
+            slot.RegisterCallback<PointerEnterEvent>(evt =>
+            {
+                if (capturedEquipIndex >= maxSlots)
+                {
+                    _tooltip.Show(GetTierLockedTooltip(capturedEquipIndex), slot);
+                    return;
+                }
+                if (_skillDatabase == null || !HasEquippedSkill(capturedEquipIndex)) return;
+                if (_skillDatabase.TryGetByGuid(runtime.equippedSkillGuids[capturedEquipIndex], out SkillData skill))
+                    _tooltip.Show(BattleHUDController.BuildSkillTooltipText(skill), slot);
+            });
+            slot.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
+
             slot.RegisterCallback<PointerDownEvent>(evt =>
             {
-                // Right-click unequip (2026-08 follow-up bugfix — user: "The right click unequip
-                // from the menu also doesnt work"). Checked directly on PointerDownEvent.button
-                // (1 = right/secondary button) rather than relying solely on UI Toolkit's
-                // ContextClickEvent, whose real-mouse synthesis in a runtime UIDocument panel
-                // isn't confirmed reliable in this project (VisualElement.tooltip had an
-                // analogous Editor-only gap this same session) — PointerDownEvent is already
-                // confirmed working for real mouse input via the left-click drag path below.
+                if (capturedEquipIndex >= maxSlots) return; // tier-locked right now — hover already explained why
+
+                // Right-click unequip (checked directly on PointerDownEvent.button — 1 = right/
+                // secondary button — rather than relying solely on ContextClickEvent, whose real-
+                // mouse synthesis in a runtime UIDocument panel isn't confirmed reliable in this
+                // project).
                 if (evt.button == 1)
                 {
                     evt.StopPropagation();
@@ -808,51 +905,24 @@ public class OverworldMenuController : MonoBehaviour
                 }
 
                 if (evt.button != 0) return;
-                if (capturedEquipIndex >= runtime.equippedSkillGuids.Count) return; // empty slot — nothing to drag
+                if (!HasEquippedSkill(capturedEquipIndex)) return; // empty slot — nothing to drag
                 evt.StopPropagation();
                 BeginRingDrag(capturedEquipIndex, evt);
             });
             // Kept as a secondary trigger alongside the PointerDownEvent check above — harmless
             // if it also fires, and covers any input path that only raises ContextClickEvent.
-            slot.RegisterCallback<ContextClickEvent>(evt => UnequipThisSlot());
-            slot.RegisterCallback<PointerEnterEvent>(evt =>
-            {
-                if (_skillDatabase == null || capturedEquipIndex >= runtime.equippedSkillGuids.Count) return;
-                if (_skillDatabase.TryGetByGuid(runtime.equippedSkillGuids[capturedEquipIndex], out SkillData skill))
-                    _tooltip.Show(BattleHUDController.BuildSkillTooltipText(skill), slot);
-            });
-            slot.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
+            slot.RegisterCallback<ContextClickEvent>(evt => { if (capturedEquipIndex < maxSlots) UnequipThisSlot(); });
         }
 
         RefreshSkillArea();
+        ApplyDefaultFraming();
         return column;
     }
 
-    /// <summary>Removes any existing skill-identity color class, then applies the one for skillGuid (or leaves the element uncolored if null — an empty/locked slot).</summary>
-    private static void ApplySkillColor(VisualElement element, string skillGuid)
-    {
-        foreach (string c in SkillColorClasses) element.RemoveFromClassList(c);
-        if (skillGuid != null) element.AddToClassList(GetSkillColorClass(skillGuid));
-    }
+    /// <summary>Short orb/tray label for a SkillData-backed skill — see SkillLabelFormatter (2026-08-10 follow-up, shared with the battle scene's skill ring; was a private copy here until then).</summary>
+    private string GetShortSkillLabel(SkillData skill) => SkillLabelFormatter.GetShortLabel(skill, _skillDatabase);
 
-    /// <summary>Deterministic skill -> color mapping (stable hash of the GUID) so a given skill always shows the same color everywhere it appears, regardless of which slot it occupies.</summary>
-    private static string GetSkillColorClass(string skillGuid)
-    {
-        int hash = skillGuid.GetHashCode();
-        int index = ((hash % SkillColorClasses.Length) + SkillColorClasses.Length) % SkillColorClasses.Length;
-        return SkillColorClasses[index];
-    }
-
-    /// <summary>
-    /// Short orb/tray label for a SkillData-backed skill (2026-08 follow-up — user: "It should
-    /// only show their icon maxium a letter and a number... they should all have the hover over
-    /// description similar to the in battle game"). An already-short real name (e.g. "C1"/"C2",
-    /// the 2 skills renamed earlier this session) passes through as-is; every other placeholder
-    /// gets a generated `{tree-initial}{index-within-tree}` code — a pure display transform, never
-    /// written back to the asset. Full identity/mechanics still live in the hover tooltip
-    /// (BattleHUDController.BuildSkillTooltipText), unchanged.
-    /// </summary>
-    /// <summary>Hover text for an equip slot beyond this creature's current tier cap — explains why the drop fails instead of leaving it a silent no-op (see BuildSkillArea's own doc comment). Finds the lowest tier whose SkillSlotCapacity max exceeds this slot's index; T6+ (fusion) slots aren't resolvable per SkillSlotCapacity's own contract, so those fall back to a generic message.</summary>
+    /// <summary>Hover text for an equip slot beyond this creature's current EFFECTIVE tier cap (real tier, or the debug override when set) — explains why the drop fails instead of leaving it a silent no-op. Finds the lowest tier whose SkillSlotCapacity max exceeds this slot's index; T6+ (fusion) slots aren't resolvable per SkillSlotCapacity's own contract, so those fall back to a generic message.</summary>
     private static string GetTierLockedTooltip(int equipIndex)
     {
         for (int t = 1; t <= 5; t++)
@@ -861,33 +931,6 @@ public class OverworldMenuController : MonoBehaviour
                 return $"Locked\nRequires evolution tier {t}+";
         }
         return "Locked\nRequires a fusion evolution";
-    }
-
-    private string GetShortSkillLabel(SkillData skill)
-    {
-        if (skill.SkillName.Length <= 3) return skill.SkillName;
-
-        char treeInitial = char.ToUpperInvariant(skill.TreeType.ToString()[0]);
-
-        // 'C' is reserved for hand-authored short names (C1/C2, see this method's own doc comment)
-        // — Corruption is the only tree whose own initial is 'C', and without this override its
-        // first two skills would generate "C1"/"C2" too, colliding with the real C1/C2 (live-
-        // verified: Corruption_Placeholder1 rendered identically to the real C1, which
-        // ComboRuleEvaluator's RepeatSameSkill rule specifically references — not just a cosmetic
-        // clash, a genuinely different skill wearing the real one's label).
-        if (treeInitial == 'C') treeInitial = 'X';
-
-        int indexInTree = 1;
-        if (_skillDatabase != null)
-        {
-            var treeSkills = _skillDatabase.GetByTreeType(skill.TreeType);
-            for (int i = 0; i < treeSkills.Count; i++)
-            {
-                if (treeSkills[i] == skill) { indexInTree = i + 1; break; }
-            }
-        }
-
-        return $"{treeInitial}{indexInTree}";
     }
 
     /// <summary>Positions a wheel slot at its fixed clock-hour position — identical math to BattleHUDController.PositionSkillSlots, so the wheel is a literal replica of battle's.</summary>

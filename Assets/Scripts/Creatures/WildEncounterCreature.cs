@@ -202,49 +202,55 @@ public class WildEncounterCreature : MonoBehaviour
         _runtimeData = runtimeData;
     }
 
+    /// <summary>
+    /// True from the moment any wild creature engages the player until its battle fully resolves
+    /// (Resolve). Guards against a SECOND wild creature contacting the player mid-encounter and
+    /// starting a second, concurrent battle — previously an incidental side effect of
+    /// EncounterPromptController.IsVisible staying true across the whole Show()-to-Resolve()
+    /// window, not just while the prompt itself was drawn. Retiring that controller (2026-08-10,
+    /// auto-engage) removed the guard along with it; live-verified the regression before adding
+    /// this back — two WildEncounterCreature instances (one overlapping the player at scene
+    /// start, one contacted moments later) both called BattleTransition.StartWildBattle,
+    /// additively loading BattleScene_Main twice at once. Static rather than per-instance because
+    /// the collision is ACROSS different creatures, not repeated contact with the same one (that
+    /// case is already covered by the per-instance _contacted flag).
+    /// </summary>
+    private static bool s_encounterInProgress;
+
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (_contacted) return;
+        if (_contacted || s_encounterInProgress) return;
         if (!other.TryGetComponent<PlayerTopDownController>(out var player)) return;
 
-        // Guards against two encounters resolving in the same physics step and clobbering
-        // each other's Show() callbacks — only one spawn point exists today so this can't
-        // happen organically yet, but the guard is cheap and the failure mode (a soft-locked
-        // second creature) isn't. Also guards against a trigger firing before
-        // EncounterPromptController.Awake() has run (observed live — Instance was null here at
-        // least once; root cause not fully isolated, but a silently-skipped encounter is a far
-        // better failure mode than an uncaught NullReferenceException on a physics callback).
-        if (EncounterPromptController.Instance == null || EncounterPromptController.Instance.IsVisible) return;
-
         _contacted = true;
+        s_encounterInProgress = true;
 
         player.FreezeMovement();
         EventBus.Raise_WildEncounterTriggered(_runtimeData);
-        EncounterPromptController.Instance.Show(_runtimeData.speciesData, () => HandleFlee(player), () => HandleEngage(player));
+        HandleEngage(player);
     }
 
-    private void HandleFlee(PlayerTopDownController player)
-    {
-        EventBus.Raise_WildEncounterFled(_runtimeData);
-        Resolve(player);
-    }
-
+    /// <summary>
+    /// Contact always leads straight into battle now (2026-08-10, user-directed: "instead of flee
+    /// or engage, automatically engage into combat") — the old pre-battle Flee/Engage prompt
+    /// (EncounterPromptController) is retired; fleeing moved INTO the battle itself as a button
+    /// next to End Turn (see BattleManager's own doc comment, BattleConfig.FleeSuccessChance).
+    /// </summary>
     private void HandleEngage(PlayerTopDownController player)
     {
         EventBus.Raise_WildEncounterEngageRequested(_runtimeData);
-        EncounterPromptController.Instance.Hide();
 
         // Player stays frozen until Resolve() runs on battle completion — BattleTransition
         // additively loads BattleScene_Main on top of the overworld (Combat_Directive Part 1)
         // and hands control back here via the callback once BattleManager reports a result.
-        // Win/loss doesn't change what happens to this wild creature yet — capture is Step 5
-        // (Roadmap_v2 Mo 8 Wk 3) — so both outcomes just end the encounter for now.
+        // Win/loss/flee doesn't change what happens to this wild creature yet — capture is Step 5
+        // (Roadmap_v2 Mo 8 Wk 3) — so every outcome just ends the encounter for now.
         BattleTransition.StartWildBattle(_runtimeData, _ => Resolve(player));
     }
 
     private void Resolve(PlayerTopDownController player)
     {
-        EncounterPromptController.Instance.Hide();
+        s_encounterInProgress = false;
         player.UnfreezeMovement();
         Destroy(gameObject);
     }

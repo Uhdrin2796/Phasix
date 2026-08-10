@@ -490,48 +490,11 @@
     opacity: 0.4;
 }
 
-/* Real skill-ring orb colors, one per ring position (2026-08 follow-up — user-directed: "select
-   whatever colors you see fit for those"; see BattleHUDController.SkillRingColorCount's doc
-   comment for why POSITION owns the color, not species PrimalType). Deliberately a different
-   palette from .move-option-blue/pink/purple/gold so the skill-ring orbs and the 5 built-in moves
-   stay visually distinct at a glance. Applied via EnableInClassList in PopulateSkillRing — only
-   present while that position actually has a skill equipped, so an empty/locked slot still falls
-   back to .skill-slot-placeholder's neutral grey. Only ring 0 (C1) and 1 (C2) are reachable today
-   (SkillSlotCapacity's Tier 1 equip cap = 2); 2-6 are forward-looking for higher tiers. */
-.skill-ring-color-0 {
-    background-color: rgb(46, 139, 135);
-    border-color: rgb(110, 200, 195);
-}
-
-.skill-ring-color-1 {
-    background-color: rgb(217, 147, 42);
-    border-color: rgb(240, 190, 110);
-}
-
-.skill-ring-color-2 {
-    background-color: rgb(120, 90, 200);
-    border-color: rgb(180, 150, 230);
-}
-
-.skill-ring-color-3 {
-    background-color: rgb(210, 90, 120);
-    border-color: rgb(240, 150, 170);
-}
-
-.skill-ring-color-4 {
-    background-color: rgb(120, 180, 70);
-    border-color: rgb(180, 220, 130);
-}
-
-.skill-ring-color-5 {
-    background-color: rgb(70, 170, 210);
-    border-color: rgb(140, 210, 235);
-}
-
-.skill-ring-color-6 {
-    background-color: rgb(160, 120, 80);
-    border-color: rgb(200, 170, 130);
-}
+/* .skill-ring-color-0..6 (the old per-ring-position ring palette) removed 2026-08-09 — the battle
+   skill ring's fill/border color is now applied inline by the shared SkillTreeColor.ApplyVisual
+   (Assets/Scripts/Combat/SkillTreeColor.cs), same source the Party menu's skill web and equip
+   wheel use, so all three can never show a different color for the same skill again. See
+   DECISIONS.md -> [Combat] for the full rationale. */
 
 /* Skill-wheel combo-streak counter (2026-08 session — user-directed: "counter next to the skill
    on the skill wheel," see DECISIONS.md -> [Combat]). Styled as its own small solid-circle badge
@@ -717,5 +680,22 @@
     color: rgb(255, 255, 255);
     border-width: 3px;
     border-color: rgb(230, 120, 120);
+    border-radius: 10px;
+}
+
+/* Mirrors .end-turn-button on the opposite side (2026-08-10, user-directed) — same size/shape,
+   a cool grey-blue instead of red so it doesn't read as "another attack-turn action." */
+.flee-button {
+    position: absolute;
+    left: 24px;
+    bottom: 190px;
+    min-width: 160px;
+    height: 56px;
+    font-size: 24px;
+    -unity-font-style: bold;
+    background-color: rgb(55, 80, 110);
+    color: rgb(255, 255, 255);
+    border-width: 3px;
+    border-color: rgb(120, 160, 200);
     border-radius: 10px;
 }

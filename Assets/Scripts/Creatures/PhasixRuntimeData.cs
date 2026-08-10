@@ -144,6 +144,27 @@ public class PhasixRuntimeData
     /// </summary>
     public List<string> equippedSkillGuids = new List<string>();
 
+    /// <summary>
+    /// Debug-only, session-scoped tier simulation for the Party menu's skill web view (2026-08).
+    /// When set, view/equip logic should prefer this over speciesData.EvolutionTier so unlocks and
+    /// slot capacity can be play-tested without a real (not-yet-built, Phase 4) evolution. Never
+    /// persisted to PhasixSaveData/SaveSystem — resets on load/restart, same convention as
+    /// DebugMovementPresetCycler's presets. Must never be used to mutate speciesData (a
+    /// ScriptableObject) or the real unlockedTreeTypes list — see
+    /// SkillTreeUnlockSystem.GetEffectiveUnlockedTrees, the single source of truth for both the
+    /// web view's display and SkillLoadoutSystem's real equip gate.
+    /// </summary>
+    public int? DebugTierOverride;
+
+    /// <summary>
+    /// Debug-only, session-scoped "show every GDD skill tree as unlocked" toggle for the skill web
+    /// view — independent of DebugTierOverride (tier still gates equip SLOT capacity; this only
+    /// affects which TREES render as unlocked/interactive). Never persisted to
+    /// PhasixSaveData/SaveSystem, same convention as DebugTierOverride. See
+    /// SkillTreeUnlockSystem.GetEffectiveUnlockedTrees, which checks this first, before tier.
+    /// </summary>
+    public bool DebugUnlockAllTrees;
+
     public PhasixRuntimeData(string nodeGuid)
     {
         instanceId = Guid.NewGuid().ToString();

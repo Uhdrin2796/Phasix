@@ -67,6 +67,7 @@
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:Button name="EndTurnButton" text="End Turn" class="end-turn-button" />
+            <ui:Button name="FleeButton" text="Flee" class="flee-button" />
         </ui:VisualElement>
         <!-- StatusHeader moved AFTER Stage (2026-08 follow-up fix — user report: "all the hover
              over things are not working at all"). .status-header is position:absolute so this

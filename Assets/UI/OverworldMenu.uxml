@@ -6,6 +6,7 @@
     <ui:VisualElement name="ScreenRoot" class="screen-root" picking-mode="Ignore">
         <ui:VisualElement name="DebugBar" class="debug-bar">
             <ui:Button name="DebugNewGameButton" text="DEBUG: New Game" class="debug-new-game-button" />
+            <ui:Button name="DebugAddPartyMemberButton" text="DEBUG: Add Party Member" class="debug-new-game-button" />
         </ui:VisualElement>
 
         <ui:VisualElement name="OverworldMenuRoot" class="overworld-menu-root">

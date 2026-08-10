@@ -1342,6 +1342,106 @@ TilemapCollider2D:
   m_MaximumTileChangeCount: 1000
   m_ExtrusionFactor: 0
   m_UseDelaunayMesh: 0
+--- !u!1 &225439389
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 225439391}
+  - component: {fileID: 225439390}
+  m_Layer: 0
+  m_Name: Test_WildSpawnPoint_BottomLeft
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &225439390
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 225439389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0dc4151607b2d9e4f824e9dfe1dbdf02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Phasix.Runtime::EncounterTrigger
+  _possibleSpecies:
+  - {fileID: 11400000, guid: e71b20c7c729e4243b9b74165cc5c4dd, type: 2}
+  _wildCreaturePrefab: {fileID: 6254609230482918134, guid: bcb6a2f7cb7a8f64e8a8b335f4d01e69, type: 3}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
+  _overrideTintColor: 1
+  _tintColorOverride: {r: 1, g: 0.6, b: 0.2, a: 1}
+--- !u!4 &225439391
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 225439389}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -10, y: -6, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &282686794
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 282686796}
+  - component: {fileID: 282686795}
+  m_Layer: 0
+  m_Name: Test_WildSpawnPoint_TopRight
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &282686795
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282686794}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0dc4151607b2d9e4f824e9dfe1dbdf02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Phasix.Runtime::EncounterTrigger
+  _possibleSpecies:
+  - {fileID: 11400000, guid: 0416ad120fc0de643994d721db91f56c, type: 2}
+  _wildCreaturePrefab: {fileID: 6254609230482918134, guid: bcb6a2f7cb7a8f64e8a8b335f4d01e69, type: 3}
+  _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
+  _overrideTintColor: 1
+  _tintColorOverride: {r: 0.3, g: 0.85, b: 0.9, a: 1}
+--- !u!4 &282686796
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282686794}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 10, y: 6, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &301587947
 GameObject:
   m_ObjectHideFlags: 0
@@ -2471,7 +2571,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690957583}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.22129849, w: 0.97520614}
+  m_LocalRotation: {x: -0, y: -0, z: 0.22129934, w: 0.97520596}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 0.47427186, y: 0.65494686, z: 0.60225}
   m_ConstrainProportionsScale: 0
@@ -2578,6 +2678,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Phasix.Runtime::OverworldMenuController
   _skillDatabase: {fileID: 11400000, guid: 0599aceee09d11944a9386f920e3a091, type: 2}
+  _debugPartyMemberSpecies: {fileID: 11400000, guid: 0416ad120fc0de643994d721db91f56c, type: 2}
 --- !u!1 &1077382791
 GameObject:
   m_ObjectHideFlags: 0
@@ -2745,7 +2846,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1260338095}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.38758782, w: 0.92183286}
+  m_LocalRotation: {x: -0, y: -0, z: 0.38758764, w: 0.9218329}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5007,7 +5108,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.16696
+      value: 0.1669602
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -5015,7 +5116,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.98596376
+      value: -0.9859637
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5023,7 +5124,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.12751238
+      value: 0.12751323
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -5031,7 +5132,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.991837
+      value: 0.9918369
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5382,3 +5483,5 @@ SceneRoots:
   - {fileID: 685583655}
   - {fileID: 985387506}
   - {fileID: 121122033}
+  - {fileID: 282686796}
+  - {fileID: 225439391}

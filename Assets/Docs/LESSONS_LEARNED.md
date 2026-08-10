@@ -341,6 +341,94 @@ Issues that required significant investigation to resolve. Read before debugging
   this one, which produces zero errors, zero visual artifacts, and a plausible-looking passing
   test if you skip the `Pick()` step.
 
+### [UI Toolkit] Same occlusion bug, different shape — an unprotected CHILD can swallow its own PARENT's pick, and `IPanel.Pick()` isn't reliably callable from `execute_code`/reflection
+- **Symptom:** User reported nameplate buff/debuff status icon hover tooltips "not showing up" for
+  both player and enemy — this directly contradicted a claim of "already confirmed working"
+  reported earlier the same session, which had called `HudTooltip.Show(text, icon)` directly and
+  observed correct text output.
+- **Root cause (two, layered):** (1) `BuildStatusIconSlot`'s `letterLabel`/`counter` children are
+  absolutely positioned to fully cover their parent `icon`'s entire area, and neither had
+  `pickingMode = PickingMode.Ignore` set — so a real hovering cursor's pick target was one of
+  THEM, not `icon`, and `HudTooltip.RegisterHover(icon, ...)` (registered on the parent) never
+  fired. This is the exact same underlying picking rule as the entry above ("later/topmost
+  pickable element at a point wins, regardless of visual stacking"), just manifesting between a
+  parent and its own child instead of two siblings — the sibling function `BuildNameplateBarRow`
+  already had the identical fix (`fill.pickingMode = PickingMode.Ignore`) on its own decorative
+  child, with a comment explaining exactly this failure mode; `BuildStatusIconSlot` was simply
+  never given the same treatment when it was built. (2) The EARLIER "confirmed working" claim was
+  wrong because it called `HudTooltip.Show()` **directly**, bypassing `RegisterHover`'s
+  `PointerEnterEvent` registration entirely — proving the tooltip TEXT/DATA was correct, but never
+  exercising whether a real hover would actually trigger it. Same root mistake the entry above
+  already documents about hand-built `SendEvent` calls, just one level removed (calling the
+  end-effect method directly is an even more complete bypass than `SendEvent`-ing a preset-target
+  event).
+- **New finding this session — the entry above's own recommended fix doesn't reliably work from
+  `execute_code`:** Following the existing "Key rule" above, `IPanel.Pick(element.worldBound.center)`
+  was called via reflection from `execute_code` to diagnose this. It returned `null` for the
+  status icon — AND, as a sanity check, also returned `null` for the enemy HP bar track, an
+  element the user independently confirmed DOES receive real hover in actual play (its tooltip
+  displays, just previously mispositioned — a separate, already-fixed issue). A `Pick()` call that
+  can't even correctly resolve a known-working element is not trustworthy evidence either way —
+  don't conclude "picking is broken" (or "picking is fine") from a `Pick()` call made this way.
+- **Fix:** Diagnosed and fixed at the CODE level instead — found via direct comparison against
+  `BuildNameplateBarRow`'s already-correct, already-documented handling of the identical shape of
+  problem, not via a live `Pick()` result. Added `pickingMode = PickingMode.Ignore` to
+  `BuildStatusIconSlot`'s `letterLabel`/`counter`, and preventively to `BuildBuffIcon`'s (Regen/
+  Burst icons — same unprotected shape, no tooltip registered on them yet, but the exact same bug
+  waiting to happen the moment one is added).
+- **Date:** August 2026
+- **Key rule (amends the entry above):** (1) When a `VisualElement` is meant to be a hover/click
+  target and has ANY absolutely-positioned children covering its full area (icon + label + badge
+  patterns are the classic case), check that every one of those children has
+  `pickingMode = PickingMode.Ignore` explicitly set — a plain `VisualElement` or `Label` defaults
+  to pickable, and a child that fully covers its parent will win picking priority over it. Look for
+  this pattern by comparison: if a sibling/nearby function in the same file already solved this
+  (search for `pickingMode = PickingMode.Ignore` and read its comment), a newer function building a
+  similar icon+label composite very likely needs the identical fix and was probably just never
+  given it. (2) `IPanel.Pick()` invoked via reflection from `execute_code` is NOT a reliable
+  diagnostic in this project's MCP tooling — it has returned `null` for elements independently
+  confirmed to work correctly. Prefer code-level comparison against a known-working sibling
+  pattern over trusting a `Pick()` result from this specific call path (a real device/build test,
+  or `Pick()` called from inside a running MonoBehaviour rather than injected `execute_code`, may
+  behave differently — not yet confirmed either way). (3) Calling a tooltip/handler method
+  DIRECTLY (`tooltip.Show(text, element)`) to "verify" a hover feature only proves the text/data
+  path is correct — it says nothing about whether the real `PointerEnterEvent` registration
+  actually reaches that element. Don't report a hover feature as confirmed working from that alone.
+
+---
+
+## Combat & Encounter Flow
+
+### [Combat] Retiring a UI screen's "IsVisible" guard also retired a state lock it was quietly enforcing
+- **Symptom:** Live-verified after retiring the pre-battle Flee/Engage prompt in favor of
+  auto-engage-on-contact (2026-08-10, user-directed): with 3 wild creatures in the test scene,
+  entering Play mode auto-triggered a battle against the one overlapping the player's spawn point
+  — expected. But a second manual contact against a DIFFERENT wild creature, while that first
+  battle was still running, ALSO went through and called `BattleTransition.StartWildBattle` —
+  `BattleScene_Main` ended up additively loaded twice at once, two `BattleManager` instances
+  running concurrently against the one `BattleHUDController.Instance` singleton.
+- **Root cause:** `WildEncounterCreature.OnTriggerEnter2D`'s old guard —
+  `if (EncounterPromptController.Instance == null || EncounterPromptController.Instance.IsVisible) return;`
+  — read like it only gated the prompt UI itself. It actually did double duty: `IsVisible` was set
+  `true` in `Show()` and only cleared by `Hide()`, which was called just once, in `Resolve()` —
+  i.e. AFTER the whole battle finished, not when the prompt closed. So `IsVisible` was
+  incidentally acting as a global "an encounter (prompt OR battle) is currently in progress" lock
+  for the entire encounter lifetime. Removing the prompt (and its guard) along with it silently
+  dropped that broader lock too — nothing in the removed code's own naming or immediate context
+  signaled it was protecting anything beyond the UI it was named after.
+- **Fix:** Added a new `WildEncounterCreature.s_encounterInProgress` (static bool), set `true`
+  right where the old guard's window effectively started (before `HandleEngage`) and cleared in
+  `Resolve()` — same lifetime the old `IsVisible` flag had, just decoupled from any UI element.
+- **Date:** 2026-08-10
+- **Key rule:** Before deleting/bypassing a guard condition that reads a flag on some OTHER
+  object (`SomeController.Instance.IsVisible`, `.IsBusy`, `.IsOpen`, etc.), trace that flag's own
+  set/clear call sites first — don't assume its name describes its full effective lifetime. A
+  flag can end up doing double duty as a broader lock purely as a side effect of WHEN its owner
+  happens to clear it, with nothing in the reading code signaling that. Losing that guard usually
+  won't show up in a quick single-action test — it took a second, concurrent trigger to surface
+  here, so specifically test the "can this be triggered twice in an overlapping window" case
+  after removing any guard like this, not just the single-trigger happy path.
+
 ---
 
 ## A* Pathfinding Project

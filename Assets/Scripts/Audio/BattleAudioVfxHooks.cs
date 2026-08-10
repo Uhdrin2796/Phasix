@@ -21,6 +21,7 @@ public static class BattleAudioVfxHooks
     {
         EventBus.OnBattleWon += OnBattleWon;
         EventBus.OnBattleLost += OnBattleLost;
+        EventBus.OnBattleFled += OnBattleFled;
         EventBus.OnSkillUsed += OnSkillUsed;
         EventBus.OnTimedInputSuccess += OnTimedInputSuccess;
         EventBus.OnDamageTaken += OnDamageTaken;
@@ -34,6 +35,9 @@ public static class BattleAudioVfxHooks
 
     // TODO: pending design — defeat sting (GDD §27, no content designed yet)
     private static void OnBattleLost(BattleResult result) { }
+
+    // TODO: pending design — "got away safely" sting for a successful Flee (GDD §27, no content designed yet)
+    private static void OnBattleFled(BattleResult result) { }
 
     // TODO: pending design — per-skill-tree cast SFX/VFX (GDD §27, no content designed yet)
     private static void OnSkillUsed(PhasixRuntimeData phasix, SkillData skill) { }
