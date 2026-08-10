@@ -1,5 +1,5 @@
 # Phasix — MCP Agent Context Guide
-**Version:** 1.5.1 · 2026-08-07
+**Version:** 1.7.0 · 2026-08-08
 
 > Unity MCP bridge is CoplayDev/unity-mcp (migrated from AnkleBreaker July 2026 — see
 > DECISIONS.md → [Tooling]). Load this file by reading it directly (Claude Code has
@@ -52,7 +52,7 @@
 | Animator generator tool | `PhasixAnimatorGenerator.cs` | `Assets/Scripts/Editor/` | ✅ Done |
 | 2D IK foundation (arms) | `IKManager2D` + 2× `LimbSolver2D` | SampleScene → Mr_chimken/IK | ✅ Done |
 | EventBus | `EventBus.cs` | `Assets/Scripts/Core/` | ✅ Done — includes `OnWildEncounterTriggered`/`Fled`/`EngageRequested` |
-| GameManager skeleton | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
+| GameManager (boot-load/fallback-seed owner, on `SceneManager.sceneLoaded`) | `GameManager.cs` | `Assets/Scripts/Core/` | ✅ Done (2026-08, absorbed DebugPartyBootstrap, see DECISIONS.md → [Core]) |
 | GameStrings constants | `GameStrings.cs` | `Assets/Scripts/Core/` | ✅ Phase 2 Kickoff |
 | BattleResult | `BattleResult.cs` | `Assets/Scripts/Core/` | ✅ Done — real class (`Victory`, `PlayerParticipants`, `EnemyParticipants`), built by `BattleManager.EndBattle` |
 | PhasixData SO (species/form template) | `PhasixData.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
@@ -66,11 +66,15 @@
 | PartySystem (up to 3 slots, single re-skinned active companion instance) | `PartySystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Wk 12-13) |
 | WildSpawnSystem (builds `PhasixRuntimeData` for a wild encounter) | `WildSpawnSystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Wk 14-16) |
 | WildEncounterCreature (contact detection, Flee/Engage; Patrol/Alert state machine) | `WildEncounterCreature.cs` | `Assets/Scripts/Creatures/` | ✅ Done (Patrol/Alert: AUD-005) |
-| DebugPartyBootstrap (adds a test Phasix to the party on Play) | `DebugPartyBootstrap.cs` | `Assets/Scripts/Creatures/` | ⚠️ Temporary — delete once real capture exists |
 | DebugMovementPresetCycler (Tab-cycle companion movement presets in Play mode) | `DebugMovementPresetCycler.cs` | `Assets/Scripts/Creatures/` | ⚠️ Debug tool, keep for now |
+| SpeciesDatabase (GUID-index lookup, mirrors SkillDatabase) | `SpeciesDatabase.cs` | `Assets/Scripts/Creatures/` | ✅ Done (2026-08, save/load species resolution) |
+| SkillLoadoutSystem (equip/unequip/swap, tier-capped) | `SkillLoadoutSystem.cs` | `Assets/Scripts/Creatures/` | ✅ Done (2026-08, Party menu skill ring) |
+| SaveSystem + PhasixSaveData/PartySaveData/SaveFile DTOs | `SaveSystem.cs` etc. | `Assets/Scripts/Save/` | ✅ Done (2026-08, real `Application.persistentDataPath` persistence, 3 slots, auto-continue by newest write time) |
 | Supporting types (StatType, BondZone, Temper, OriginType, TempoType, SignalType, Personality, SkillTreeType, PrimalType, StatBlock, EvolutionHistoryEntry) | `PhasixEnums.cs`, `PrimalType.cs`, `StatType.cs`, `BondZone.cs`, `StatBlock.cs`, `EvolutionHistoryEntry.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
-| SkillData stub | `SkillData.cs` | `Assets/Scripts/Creatures/` | ✅ Stub (full skill content pending roster) |
+| SkillData stub (+ BuiltInMoveType field, 2026-08) | `SkillData.cs` | `Assets/Scripts/Creatures/` | ✅ Stub (full skill content pending roster) |
 | EncounterPromptController (first UI Toolkit screen — Flee/Engage prompt) | `EncounterPromptController.cs` | `Assets/Scripts/UI/` | ✅ Done (Wk 14-16) |
+| HudTooltip (shared runtime hover tooltip, extracted from BattleHUDController) | `HudTooltip.cs` | `Assets/Scripts/UI/` | ✅ Done (2026-08, shared by battle + Party menu) |
+| OverworldMenuController (Tab-key Party/Save/Bag/Options menu, replaces PartyMenuController) | `OverworldMenuController.cs` | `Assets/Scripts/UI/` | ✅ Done (2026-08, see DECISIONS.md → [UI]) |
 | EditMode test assembly (7 `BondSystem` tests) | `BondSystemTests.cs` + `Phasix.Tests.EditMode.asmdef` | `Assets/Tests/EditMode/` | ✅ Done (AUD-012) — first test assembly in the project |
 
 **Active scene:** SampleScene
@@ -99,18 +103,22 @@ Assets/
                               references AstarPathfindingProject + Unity.InputSystem; a custom
                               asmdef CANNOT reference "Assembly-CSharp" by name, see
                               LESSONS_LEARNED.md → [Tooling])
-    Core/        ← GameManager, EventBus (+ wild-encounter events), GameStrings, BattleResult
-                   (real class, not a stub — see Combat/); SaveManager (pending)
+    Core/        ← GameManager (boot-load/fallback-seed owner, absorbed DebugPartyBootstrap
+                   2026-08 — see DECISIONS.md → [Core]), EventBus (+ wild-encounter events),
+                   GameStrings, BattleResult (real class, not a stub — see Combat/)
     Player/      ← PlayerTopDownController (Sprint, corner correction), CameraFollow
                    (lookahead proxy)
     Creatures/   ← PhasixData, PhasixRuntimeData, BondSystem, PersonalitySystem,
                    PersonalityStatModifier, PrimalTypeColor, PhasixPlaceholderVisual,
                    CompanionAI, PartySystem, WildSpawnSystem (incl. skill-seeding, 2026-08),
                    WildEncounterCreature, CaptureSystem, AuraStatAllocationSystem,
-                   AuraTierCeiling, DebugPartyBootstrap (temp), DebugMovementPresetCycler
-                   (debug tool), StatBlock, EvolutionHistoryEntry, PhasixEnums, PrimalType,
-                   StatType, BondZone, SkillData (stub, + 2026-08 structural wiring fields —
-                   see Combat/) — all done; EvolutionManager (pending — see note below)
+                   AuraTierCeiling, SpeciesDatabase (2026-08, GUID-index, mirrors
+                   SkillDatabase), SkillLoadoutSystem (2026-08, equip/unequip/swap),
+                   DebugMovementPresetCycler (debug tool), StatBlock, EvolutionHistoryEntry,
+                   PhasixEnums, PrimalType, StatType, BondZone, SkillData (stub, + 2026-08
+                   structural wiring fields — see Combat/) — all done; EvolutionManager
+                   (pending — see note below). DebugPartyBootstrap DELETED 2026-08 (absorbed
+                   into GameManager, per its own "delete once superseded" doc comment).
     Combat/      ← ✅ Phase 3 Gate, live in BattleScene_Main (was "not yet created" through
                    2026-08-04 — corrected 2026-08-07). BattleManager (live turn loop),
                    BattleEngine, BattleHUDController, BattleParticipant, BattleState/Action/
@@ -120,7 +128,10 @@ Assets/
                    ComboEngine/Tier, ComboRuleType/ComboRuleEvaluator (2026-08, new — NOT GDD
                    content, see DECISIONS.md), SkillTreeCatalog/UnlockSystem, SkillSlotCapacity,
                    TimedInputConfig, PlaceholderSkillResolver/SkillDatabase/ChosenMove/
-                   ActiveStatusInstance (2026-08, skill-ring wiring), BattleLaneLayout/
+                   ActiveStatusInstance (2026-08, skill-ring wiring), BuiltInMoveType (2026-08
+                   follow-up — Attack/Charge/Heal/Regen/Capture became real, equippable
+                   Standard-tree SkillData instead of a hardcoded wheel, see DECISIONS.md),
+                   BattleLaneLayout/
                    StageGizmos (dev-only), RadialGaugeVisual/RingVisual/DragLineVisual (UI
                    Toolkit custom elements), BattleLogFormatter. No `Evolution/` folder exists
                    — Evolution Burst (mid-battle) lives here; a full species-evolution-tree
@@ -129,27 +140,34 @@ Assets/
                    ZoneManager (pending)
     UI/          ← EncounterPromptController (first UI Toolkit screen); BattleHUDController
                    (see Combat/); BattleSummaryController (2026-08, read-only post-battle recap
-                   — Aura gained/damage dealt/healing done, NOT where Aura is spent); new
-                   PartyMenuController (2026-08, Tab-key overworld menu, currently just the
-                   Aura-spend "+1" cards moved out of the post-battle flow — see DECISIONS.md ->
-                   [Combat/UI]). Old AuraAllocationController (same-session predecessor to
-                   BattleSummaryController) deleted. SkillTreeUI, BondDisplay (pending)
+                   — Aura gained/damage dealt/healing done, NOT where Aura is spent);
+                   HudTooltip (2026-08, shared runtime hover tooltip, extracted from
+                   BattleHUDController so battle and the Party menu use the identical
+                   behavior); OverworldMenuController (2026-08, Tab-key Party/Save/Bag/Options
+                   menu — see DECISIONS.md -> [UI]). Old PartyMenuController (single-purpose
+                   Aura-spend screen) and AuraAllocationController (same-session predecessor to
+                   BattleSummaryController) both deleted, fully superseded. SkillTreeUI,
+                   BondDisplay (pending)
     Audio/       ← AudioManager ← Phase 3, not yet created
-    Save/        ← SaveSystem, SaveData ← Phase 3, not yet created
+    Save/        ← SaveSystem, PhasixSaveData, PartySaveData, SaveFile ← ✅ Done (2026-08) —
+                   real Application.persistentDataPath persistence, 3 manual slots,
+                   auto-continue by newest file write time. No longer "not yet created."
     Editor/      ← PhasixSpriteSetup, PhasixAnimatorGenerator; own
                    Phasix.Editor.asmdef (Editor-only, references Unity.2D.Sprite.Editor —
                    needed once split out of the implicit default assembly)
   Tests/
     EditMode/    ← Phasix.Tests.EditMode.asmdef (references Phasix.Runtime, not
-                   Assembly-CSharp) — 206 tests across 21 files: AuraStatAllocationSystemTests,
+                   Assembly-CSharp) — 239 tests across 23 files: AuraStatAllocationSystemTests,
                    BattleEngineTests, BattleLogFormatterTests, BattleParticipantTests,
                    BondSystemTests, CaptureSystemTests, ChainResultCatalogTests,
                    ComboEngineTests, ComboRuleEvaluatorTests, DamageCalculatorTests,
                    EvolutionBurstSystemTests, MasteryBonusCatalogTests,
                    PlaceholderSkillResolverTests, PrimalTypeChartTests,
-                   ResonanceBonusEvaluatorTests, SkillDatabaseTests, SkillSlotCapacityTests,
-                   SkillTreeUnlockSystemTests, StatusDurationCalculatorTests,
-                   StatusEffectCatalogTests, TimedInputConfigTests
+                   ResonanceBonusEvaluatorTests, SaveSystemTests (2026-08, new),
+                   SkillDatabaseTests, SkillLoadoutSystemTests (2026-08, new),
+                   SkillSlotCapacityTests, SkillTreeUnlockSystemTests,
+                   StatusDurationCalculatorTests, StatusEffectCatalogTests,
+                   TimedInputConfigTests
   Prefabs/
     Creatures/   ← Phasix_Placeholder.prefab (companion — Rigidbody2D/Seeker/AIPath/
                    CompanionAI), Phasix_WildEncounter.prefab (stationary-spawn variant, now
@@ -164,7 +182,8 @@ Assets/
                    at battle end; overworld stays loaded underneath)
   Data/
     Species/     ← PhasixData SOs — Test_FireType, Test_SteamType (placeholder, no real
-                   roster yet; both EvolutionTier=1, AvailableTreeTypes set for skill-seeding)
+                   roster yet; both EvolutionTier=1, AvailableTreeTypes set for skill-seeding),
+                   + SpeciesDatabase.asset (2026-08, GUID-index for save/load species resolution)
     Skills/      ← 36 placeholder SkillData assets (2 per SkillTreeType, real but generic —
                    "Do not treat as real skill content"), + SkillDatabase.asset (2026-08,
                    resolves equipped/learned GUIDs to real SkillData at runtime)
@@ -177,9 +196,10 @@ Assets/
                    matches the Pixel Perfect Camera); BattleHUD.uxml/.uss/PanelSettings;
                    BattleSummary.uxml/.uss (2026-08, read-only post-battle recap, reuses
                    AuraAllocationPanelSettings.asset — name is stale, asset itself is fine);
-                   PartyMenu.uxml/.uss (2026-08, Tab-key overworld Aura-spend menu — needs its
-                   own new PanelSettings asset, not yet created as of this doc pass, see
-                   DECISIONS.md -> [Combat/UI] "Blocked" note)
+                   OverworldMenu.uxml/.uss (2026-08, Tab-key Party/Save/Bag/Options menu,
+                   replaces PartyMenu.uxml/.uss — reuses BattleHUD.uss directly for skill-ring
+                   orb classes, and the existing PartyMenuPanelSettings.asset unchanged, name
+                   is stale but the asset itself is fine)
   MCP/
     Context/     ← This file (read directly by Claude Code, no Unity round-trip)
 ```

@@ -13,6 +13,13 @@ using UnityEngine;
 /// derives all actual damage/status behavior from data that's already GDD-locked elsewhere
 /// (SkillTreeCatalog, StatusEffectCatalog). Do NOT add real balance fields (power, cost, specific
 /// status assignment) here — that's still genuinely pending the skill design phase.
+///
+/// 2026-08 follow-up: BuiltInMove is a THIRD structural field, same tier as the two above — marks
+/// the 5 Standard-tree assets (Attack/Charge/Heal/Regen/Capture) that used to be hardcoded,
+/// non-equippable battle moves and are now real, equippable/unequippable SkillData like any other
+/// (user: "make them like any other skills... full customizability, for good or for worse"). A
+/// non-None value tells BattleManager.ResolveSkillAction to skip PlaceholderSkillResolver entirely
+/// and run that move's own dedicated mechanics instead — see BuiltInMoveType's own doc comment.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -32,9 +39,16 @@ public class SkillData : ScriptableObject
              "Assign by hand per-asset — this is a designer choice, not derived data.")]
     [SerializeField] private ComboRuleType _grantsComboRule = ComboRuleType.None;
 
+    [Tooltip("None for every real placeholder skill (resolves through PlaceholderSkillResolver as usual). " +
+             "Set only on the 5 Standard-tree assets (Attack/Charge/Heal/Regen/Capture) — tells " +
+             "BattleManager to run that move's own dedicated mechanics instead of the generic " +
+             "tree-derived damage/status logic.")]
+    [SerializeField] private BuiltInMoveType _builtInMove = BuiltInMoveType.None;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
     public int PlaceholderIndex => _placeholderIndex;
     public ComboRuleType GrantsComboRule => _grantsComboRule;
+    public BuiltInMoveType BuiltInMove => _builtInMove;
 }

@@ -252,6 +252,37 @@
     border-color: rgb(240, 170, 90);
 }
 
+/* Generic status-effect (debuff/buff) icon colors, one per StatusEffectCategory (2026-08
+   follow-up — user report: no debuff indicator appeared on the enemy nameplate after a
+   status-applying skill; BattleHUDController.RefreshStatusIcons is the fix). Placeholder colors,
+   not GDD-locked — distinct from Regen's purple/Burst's orange so all 4 possible icon slots stay
+   visually separable. Applied via EnableInClassList-equivalent add/remove in
+   BattleHUDController.RefreshStatusIcons, same convention as .skill-ring-color-N. */
+.nameplate-status-physical {
+    background-color: rgb(130, 45, 45);
+    border-color: rgb(220, 120, 120);
+}
+
+.nameplate-status-elemental {
+    background-color: rgb(30, 110, 130);
+    border-color: rgb(120, 200, 220);
+}
+
+.nameplate-status-signal {
+    background-color: rgb(75, 60, 140);
+    border-color: rgb(150, 140, 220);
+}
+
+.nameplate-status-universal {
+    background-color: rgb(80, 80, 85);
+    border-color: rgb(165, 165, 170);
+}
+
+.nameplate-status-positive {
+    background-color: rgb(50, 120, 60);
+    border-color: rgb(140, 220, 150);
+}
+
 .nameplate-buff-icon-label {
     position: absolute;
     left: 0;

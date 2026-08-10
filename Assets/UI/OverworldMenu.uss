@@ -1,0 +1,409 @@
+/* Full overworld Tab-key menu (2026-08 session — see DECISIONS.md -> [UI]), replacing the old
+   single-purpose PartyMenu.uss Aura-spend screen. Reuses BattleHUD.uss directly (see
+   OverworldMenu.uxml's second <ui:Style>) for the skill-ring orb classes (.skill-slot-placeholder,
+   .skill-ring-color-N, .move-option-label, .skill-slot-locked, .hud-tooltip, .move-option-disabled)
+   so the Party tab's equipped-skill ring reads identically to the battle scene's, per the user's
+   explicit ask — this file only supplies the menu-specific chrome around it.
+
+   Text sizing floor (2026-08 follow-up — user: "make sure font size is similar to standard font
+   size like whats in the battle log"): BattleHUD.uss's .battle-log-entry (13px)/.battle-log-title
+   (15px) are the established readable baseline for this project. Every label/button below is
+   13px body / 15px section-header-or-larger, nothing smaller. */
+
+.screen-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Always-visible debug reset (2026-08 session — user: "at the very top middle of the screen allow
+   for a debug option to start a fresh game from the beginning"). Lives OUTSIDE
+   .overworld-menu-root so it renders whether or not the Tab menu is open. Dashed red-tinted border
+   deliberately marks it as a debug affordance, not a real player-facing "New Game" flow. */
+.debug-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 4px;
+    align-items: center;
+}
+
+.debug-new-game-button {
+    font-size: 13px;
+    color: rgb(255, 210, 210);
+    background-color: rgba(60, 20, 20, 0.85);
+    border-width: 2px;
+    border-color: rgb(200, 80, 80);
+    padding: 4px 10px;
+    margin: 0;
+}
+
+.overworld-menu-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(10, 10, 14, 0.94);
+    padding-top: 26px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.tab-bar {
+    flex-direction: row;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.tab-button {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(200, 200, 205);
+    background-color: rgba(30, 30, 36, 0.9);
+    border-width: 1px;
+    border-color: rgb(80, 80, 90);
+    padding: 5px 16px;
+    margin: 0 3px;
+}
+
+.tab-button-active {
+    color: rgb(255, 255, 255);
+    background-color: rgba(60, 60, 80, 0.95);
+    border-color: rgb(140, 140, 170);
+}
+
+.tab-content {
+    flex-grow: 1;
+}
+
+.tab-panel {
+    flex-grow: 1;
+}
+
+.panel-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-align: middle-center;
+    margin-bottom: 8px;
+}
+
+.pending-message {
+    font-size: 13px;
+    color: rgb(180, 180, 185);
+    -unity-text-align: middle-center;
+    margin-top: 20px;
+}
+
+.menu-footer {
+    font-size: 13px;
+    color: rgb(170, 170, 175);
+    -unity-text-align: middle-center;
+    margin-top: 6px;
+}
+
+/* --- Party tab: roster view --- */
+
+.party-roster-view {
+    flex-grow: 1;
+}
+
+.party-card-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.roster-card {
+    width: 168px;
+    margin: 5px;
+    padding: 10px;
+    background-color: rgba(30, 30, 36, 0.9);
+    border-width: 1px;
+    border-color: rgb(80, 80, 90);
+    align-items: center;
+}
+
+.roster-card-name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-text-align: middle-center;
+    margin-bottom: 4px;
+}
+
+.roster-card-sub {
+    font-size: 13px;
+    color: rgb(190, 190, 195);
+    -unity-text-align: middle-center;
+}
+
+/* --- Party tab: detail view --- */
+
+.party-detail-view {
+    flex-grow: 1;
+}
+
+.detail-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.detail-back-button {
+    font-size: 13px;
+    color: rgb(220, 220, 225);
+    background-color: rgba(40, 40, 46, 0.9);
+    border-width: 1px;
+    border-color: rgb(90, 90, 100);
+    padding: 4px 10px;
+    margin-right: 10px;
+}
+
+.detail-name-label {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+}
+
+.detail-body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.detail-stat-column {
+    width: 150px;
+    margin-right: 12px;
+}
+
+.detail-aura-label {
+    font-size: 13px;
+    color: rgb(210, 200, 90);
+    margin-bottom: 6px;
+}
+
+.detail-stat-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.detail-stat-name {
+    font-size: 13px;
+    color: rgb(220, 220, 220);
+    width: 78px;
+}
+
+.detail-stat-value {
+    font-size: 13px;
+    color: rgb(255, 255, 255);
+    width: 26px;
+    -unity-text-align: middle-right;
+}
+
+.detail-stat-button {
+    width: 32px;
+    height: 22px;
+    font-size: 13px;
+    padding: 0;
+    margin: 0;
+}
+
+.detail-skill-column {
+    flex-grow: 1;
+    align-items: center;
+}
+
+/* Full 12-position wheel replica of battle's skill ring (2026-08 follow-up — user: "the skill
+   wheel in the party configurator should be a replica of what we see in the battle scene").
+   220 -> 240px: needs to comfortably contain WheelRadius (95, OverworldMenuController.cs) plus
+   an orb's own half-size (16) on every side, vs. the smaller evenly-spaced ring this replaced. */
+.skill-ring-area {
+    position: relative;
+    width: 240px;
+    height: 240px;
+}
+
+/* Beyond this creature's tier cap (2026-08 follow-up — user: "i cant drag and drop the new
+   skills onto the open placeholders... we need to have this fixed"). Distinct from the plain
+   .skill-slot-locked look (BattleHUD.uss — opacity 0.4, means "empty but a valid, fillable
+   position") — this additional class marks a position the creature's current evolution tier can
+   never fill, so it reads as genuinely unavailable rather than a silently-broken empty slot.
+   OverworldMenuController skips drag/right-click registration for these entirely and shows an
+   explanatory "Requires evolution tier N+" tooltip instead. */
+.skill-slot-tier-locked {
+    opacity: 0.18;
+    border-color: rgb(55, 55, 60);
+}
+
+.skill-ring-hub {
+    position: absolute;
+    left: 88px;
+    top: 88px;
+    width: 64px;
+    height: 64px;
+    border-radius: 32px;
+    background-color: rgba(45, 45, 55, 0.9);
+    border-width: 2px;
+    border-color: rgb(90, 90, 100);
+}
+
+/* --- Skill tree carousel (2026-08 follow-up #6 — user: "make it so its a vertical tree that
+   allows a player to swipe left and right to see the tree. Similar to how skyrims skill tree
+   mechanic is.") Replaces the flat grouped tray (.skill-tray-label/.skill-tray-scroll/
+   .skill-tray-row/.skill-tray-group-label, all removed here) with one paged vertical node column
+   per SkillTreeType — see OverworldMenuController.BuildSkillArea's own doc comment. */
+
+.tree-nav-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.tree-nav-button {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(220, 220, 225);
+    background-color: rgba(40, 40, 48, 0.9);
+    border-width: 1px;
+    border-color: rgb(90, 90, 100);
+    padding: 2px 10px;
+    margin: 0 6px;
+}
+
+.tree-nav-label {
+    font-size: 13px;
+    color: rgb(190, 190, 195);
+    margin: 0 6px;
+    -unity-text-align: middle-center;
+}
+
+/* Fixed-size viewport clipping .tree-strip — OverworldMenuController's TreeStageWidth/Height
+   constants must match these px values (kept in sync manually, see that constant's own comment). */
+.tree-stage {
+    width: 260px;
+    height: 200px;
+    overflow: hidden;
+    align-self: center;
+}
+
+/* Positioned via inline style.left by the controller (PageTo/SetStripPosition) to center the
+   current page; width is also set in code (TreePageWidth * page count). transition-property/
+   duration give page-to-page changes an animated slide — the controller zeroes duration during a
+   live drag so the strip tracks the pointer 1:1, then restores it (StyleKeyword.Null, falling
+   back to this rule) on release so the commit/snap-back animates smoothly. */
+.tree-strip {
+    position: absolute;
+    top: 0;
+    flex-direction: row;
+    transition-property: left;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+}
+
+/* Narrower than .tree-stage (210px in a 260px stage) so the previous/next page's edges peek in —
+   confirmed via AskUserQuestion: "show a tree as a page, with the other adjacent trees slightly
+   showing." */
+.tree-page {
+    width: 210px;
+    height: 200px;
+    align-items: center;
+}
+
+.tree-page-empty-label {
+    font-size: 12px;
+    color: rgb(140, 140, 148);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-top: 16px;
+    padding: 0 10px;
+}
+
+.tree-node-column {
+    width: 100%;
+    align-items: center;
+}
+
+/* Straight placeholder connector between vertically stacked nodes — a plain background bar, not
+   DragLineVisual's Painter2D line (that class is built for the arbitrary-angle drag-to-equip
+   line; a fixed vertical segment between stacked nodes doesn't need it). No real branching/
+   prerequisite data exists yet (SkillData.cs), so every tree renders as one straight chain for
+   now — "the finer details of what unlocks into what" is still pending real skill-tree design. */
+.tree-node-connector {
+    width: 3px;
+    height: 14px;
+    background-color: rgb(110, 110, 120);
+}
+
+/* Tray icons reuse the same 32x32 orb sizing as the equipped ring (.skill-slot-placeholder) so
+   dragging one into a ring slot doesn't require any size transition — deliberately NOT shrunk
+   smaller, per the text-legibility floor this menu holds every element to. .skill-slot-placeholder
+   itself is `position: absolute` (correct for the ring, wrong for a flex-wrapped tray row) — the
+   controller sets `position: Relative` as an inline style on each tray icon to override it
+   (established project convention: an inline style always wins over any stylesheet rule,
+   sidestepping cascade-specificity ambiguity — see BattleHUDController.ApplyEvoVisual's own note
+   on this). Color itself (.skill-ring-color-N) is applied by the controller per skill identity,
+   not by this class — see OverworldMenuController.ApplySkillColor. */
+.skill-tray-icon {
+    margin: 4px;
+}
+
+/* A skill currently equipped elsewhere on the wheel stays visible in its tree (2026-08 follow-up
+   #7 — user: "it shouldnt disappear from the tree, it should act more as a copy from the tree
+   assuming its unlocked") — dimmed and outlined so it still reads as "already placed" rather than
+   an identical, freely-equippable duplicate. Dragging it again is harmless (SkillLoadoutSystem
+   already refuses to equip the same skill into two slots), this is purely a visual cue. */
+.skill-tray-icon-equipped {
+    opacity: 0.55;
+    border-width: 2px;
+    border-color: rgb(255, 255, 255);
+}
+
+/* --- Save tab --- */
+
+.save-slot-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.save-slot-card {
+    width: 168px;
+    margin: 5px;
+    padding: 10px;
+    background-color: rgba(30, 30, 36, 0.9);
+    border-width: 1px;
+    border-color: rgb(80, 80, 90);
+    align-items: center;
+}
+
+.save-slot-title {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    margin-bottom: 4px;
+}
+
+.save-slot-timestamp {
+    font-size: 13px;
+    color: rgb(190, 190, 195);
+    margin-bottom: 8px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.save-slot-button {
+    font-size: 13px;
+    color: rgb(220, 230, 220);
+    background-color: rgba(30, 60, 30, 0.9);
+    border-width: 1px;
+    border-color: rgb(90, 140, 90);
+    padding: 5px 14px;
+    margin: 0;
+}

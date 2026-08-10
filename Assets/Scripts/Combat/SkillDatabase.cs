@@ -61,6 +61,22 @@ public class SkillDatabase : ScriptableObject
         return _byGuid.TryGetValue(guid, out skill);
     }
 
+    /// <summary>
+    /// Every skill registered in this database, paired with its GUID (skipping any entry whose
+    /// GUID never resolved — see RebuildGuidIndex). Added for the overworld Party menu's skill
+    /// configurator (2026-08 follow-up — user: "all the other skills we have right now... should
+    /// be displayed" as equip options, not just what a creature has already learned).
+    /// </summary>
+    public IEnumerable<(SkillData skill, string guid)> AllSkills
+    {
+        get
+        {
+            EnsureLookupsBuilt();
+            foreach (KeyValuePair<string, SkillData> entry in _byGuid)
+                yield return (entry.Value, entry.Key);
+        }
+    }
+
     /// <summary>Reverse lookup, used by bootstrap-seeding (WildSpawnSystem/DebugPartyBootstrap) to turn a resolved SkillData back into the GUID string PhasixRuntimeData's skill lists store.</summary>
     public bool TryGetGuid(SkillData skill, out string guid)
     {

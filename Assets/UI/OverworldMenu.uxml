@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Style src="project://database/Assets/UI/BattleHUD.uss" />
+    <ui:Style src="project://database/Assets/UI/OverworldMenu.uss" />
+
+    <ui:VisualElement name="ScreenRoot" class="screen-root" picking-mode="Ignore">
+        <ui:VisualElement name="DebugBar" class="debug-bar">
+            <ui:Button name="DebugNewGameButton" text="DEBUG: New Game" class="debug-new-game-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="OverworldMenuRoot" class="overworld-menu-root">
+            <ui:VisualElement name="TabBar" class="tab-bar">
+                <ui:Button name="TabButtonParty" text="Party" class="tab-button" />
+                <ui:Button name="TabButtonSave" text="Save" class="tab-button" />
+                <ui:Button name="TabButtonBag" text="Bag" class="tab-button" />
+                <ui:Button name="TabButtonOptions" text="Options" class="tab-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="TabContent" class="tab-content">
+                <ui:VisualElement name="PartyPanel" class="tab-panel">
+                    <ui:VisualElement name="PartyRosterView" class="party-roster-view">
+                        <ui:Label text="Party" class="panel-title" />
+                        <ui:VisualElement name="PartyCardContainer" class="party-card-container" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PartyDetailView" class="party-detail-view" style="display: none;" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="SavePanel" class="tab-panel" style="display: none;">
+                    <ui:Label text="Save" class="panel-title" />
+                    <ui:VisualElement name="SaveSlotContainer" class="save-slot-container" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="BagPanel" class="tab-panel" style="display: none;">
+                    <ui:Label text="Bag" class="panel-title" />
+                    <ui:Label text="Pending — no item system exists yet." class="pending-message" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="OptionsPanel" class="tab-panel" style="display: none;">
+                    <ui:Label text="Options" class="panel-title" />
+                    <ui:Label text="Pending — no settings system exists yet." class="pending-message" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:Label text="Press Tab to close" class="menu-footer" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

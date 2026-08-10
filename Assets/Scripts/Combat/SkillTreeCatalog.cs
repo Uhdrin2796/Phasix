@@ -47,6 +47,14 @@ public static class SkillTreeCatalog
         { SkillTreeType.Typing, new Entry("Resonance", "Type-specific power skills, Primal interaction exploits") },
         { SkillTreeType.Bastion, new Entry("Guard/Vitality", "Fortify, Counter, Absorb. Physical defense primary tree.") },
         { SkillTreeType.Phantom, new Entry("Instinct", "Evasion, Prediction, Ghost Step. Speed-based defense primary tree.") },
+
+        // Standard (2026-08 follow-up) — NOT part of the GDD's 18-tree taxonomy above; groups the
+        // 5 built-in moves (see SkillTreeType.Standard's own doc comment). This entry exists only
+        // as a defensive fallback so a stray SkillTreeCatalog.Get(Standard) call never throws —
+        // the real mechanism keeping built-ins out of PlaceholderSkillResolver's tree-derived
+        // damage/status logic is the SkillData.BuiltInMove != None check, applied BEFORE any
+        // SkillTreeCatalog/PlaceholderSkillResolver call site touches a built-in move's SkillData.
+        { SkillTreeType.Standard, new Entry("N/A", "Built-in moves (Attack/Charge/Heal/Regen/Capture) — not a real skill tree, never resolved through this catalog's PrimaryAttribute derivation.") },
     };
 
     public static Entry Get(SkillTreeType type) => Entries[type];

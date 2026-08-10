@@ -17,21 +17,6 @@
                     <ui:VisualElement name="PlayerStageSlot0_SkillSlot9" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot0_SkillSlot10" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot0_SkillSlot11" class="skill-slot-placeholder" />
-                    <ui:VisualElement name="PlayerStageSlot0_MoveOption0" class="move-option-placeholder">
-                        <ui:Label text="A" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot0_MoveOption1" class="move-option-placeholder move-option-blue">
-                        <ui:Label text="C" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot0_MoveOption2" class="move-option-placeholder move-option-pink">
-                        <ui:Label text="H" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot0_MoveOption3" class="move-option-placeholder move-option-purple">
-                        <ui:Label text="R" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot0_MoveOption4" class="move-option-placeholder move-option-gold">
-                        <ui:Label text="K" class="move-option-label" />
-                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="PlayerStageSlot1" class="stage-creature">
                     <ui:VisualElement name="PlayerStageSlot1_SkillSlot0" class="skill-slot-placeholder" />
@@ -46,21 +31,6 @@
                     <ui:VisualElement name="PlayerStageSlot1_SkillSlot9" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot1_SkillSlot10" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot1_SkillSlot11" class="skill-slot-placeholder" />
-                    <ui:VisualElement name="PlayerStageSlot1_MoveOption0" class="move-option-placeholder">
-                        <ui:Label text="A" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot1_MoveOption1" class="move-option-placeholder move-option-blue">
-                        <ui:Label text="C" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot1_MoveOption2" class="move-option-placeholder move-option-pink">
-                        <ui:Label text="H" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot1_MoveOption3" class="move-option-placeholder move-option-purple">
-                        <ui:Label text="R" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot1_MoveOption4" class="move-option-placeholder move-option-gold">
-                        <ui:Label text="K" class="move-option-label" />
-                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="PlayerStageSlot2" class="stage-creature">
                     <ui:VisualElement name="PlayerStageSlot2_SkillSlot0" class="skill-slot-placeholder" />
@@ -75,21 +45,6 @@
                     <ui:VisualElement name="PlayerStageSlot2_SkillSlot9" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot2_SkillSlot10" class="skill-slot-placeholder" />
                     <ui:VisualElement name="PlayerStageSlot2_SkillSlot11" class="skill-slot-placeholder" />
-                    <ui:VisualElement name="PlayerStageSlot2_MoveOption0" class="move-option-placeholder">
-                        <ui:Label text="A" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot2_MoveOption1" class="move-option-placeholder move-option-blue">
-                        <ui:Label text="C" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot2_MoveOption2" class="move-option-placeholder move-option-pink">
-                        <ui:Label text="H" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot2_MoveOption3" class="move-option-placeholder move-option-purple">
-                        <ui:Label text="R" class="move-option-label" />
-                    </ui:VisualElement>
-                    <ui:VisualElement name="PlayerStageSlot2_MoveOption4" class="move-option-placeholder move-option-gold">
-                        <ui:Label text="K" class="move-option-label" />
-                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement name="EnemyStageArea" class="stage-side stage-side-enemy">

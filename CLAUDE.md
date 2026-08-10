@@ -57,7 +57,8 @@ Assets/
     World/       ← WorldChunkManager, EncounterTrigger, ZoneManager
     UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay
     Audio/       ← AudioManager ← Phase 3, not yet created
-    Save/        ← SaveSystem, SaveData ← Phase 3, not yet created
+    Save/        ← SaveSystem, SaveData ← Done (2026-08) — real Application.persistentDataPath
+                   persistence, 3 manual slots, auto-continue by newest file write time
   Prefabs/
     Creatures/   ← Phasix placeholder/visual prefabs (Phasix_Placeholder, etc.)
   Data/
@@ -115,7 +116,7 @@ float phaseSaturation;       // accumulates toward evolution thresholds
 // SKILL SYSTEM
 List<SkillTreeType> unlockedTreeTypes;
 List<SkillData> learnedSkills;      // NEVER shrinks
-List<SkillData> equippedSkills;     // active slots: T1=2, T2=3, T3=4, T4=5, T5=5–7
+List<SkillData> equippedSkills;     // active slots: T1=4, T2=6, T3=8, T4=10, T5=12 (2026-08 rework — full 12-slot wheel reachable at max tier; see SkillSlotCapacity.GetActiveSlotRange, DECISIONS.md -> [Progression])
 ```
 
 ---

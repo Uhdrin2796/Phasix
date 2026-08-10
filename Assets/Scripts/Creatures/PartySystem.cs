@@ -81,6 +81,19 @@ public class PartySystem : MonoBehaviour
         return (index >= 0 && index < MaxPartySize) ? _slots[index] : null;
     }
 
+    /// <summary>
+    /// Directly sets a specific slot's contents, bypassing AddToParty's "first empty slot"
+    /// semantics (2026-08 session, see DECISIONS.md -> [Save]) — used by SaveSystem to restore a
+    /// save's exact slot alignment (a save's slot 2 must load back into slot 2, not wherever
+    /// AddToParty would have placed it). Does NOT touch the active companion visual or
+    /// _activeSlotIndex; call SetActiveSlot separately once all slots are populated.
+    /// </summary>
+    public void SetSlot(int index, PhasixRuntimeData phasix)
+    {
+        if (index < 0 || index >= MaxPartySize) return;
+        _slots[index] = phasix;
+    }
+
     private void EnsureCompanionInstance()
     {
         if (_companionInstance != null) return;

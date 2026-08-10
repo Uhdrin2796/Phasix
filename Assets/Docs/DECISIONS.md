@@ -3048,3 +3048,286 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Date:** 2026-08-07
 - **Revisit if:** Devolution is built — `auraAllocatedPoints` resetting alongside `baseStats` (or
   not) on devolution is unresolved and should be decided then, not assumed from this entry.
+
+---
+
+## New Entries — 2026-08-08 Full Overworld Menu Session
+
+### [Save] Save/Load implemented — JsonUtility, 3 manual slots, auto-continue by file write-time
+- **Decided:** New `Assets/Scripts/Save/` (`PhasixSaveData`, `PartySaveData`, `SaveFile`,
+  `SaveSystem`). `SaveSystem.Save`/`TryLoad` write/read `Application.persistentDataPath/
+  save_slot_{n}.json` via `JsonUtility`. No separate "current slot" marker — `TryGetNewestSlot`
+  just compares `File.GetLastWriteTimeUtc` across all 3 slot files and picks the newest, so saving
+  to any slot naturally becomes "continue from here" next launch. `Dictionary<string,int>
+  specificAura` and `HashSet<string> discoveredNodeGuids` are flattened to parallel `List<T>`s at
+  the DTO layer since `JsonUtility` supports neither directly. Species references (`PhasixData`,
+  `[NonSerialized]` on `PhasixRuntimeData`) round-trip through a new `SpeciesDatabase` (mirrors the
+  existing `SkillDatabase` GUID-index pattern exactly) rather than `AssetDatabase`, which is
+  Editor-only and unusable from save/load code that must also work in a build.
+- **Why:** [Save] Save format (March 2026, above) already locked JsonUtility as one of two
+  acceptable formats; picked here specifically to avoid a new package dependency, since every DTO
+  was hand-flattened to be fully JsonUtility-compatible anyway.
+- **Alternatives rejected:** A separate "active slot index" file/PlayerPrefs entry as the
+  auto-continue marker — rejected as redundant; file write-time is already an unambiguous,
+  tamper-resistant ordering with no extra state to keep in sync.
+- **Date:** 2026-08-08
+- **Revisit if:** A future explicit "load a different slot" UI is added — this pass is
+  deliberately save-only, per user direction ("Save-only menu; auto-load last-saved slot on boot").
+
+### [Core] GameManager boot-load runs on SceneManager.sceneLoaded, not Start()
+- **Decided:** `GameManager` (persistent singleton, `DontDestroyOnLoad`) resolves "auto-load the
+  newest save, or seed a fallback starter" from a `SceneManager.sceneLoaded` handler registered in
+  `OnEnable`, not `Start()`.
+- **Why:** Live-verified bug: the debug "New Game" button (`GameManager.ResetToNewGame`) reloads
+  the active scene while `GameManager` itself survives via `DontDestroyOnLoad`. `Start()` only
+  ever fires ONCE per component instance — it does not re-run just because the scene around a
+  surviving `DontDestroyOnLoad` object reloads. A `Start()`-based version silently never re-seeded
+  the party after a debug reset (console showed no "seeded fallback starter" log, and the old
+  save's stats stayed in the freshly-reloaded scene). `sceneLoaded` fires for every load, including
+  the very first one at boot, so one handler covers both cases.
+- **Alternatives rejected:** Manually re-invoking the load/seed logic from inside
+  `ResetToNewGame` before calling `SceneManager.LoadScene` — rejected because the freshly-reloaded
+  scene's `PartySystem` doesn't exist yet at that point (it's created by the load itself), so the
+  seed would target the SOON-TO-BE-DESTROYED old `PartySystem`, not the new one.
+- **Date:** 2026-08-08
+- **Revisit if:** Never — this is the correct Unity lifecycle idiom for logic that must re-run
+  after any scene (re)load a persistent singleton survives.
+
+### [UI] Tab menu rebuilt as a full Party/Save/Bag/Options shell, replacing the single-purpose Aura screen
+- **Decided:** `PartyMenuController`/`PartyMenu.uxml`/`.uss` deleted, replaced by
+  `OverworldMenuController`/`OverworldMenu.uxml`/`.uss`. Party tab: roster cards -> click opens a
+  per-creature detail view with the ported Aura stat-allocation rows plus an equipped skill ring
+  that reuses the battle scene's own orb classes (`.skill-slot-placeholder`/`.skill-ring-color-N`/
+  `.move-option-label`), the shared `HudTooltip`, and `DragLineVisual` — so it reads identically to
+  battle, per explicit user ask. Save tab: 3 slots, click to overwrite. Bag/Options: static
+  "pending design" placeholders — no item or settings system exists yet. An always-visible debug
+  "New Game" button lives outside the Tab-toggled menu root so it renders regardless of menu state.
+- **Why:** User: "I need a Full menu = party, save, bag, options... clicking on them allows you to
+  see stat allocation, possible skills equipped and equipped skills as full icons and placement
+  like you see in battle scene so we can drag and drop there."
+- **Alternatives rejected:** A from-scratch skill-ring visual for the menu, independent of
+  battle's — rejected per the user's explicit ask for the SAME look or feel, and because
+  duplicating the orb/color/label/tooltip system would drift out of sync with battle over time.
+- **Date:** 2026-08-08
+- **Revisit if:** A real Bag/Options system is designed — those tabs are the natural place to
+  extend, not a reason to pre-build them now.
+
+### [UI] Skill ring drag/drop: both swap-in-place AND tray re-equip; right-click to unequip
+- **Decided:** New `SkillLoadoutSystem` (static rules class, matches `AuraStatAllocationSystem`/
+  `BondSystem`'s convention): `TryEquip`/`TryEquipAt`/`Unequip`/`SwapEquipped`. Dragging one
+  equipped orb onto another swaps their positions (`SwapEquipped`). Dragging a learned-but-
+  unequipped tray skill onto ANY ring orb (occupied or empty) equips it there, overwriting
+  whatever was there (`TryEquipAt`) — the overwritten skill simply falls out of
+  `equippedSkillGuids` and reappears in the tray, since it's never removed from
+  `learnedSkillGuids`. Right-click (UI Toolkit's `ContextClickEvent`) on an equipped orb unequips
+  it back to the tray (`Unequip`) without touching `learnedSkillGuids`.
+- **Why:** User, when asked to choose between "swap only" and "tray re-equip only": "lets do both
+  options and then let right click be to unequip an equipped skill."
+- **Alternatives rejected:** A single unified "equip" call that always appends to the end of
+  `equippedSkillGuids` — rejected because dropping onto a SPECIFIC occupied ring position needs to
+  land at that exact index, not wherever the list's next open slot happens to be, so `TryEquip`
+  (append-only, from Part E) was extended with `TryEquipAt` (index-targeted) rather than reused.
+- **Date:** 2026-08-08
+- **Revisit if:** Never — this is the agreed-on interaction model, not a placeholder.
+
+### [UI] Skill configurator follow-up: per-skill color, full catalog + built-ins, compact labels
+- **Decided:** Three follow-up fixes to the Party menu's skill configurator after first-pass user
+  feedback. (1) Orb/tray color is now a deterministic hash of the skill's own GUID into the
+  7-color palette (`OverworldMenuController.GetSkillColorClass`), not owned by ring position —
+  user: "the colors and stuff should be dedicated to that specific skill not just on the slot."
+  (2) The "All Skills" tray now also lists the 5 built-in moves (A/C/H/R/K), shown with battle's
+  real colors/hover text but not draggable (they're inherent to every creature, not managed by
+  `SkillLoadoutSystem`) — user: "the other skills... C, H, A, etc. are all skills that should be
+  on the all skills list." (3) Every orb label (ring and tray) is now a short code
+  (`GetShortSkillLabel`) instead of the full `SkillName`, which was overflowing a 32px circle —
+  user: "It should only show their icon maxium a letter and a number... they should all have the
+  hover over description similar to the in battle game." An already-short real name (`C1`/`C2`)
+  passes through as-is; everything else gets `{tree-initial}{index-in-tree}` (e.g. `S1`).
+- **Bug found and fixed during live verification:** Corruption is the only one of the 18
+  `SkillTreeType`s whose own initial is `C` — without an override, its first two skills would
+  auto-generate `C1`/`C2` too, colliding with the real, hand-set `C1`/`C2` (which
+  `ComboRuleEvaluator`'s `RepeatSameSkill` rule specifically references — not just cosmetic, two
+  actually-different skills rendering identically). Live-verified before the fix: unequipping the
+  real C1 and finding it in the tray showed a DIFFERENT color than it had on the ring
+  (`skill-ring-color-4` vs `skill-ring-color-6`) — root cause was `GetShortSkillLabel` returning
+  `"C1"` for Corruption's first skill too, so a tray search for the label `"C1"` sometimes matched
+  the wrong skill entirely. Fixed by reserving the letter `C` for hand-authored short names —
+  `GetShortSkillLabel` substitutes `X` for Corruption's tree-initial. Re-verified live: ring/tray
+  colors now match for the same skill, and exactly one tray entry is labeled `"C1"`.
+- **Alternatives rejected:** A 2-letter tree-prefix scheme (e.g. `Co1` for Corruption) — would
+  avoid this specific collision but contradicts the user's explicit "maximum a letter and a
+  number" format, and other letter collisions (e.g. Aura/Aspect both -> `A`) are accepted as-is
+  per the user's own stated tolerance for placeholder imperfection ("a lot of them are just
+  placeholders and don't do anything but that's how it should work") — hover always resolves the
+  ambiguity with the skill's real name.
+- **Date:** 2026-08-08
+- **Revisit if:** A skill is ever hand-renamed to a short code starting with a letter other than
+  `C` — the same collision class could recur for that letter's tree-initial and would need the
+  same kind of reservation.
+
+### [Combat] Generic status-effect (debuff/buff) icons added to the nameplate — previously invisible
+- **Decided:** `BattleParticipant.ActiveStatuses` was already fully tracked (`ApplyStatus`/
+  `TickStatuses`, wired into `ResolveSkillAction`'s status branch and `ChainResultCatalog`/
+  `MasteryBonusCatalog` detection) but had ZERO nameplate visualization — confirmed by grep,
+  `BattleHUDController` had no reference to `ActiveStatus`/status icons at all before this pass.
+  Added a fixed pool of `StatusIconPoolSize` (4) generic icon slots per nameplate, reusing
+  `.nameplate-buff-icon`'s existing visual language (small lettered circle + countdown subscript,
+  same as Regen/Burst) — letter is the status type's own first initial, color is by
+  `StatusEffectCategory` (5 new placeholder color classes, `.nameplate-status-physical/elemental/
+  signal/universal/positive`), hover shows the full name/category/turns-remaining via the shared
+  `HudTooltip`. Runs every `RefreshNameplateStats` call (both sides), so an expired status
+  (`TickAllStatuses`, once per round) clears on the next refresh.
+- **Why:** User: "for c1 on application for debuffs i dont seee any debuffs on the enemy hud,
+  please include that." (C1 itself deals damage, not a status — the underlying gap was general:
+  no status-applying skill's effect was ever visible on either nameplate.)
+- **Alternatives rejected:** A per-status unique color/icon (28 distinct designs) — rejected as
+  inventing real content beyond what's GDD-locked; category (5 values, GDD §17's own table
+  grouping) is the right granularity for a placeholder pass, same reasoning as the skill-color
+  hash needing no per-status hand-authored art. A dynamic (unbounded) icon list — rejected as
+  unnecessary complexity; a fixed pool of 4 comfortably covers realistic simultaneous-status counts
+  for this project's current scope.
+- **Verified live:** Applied Bleed (Physical) + Regenerate (Positive) directly to a live enemy
+  participant mid-battle — both appeared with correct letter/color/countdown, hover dispatched the
+  correct tooltip text, and unused pool slots stayed hidden.
+- **Date:** 2026-08-08
+- **Revisit if:** `StatusIconPoolSize` (4) is ever hit in real play (needs bumping) — no test
+  currently exercises the overflow case since it's a placeholder-generous cap, not a modeled limit.
+
+### [Combat] Built-in moves (A/C/H/R/K) now interrupt RepeatSameSkill — previously invisible to combo history
+- **Decided:** `BattleManager.PlayerTurn` now calls `attacker.RecordSkillUse(null)` whenever a
+  built-in move (Attack/Charge/Heal/Regen/Capture) resolves, guarded by `_pendingSkill == null`
+  (skill-ring uses still record the real `SkillData` via `ResolveSkillAction`, unchanged). A null
+  entry naturally fails `ComboRuleEvaluator.HasTrailingMatch`'s `sequence[i] != target` check,
+  correctly breaking any in-progress `RepeatSameSkill` streak.
+- **Why:** User: "the other skills dont reset the counter on C1 if it has stacks, only C2
+  does... Do all the other skills not count as normal skills?" Root cause: `RecordSkillUse` was
+  ONLY ever called from `ResolveSkillAction` (the skill-ring path) — built-in moves left zero
+  trace in `RecentSkillsUsed`, so the trailing-match check simply never saw them; a built-in used
+  between two C1 casts didn't break the streak, it just left it frozen mid-way, and the next C1
+  picked the same streak back up as if nothing happened in between. `RecentSkillTrees`
+  (CrossTreeSequence's feed) is deliberately DIFFERENT and untouched here — its own doc comment
+  already documents built-in exclusion as intentional (no `SkillTreeType` to record), a separate,
+  already-considered design decision this fix doesn't revisit.
+- **Alternatives rejected:** A dedicated `RecordNonSkillAction()` method instead of
+  `RecordSkillUse(null)` — rejected as unnecessary API surface; `RecentSkillsUsed` is already
+  typed `List<SkillData>` (nullable), and `HasTrailingMatch`/`GetRepeatTrailingStreakLength`
+  already handle a null entry correctly with no changes needed on that side.
+- **Verified live:** Recorded C1, C1 (streak length 2) → simulated built-in move (streak length 0)
+  → C1 again (streak length 1, not 3) — confirms the streak genuinely resets rather than pausing.
+- **Date:** 2026-08-08
+- **Revisit if:** `TimedInputStreak` is ever reported with the same symptom — it wasn't touched by
+  this fix (its own doc comment specifies only an actual timed-input miss breaks it, not "any
+  other action," a different rule from RepeatSameSkill's).
+
+### [UI] Party-menu equip slots beyond the tier cap now visually/functionally distinct from empty-but-fillable ones
+- **Decided:** `OverworldMenuController.BuildSkillArea` computes `maxSlots` (the tier's real
+  active-slot cap, `SkillSlotCapacity.GetActiveSlotRange`) again and applies a NEW
+  `.skill-slot-tier-locked` class to any equip position at or beyond it — no drag-start/
+  right-click registration, an explanatory "Locked / Requires evolution tier N+" hover tooltip
+  (`GetTierLockedTooltip`, walks `SkillSlotCapacity` to find the actual required tier), and
+  `OnDragUp`'s drop-target hit-test loop now bounds at `maxSlots` instead of the full 7 physical
+  positions.
+- **Why:** User: "i cant drag and drop the new skills onto the open placeholders either, but i
+  can swap them with the existing C1 and C2. We need to have this fixed too." The underlying
+  behavior (tier cap enforced) was already correct — `SkillLoadoutSystem.TryEquipAt` already
+  refused any index `>= maxSlots` — but visually, a "beyond-cap, will never accept a drop" slot
+  and a "within-cap, currently empty, valid drop target" slot both just showed the same plain
+  `.skill-slot-locked` grey with no differentiation, so a beyond-cap drop read as broken rather
+  than tier-gated.
+- **Alternatives rejected:** Removing the tier cap in the party menu (letting any of the 7
+  physical positions be filled regardless of tier) — rejected, this is a locked mechanic from
+  Evolution_System_Directive's tier progression, not a UI-only restriction to relax. Hiding
+  beyond-cap positions entirely instead of showing them locked — rejected, contradicts the
+  already-agreed "replica of battle scene" wheel, which also always renders all 7 physical
+  positions regardless of tier.
+- **Verified live:** For a Tier-1 creature (cap 2): slots 0-1 (C1/C2) correctly NOT tier-locked;
+  slots 2-6 correctly tier-locked. Dragging a tray skill onto slot 2 was correctly rejected (no
+  change) with the tooltip reading "Locked / Requires evolution tier 2+"; dragging the same skill
+  onto slot 0 correctly swapped it in, confirming within-cap drops still work unchanged.
+- **Date:** 2026-08-08
+- **Revisit if:** Never — matches the established tier-cap mechanic, just makes it legible in the
+  one UI surface (drag-to-equip) where its absence of feedback was actually reachable by a player.
+
+### [Combat] Built-in moves (Attack/Charge/Heal/Regen/Capture) became real, equippable/unequippable SkillData
+- **Decided:** The 5 built-in battle moves stop being hardcoded, always-available, non-equip-managed
+  fixed wheel positions. New `BuiltInMoveType` enum (`None`/`Attack`/`Charge`/`Heal`/`Regen`/
+  `Capture`) + `SkillData.BuiltInMove` field mark 5 new real assets (`Standard_Attack.asset` etc.,
+  `Assets/Data/Skills/`) registered in `SkillDatabase` like any other skill. New `SkillTreeType.
+  Standard` (19th value, NOT GDD taxonomy — same precedent as `ComboRuleType`/`ChainResultType`)
+  groups them, per the user's own wording: "if theres not particular skill tree for them they can
+  all be grouped in their own as standard." `SkillName` = `"A"`/`"C"`/`"H"`/`"R"`/`"K"` — reuses
+  their existing battle-scene letters, so the Party menu's `GetShortSkillLabel` picks them up with
+  zero special-casing. `BattleHUDController`'s old fixed-5 wheel positions (`MoveOptionClockHours`/
+  `MoveOptionIsSelfOnly`/`MoveOptionTooltips`/`_playerMoveOptions`, 15 UXML `MoveOption` elements)
+  are gone — the skill ring is now a uniform 12-slot ring, every position a real equip slot.
+  `BattleManager.ResolveSkillAction` dispatches on `skill.BuiltInMove` first (new
+  `ResolveBuiltInMove`, the exact pre-existing per-move mechanics relocated verbatim) before ever
+  reaching `PlaceholderSkillResolver`. `WildSpawnSystem.SeedInitialSkills` now always learns all 5
+  Standard skills (regardless of `species.AvailableTreeTypes`) and seeds Standard FIRST in the
+  round-robin equip pass, so Attack claims a slot by default — confirmed with the user as an
+  acceptable temporary default pending a real move-pool-assignment design ("We havent done that
+  yet so the ones we have are good for now"). `OverworldMenuController`'s old "5 built-ins,
+  informational-only, not draggable" tray section is deleted — they now flow through the same
+  `SkillDatabase.AllSkills` loop as every other skill: real per-skill color, real drag-to-equip,
+  real right-click-to-unequip.
+- **Why:** User, after the skill-configurator follow-up work: "dont make them inherent i want
+  them to also be selectable. This makes it so players can remove things that they dont need and
+  have full customizability for good or for worse."
+- **Alternatives rejected:** Keeping built-ins hardcoded but ALSO letting the Party menu show them
+  as draggable (a UI-only illusion of equippability with no real backing data) — rejected as
+  fundamentally dishonest UI; the user's own framing ("full customizability, for good or for
+  worse") specifically implies real consequences (a creature CAN end up with zero offense
+  equipped), which requires them to be real, unequippable SkillData, not a cosmetic overlay.
+- **Verified live:** Fresh-seeded Tier-1 creature defaults to `[Attack, C1]`. Attack/Charge/Heal/
+  Regen/Capture each independently confirmed correct via `ResolveBuiltInMove` (Aura restored, HP
+  healed, Regen applied, enemy captured and added to party, Attack damage logged). Party menu:
+  all 5 appear in "All Skills" with real colors/labels; right-click-unequip and drag-back-to-equip
+  both confirmed round-tripping correctly. A creature with ALL skills unequipped (including
+  Attack) completed a full player turn and the following enemy turn with no errors — confirms
+  "for good or for worse" doesn't soft-lock the battle loop.
+- **Date:** 2026-08-08
+- **Revisit if:** A real move-pool-assignment/starter-loadout design is ever built — the
+  "Standard seeds first, Attack wins pass 0" default is explicitly a placeholder, not a design.
+
+## New Entries — 2026-08-09 Skill Wheel Follow-up
+
+### [Progression] Equip-slot count per tier changed to flat 4/6/8/10/12, reaching all 12 wheel positions at T5
+- **Decided:** `SkillSlotCapacity.GetActiveSlotRange` now returns a flat `(4,4)/(6,6)/(8,8)/(10,10)/(12,12)`
+  for T1-T5, replacing the original `(2,2)/(3,3)/(4,4)/(5,5)/(5,7)` table. Every natural tier now
+  has a single fixed value — T5's old "5-7, varies by species" range is gone for now.
+- **Why:** User: "at max tier they should be able to access all 12 slots. say tier 1 they have
+  access to 3 slots, then increasing by 2 every tier." A pure `start=3, +2/tier` progression lands
+  on 11 at T5, one short of the 12-position wheel (`BattleHUDController`/`OverworldMenuController`
+  both render 12 physical ring slots) — user confirmed shifting the start to 4 instead so T5 lands
+  exactly on 12, keeping the clean +2/tier step.
+- **Alternatives rejected:** (1) Keep start=3, give T5 an irregular +3 final step (3/5/7/9/12) —
+  rejected, user picked the clean start=4 progression instead. (2) Keep start=3, accept 11 at T5 —
+  rejected, user explicitly wants all 12 wheel positions reachable.
+- **This SUPERSEDES a number sourced from `Evolution_System_Directive_v1_1_0.pdf` §1** (the
+  Directive's canonical PDF, per DOCUMENT_INDEX.md, still shows the old table — Claude Code cannot
+  edit the PDF directly). The `.md` mirror (`Evolution_System_Directive_v1_1_0.md`) has been
+  updated with a "PDF SYNC REQUIRED" note in both its Active Slots tables, same convention this
+  file already uses elsewhere ("Status: GDD SYNC REQUIRED"). **The PDF itself still needs a manual
+  update outside Claude Code's reach if it's meant to stay the source of truth.** "Skill Trees
+  Available" (2/4/5/6/7) is unaffected — only the equip-slot count changed.
+- **Future variance hook:** User: "let's do flat tier for now, but please build in the option to
+  have it vary once we get more granular on phasix specific design." `GetActiveSlotRange`'s
+  `(min, max)` tuple return shape already supports a future per-species range (T5's old 5-7 "varies
+  by species" used this same shape) — reintroducing variance later needs only a data change, no
+  signature or call-site change.
+- **Downstream fix required:** `OverworldMenuController`'s `WheelEquipSlotOffset`/
+  `WheelEquipSlotCount` changed from `0`/`7` to `0`/`12` — the previous "5 permanently decorative
+  positions beyond the 7-slot ceiling" concept (added earlier the same day per user request) is
+  gone; all 12 physical wheel positions are now real equip slots, with positions beyond the
+  CURRENT creature's tier cap rendering tier-locked (dim, explanatory tooltip) via the existing
+  `maxSlots` check rather than a separate always-decorative branch.
+- **Tests updated:** `SkillSlotCapacityTests` (`GetTreeCount_And_GetActiveSlotRange_MatchLockedTable`
+  test cases, `GetActiveSlotRange_TierFive_MaxIsTwelve` renamed from `...MaxIsSeven`),
+  `SkillLoadoutSystemTests` (`TryEquip_AtTierCap_Fails` now needs 5 learned skills to hit the new
+  Tier-1 cap of 4; `TryEquipAt_OutsideTierRange_IsNoOp` now tests `slotIndex: 4`, not `2`),
+  `WildSpawnSystemTests` (`SeedInitialSkills_TwoTreesTwoSkillsEach_EquipsOneFromEachTree` renamed
+  and rebuilt with 4 skills per tree so the round-robin regression is still exercised against the
+  new, larger Tier-1 cap). 239/239 EditMode tests pass after the rewrite.
+- **Date:** 2026-08-09
+- **Revisit if:** The Directive PDF gets manually updated to match (closes the sync gap noted
+  above), or T5's per-species variance gets reintroduced once species design is more granular.

@@ -62,78 +62,50 @@ public class BattleHUDController : MonoBehaviour
     /// <summary>A hit counts as "perfect" when the marker/target ratio deviation is within this fraction of the full tolerance half-width — e.g. 0.2 means the innermost 20% of the success window. Placeholder, not tuned.</summary>
     private const float PerfectToleranceFraction = 0.2f;
 
-    // Sonny 2-style radial move option layout (2026-08-05, user-directed — see DECISIONS.md ->
-    // [Combat]): fixed clock-face positions around the acting creature, further out than the
-    // creature's own radius for a "floating orb" feel. Clock hour -> standard math degrees:
-    // 12 o'clock = 90° (straight up), each hour = 30° clockwise, so hour h -> 90 - 30*h.
-    private const int MoveOptionsPerSlot = 5;
-    private const float MoveOptionRadius = 95f; // px from the creature's center to each option's center
-
-    /// <summary>Clock-hour position for each move option, index-matched to MoveOptionsPerSlot — "A"=1, "C"=11 per the user's original ask; "H"=12 and "R"=2 (2026-08-06 additions); "K" (Capture, Phase 3 Gate wiring)=3.</summary>
-    private static readonly float[] MoveOptionClockHours = { 1f, 11f, 12f, 2f, 3f };
-
-    /// <summary>
-    /// Index-matched to MoveOptionsPerSlot/MoveOptionClockHours — false means the move drops onto
-    /// the ENEMY (Attack, Capture), true means it's solo/self-only and only drops onto the
-    /// CASTER's own creature (Charge/Heal/Regen — "this one happens to only make it so you can
-    /// select the character that is casting it", 2026-08-06 user-directed, see DECISIONS.md ->
-    /// [Combat]). Drives OnDragPointerUp's hit-test target per move without a per-move enum/
-    /// switch — adding a new self-only move is just one more `true` here plus one more callback
-    /// slot; Capture reuses the SAME `false` (enemy-target) path Attack already has, no new logic.
-    /// </summary>
-    private static readonly bool[] MoveOptionIsSelfOnly = { false, true, true, true, false };
+    // Full 12-slot skill ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]), one
+    // clock-face position per hour. Originally the 5 built-in moves (A/C/H/R/K) were hardcoded
+    // onto fixed hours (1/11/12/2/3) with only the remaining 7 as real equipped-skill slots; 2026-
+    // 08 follow-up (user: "make them like any other skills... full customizability") made the 5
+    // built-ins into real, equippable SkillData (Standard tree, see BuiltInMoveType) — so ALL 12
+    // positions are now uniform equip slots, sized/positioned identically, no reserved subset.
+    private const int SkillSlotCount = 12;
+    private const float SkillSlotRadius = 95f; // px from the creature's center to each slot's center
 
     /// <summary>
-    /// Hover tooltip text for the 5 built-in moves, index-matched to MoveOptionsPerSlot/
-    /// MoveOptionClockHours (A/C/H/R/K — 2026-08 follow-up, user report they showed nothing on
-    /// hover, unlike the real skill-ring orbs). Built once from the same named constants
-    /// (BattleConfig, DamageCalculator, CaptureSystem) that actually drive each move's resolution
-    /// in BattleManager — same "use the real values" standard BuildSkillTooltipText applies to the
-    /// skill-ring orbs, just for the 5 moves that aren't SkillData-backed and so have no
-    /// PlaceholderSkillResolver entry to read from. Capture's chance range is computed via
-    /// CaptureSystem.ComputeCaptureChancePercent at 0% and 100% target HP rather than hardcoded,
-    /// so it can't drift out of sync with the real formula.
+    /// Hover tooltip text for the 5 built-in moves (A/C/H/R/K — now real SkillData, see
+    /// BuiltInMoveType), keyed by move type rather than a fixed array index. Built from the same
+    /// named constants (BattleConfig, DamageCalculator, CaptureSystem) that actually drive each
+    /// move's resolution in BattleManager — same "use the real values" standard
+    /// BuildSkillTooltipText applies to every other skill orb. Capture's chance range is computed
+    /// via CaptureSystem.ComputeCaptureChancePercent at 0% and 100% target HP rather than
+    /// hardcoded, so it can't drift out of sync with the real formula.
     /// </summary>
-    private static readonly string[] MoveOptionTooltips = BuildMoveOptionTooltips();
-
-    private static string[] BuildMoveOptionTooltips()
+    public static string GetBuiltInMoveTooltipText(BuiltInMoveType move)
     {
-        float minCaptureChance = CaptureSystem.ComputeCaptureChancePercent(100, 100); // full target HP -> lowest chance
-        float maxCaptureChance = CaptureSystem.ComputeCaptureChancePercent(0, 100);   // 0 target HP -> highest chance
-
-        return new[]
+        switch (move)
         {
-            $"Attack\n{DamageCategory.Physical} damage — Power {DamageCalculator.BasicAttackPower}\nTarget: Enemy\nAura Cost: {BattleConfig.AttackAuraCost}",
-            $"Charge\nRestores {BattleConfig.ChargeAuraRestore} Aura\nTarget: Self",
-            $"Heal\nRestores {BattleConfig.HealAmount} HP instantly\nTarget: Self\nAura Cost: {BattleConfig.HealAuraCost}",
-            $"Regen\nRestores {BattleConfig.RegenHealPerTurn} HP/turn for {BattleConfig.RegenDurationTurns} turns\nTarget: Self\nAura Cost: {BattleConfig.RegenAuraCost}",
-            $"Capture\nCapture chance: {Mathf.RoundToInt(minCaptureChance)}-{Mathf.RoundToInt(maxCaptureChance)}% (lower target HP = higher chance)\nTarget: Enemy",
-        };
+            case BuiltInMoveType.Attack:
+                return $"Attack\n{DamageCategory.Physical} damage — Power {DamageCalculator.BasicAttackPower}\nTarget: Enemy\nAura Cost: {BattleConfig.AttackAuraCost}";
+            case BuiltInMoveType.Charge:
+                return $"Charge\nRestores {BattleConfig.ChargeAuraRestore} Aura\nTarget: Self";
+            case BuiltInMoveType.Heal:
+                return $"Heal\nRestores {BattleConfig.HealAmount} HP instantly\nTarget: Self\nAura Cost: {BattleConfig.HealAuraCost}";
+            case BuiltInMoveType.Regen:
+                return $"Regen\nRestores {BattleConfig.RegenHealPerTurn} HP/turn for {BattleConfig.RegenDurationTurns} turns\nTarget: Self\nAura Cost: {BattleConfig.RegenAuraCost}";
+            case BuiltInMoveType.Capture:
+                float minCaptureChance = CaptureSystem.ComputeCaptureChancePercent(100, 100); // full target HP -> lowest chance
+                float maxCaptureChance = CaptureSystem.ComputeCaptureChancePercent(0, 100);   // 0 target HP -> highest chance
+                return $"Capture\nCapture chance: {Mathf.RoundToInt(minCaptureChance)}-{Mathf.RoundToInt(maxCaptureChance)}% (lower target HP = higher chance)\nTarget: Enemy";
+            default:
+                return string.Empty;
+        }
     }
 
-    // Empty skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark
-    // grey placeholder circles around the acting creature, one per clock hour (1-12) — future
-    // homes for real skills once the skill tree framework has content (CLAUDE.md "What Is
-    // Pending": "Actual skill content (§14) — taxonomy locked, individual skills pending").
-    // Purely visual for now — no click handler, no functionality. Deliberately the SAME radius
-    // AND same size as "A"/"C" (MoveOptionRadius, .move-option-placeholder's 32x32) — user's
-    // model: these 12 circles ARE the slots, and "A"/"C" are two skills already slotted into the
-    // 1/11 o'clock positions, not smaller decorations peeking out from behind a bigger orb.
-    // UXML orders the skill slots BEFORE the move options so "A"/"C" paint on top and fully
-    // cover the grey slot underneath at those two positions. Shown/hidden in lockstep with the
-    // move options (same SetMoveOptionsVisible call) so the whole radial wheel appears/
-    // disappears together.
-    private const int SkillSlotCount = 12;
-    private const float SkillSlotRadius = MoveOptionRadius; // same path as "A"/"C", not a separate ring
-
-    // Real skill-ring wiring (2026-08 session — Combo/Status/Chain/Mastery wiring, see
-    // DECISIONS.md -> [Combat]): the 5 built-in moves occupy skill-slot array indices 0,1,2,10,11
-    // (hours 1,2,3,11,12 — MoveOptionClockHours), so the remaining indices 3-9 (hours 4-10) are
-    // exactly the 7 slots this ring has left over. That happens to comfortably cover every tier's
-    // active-slot range (SkillSlotCapacity.GetActiveSlotRange: T1=2 ... T5 up to 7) — not a
-    // coincidence, the leftover count was chosen to line up with it.
-    private const int SkillRingSlotOffset = 3;
-    private const int SkillRingSlotCount = 7;
+    /// <summary>Attack/Capture target the enemy; Charge/Heal/Regen are solo/self-only — matches the moves' pre-2026-08 hardcoded targeting exactly, now looked up by BuiltInMoveType instead of a fixed per-index array. Checked BEFORE ever calling PlaceholderSkillResolver.Resolve, which built-in-marked SkillData must never reach (see BuiltInMoveType's own doc comment).</summary>
+    public static bool IsBuiltInMoveSelfTargeted(BuiltInMoveType move)
+    {
+        return move == BuiltInMoveType.Charge || move == BuiltInMoveType.Heal || move == BuiltInMoveType.Regen;
+    }
 
     public static BattleHUDController Instance { get; private set; }
 
@@ -174,6 +146,9 @@ public class BattleHUDController : MonoBehaviour
     /// stay hidden (Initialize's hasSlot check).
     /// </summary>
     private const int MaxNameplateSlots = 7;
+
+    /// <summary>Max simultaneous generic status-effect icons shown per nameplate (2026-08 follow-up — see NameplateRefs' own doc comment). A fixed, generous-for-real-play cap rather than a dynamic list — real gameplay rarely stacks more than a couple statuses on one target at once.</summary>
+    private const int StatusIconPoolSize = 4;
 
     /// <summary>
     /// Which nameplate visual the HP/Aura/Evo readout uses. Radial = the original circular gauge
@@ -307,7 +282,7 @@ public class BattleHUDController : MonoBehaviour
         // Bars-style only (null while ActiveNameplateStyle == Radial). Each *BarFill is the inner
         // colored rect whose width gets set to a percentage; hovering its parent track shows the
         // matching *TooltipText string (kept current by RefreshNameplateStats/ApplyEvoVisual, read
-        // fresh at hover time by the callback RegisterHudTooltipHover wires up).
+        // fresh at hover time by the callback _tooltip.RegisterHover wires up).
         public VisualElement HPBarFill;
         public VisualElement AuraBarFill;
         public VisualElement EvoBarFill;
@@ -329,49 +304,56 @@ public class BattleHUDController : MonoBehaviour
         public Label RegenCounter;
         public VisualElement BurstIcon;
         public Label BurstCounter;
+
+        // Generic status-effect (debuff/buff) icon pool (2026-08 follow-up — user report: "on
+        // application for debuffs i dont see any debuffs on the enemy hud" — BattleParticipant.
+        // ActiveStatuses was fully tracked via ApplyStatus/TickStatuses but never had ANY nameplate
+        // visualization, unlike Regen/Burst which are separate, hardcoded, player-only mechanics.
+        // Fixed pool size (StatusIconPoolSize) rather than dynamic — real gameplay rarely stacks
+        // more than a couple statuses at once; RefreshStatusIcons hides any unused slots.
+        public VisualElement[] StatusIcons;
+        public Label[] StatusIconLabels;
+        public Label[] StatusIconCounters;
+        public string[] StatusIconTooltipText;
     }
 
     private readonly NameplateRefs[] _playerNameplates = new NameplateRefs[MaxNameplateSlots];
     private readonly NameplateRefs[] _enemyNameplates = new NameplateRefs[MaxNameplateSlots];
 
-    /// <summary>[slotIndex][optionIndex] — MoveOptionsPerSlot placeholders per party member, radially positioned above their stage creature.</summary>
-    private readonly VisualElement[][] _playerMoveOptions = new VisualElement[BattleConfig.ActivePartySize][];
-
-    /// <summary>[slotIndex][skillSlotIndex] — SkillSlotCount placeholder circles per party member, one per clock hour. Indices 0,1,2,10,11 sit under the 5 built-in move orbs; SkillRingSlotOffset..+SkillRingSlotCount-1 are the real, clickable equipped-skill slots (see PopulateSkillRing).</summary>
+    /// <summary>[slotIndex][skillSlotIndex] — SkillSlotCount (12) placeholder circles per party member, one per clock hour. Every position is now a real, clickable equip slot (see PopulateSkillRing) — the old 5-fixed/7-equip split was removed once the built-in moves became real, equippable SkillData (2026-08 follow-up, see BuiltInMoveType).</summary>
     private readonly VisualElement[][] _playerSkillSlots = new VisualElement[BattleConfig.ActivePartySize][];
 
-    /// <summary>[slotIndex][ringIndex 0..SkillRingSlotCount-1] — resolved equipped skill for each real skill-ring slot, or null if that slot is empty/locked for this creature (2026-08 session, see DECISIONS.md -> [Combat]). Populated by PopulateSkillRing (called from Initialize); read by the click handlers registered in Awake.</summary>
+    /// <summary>[slotIndex][ringIndex 0..SkillSlotCount-1] — resolved equipped skill for each skill-ring slot, or null if that slot is empty/locked for this creature (2026-08 session, see DECISIONS.md -> [Combat]). Populated by PopulateSkillRing (called from Initialize); read by the click handlers registered in Awake.</summary>
     private readonly SkillData[][] _playerSkillSlotSkills = new SkillData[BattleConfig.ActivePartySize][];
 
     /// <summary>
-    /// [slotIndex][ringIndex 0..SkillRingSlotCount-1] — small numeric badge on each real
-    /// skill-ring slot showing the current combo-streak count (2026-08 session — user-directed:
-    /// "counter next to the skill on the skill wheel," see DECISIONS.md -> [Combat]). Created
-    /// once per slot in Awake, hidden by default; BattleManager decides which slot to badge and
-    /// with what count via SetSkillComboCounter/ClearAllSkillComboCounters — this class has no
-    /// combo logic of its own, purely a dumb display.
+    /// [slotIndex][ringIndex 0..SkillSlotCount-1] — small numeric badge on each skill-ring slot
+    /// showing the current combo-streak count (2026-08 session — user-directed: "counter next to
+    /// the skill on the skill wheel," see DECISIONS.md -> [Combat]). Created once per slot in
+    /// Awake, hidden by default; BattleManager decides which slot to badge and with what count via
+    /// SetSkillComboCounter/ClearAllSkillComboCounters — this class has no combo logic of its own,
+    /// purely a dumb display.
     /// </summary>
     private readonly Label[][] _playerSkillSlotComboBadges = new Label[BattleConfig.ActivePartySize][];
 
     /// <summary>
-    /// [slotIndex][ringIndex 0..SkillRingSlotCount-1] — lettering label on each real skill-ring
-    /// slot, showing the equipped skill's SkillName (2026-08 follow-up — user-directed: "make
-    /// sure the orb has the lettering like all the other orbs and is visible"). Reuses
-    /// `.move-option-label`'s exact styling (position/centering/font/color) so C1/C2 read
-    /// identically to A/C/H/R/K, not a separate visual language. Created once per slot in Awake
-    /// like the combo badge; PopulateSkillRing just updates `.text` (empty for a locked slot).
+    /// [slotIndex][ringIndex 0..SkillSlotCount-1] — lettering label on each skill-ring slot,
+    /// showing the equipped skill's SkillName (2026-08 follow-up — user-directed: "make sure the
+    /// orb has the lettering like all the other orbs and is visible"). Reuses
+    /// `.move-option-label`'s exact styling (position/centering/font/color), one uniform visual
+    /// language across every slot. Created once per slot in Awake like the combo badge;
+    /// PopulateSkillRing just updates `.text` (empty for a locked slot).
     /// </summary>
     private readonly Label[][] _playerSkillSlotLabels = new Label[BattleConfig.ActivePartySize][];
 
     /// <summary>
-    /// Fill+border color per real skill-ring position (2026-08 follow-up — user-directed: "select
-    /// whatever colors you see fit for those"), index-matched to ring position 0..SkillRingSlotCount-1
-    /// (SkillRingSlotOffset+0 = C1's slot, +1 = C2's, etc.) — the POSITION owns the color, same as
-    /// how A/C/H/R/K are colored by their fixed clock position, not by whichever move happens to be
-    /// there. Deliberately a different palette from A/C/H/R/K's green/blue/pink/purple/gold so the
-    /// two orb families stay visually distinct. USS classes are `.skill-ring-color-0` etc. (see
-    /// BattleHUD.uss) — only the first 2 are reachable today (SkillSlotCapacity's Tier 1 cap), the
-    /// rest are forward-looking for higher tiers.
+    /// Fill+border color per skill-ring position (2026-08 follow-up — user-directed: "select
+    /// whatever colors you see fit for those"), index-matched to ring position 0..SkillSlotCount-1
+    /// — the POSITION owns the color (position 0 = whichever skill is equipped first, etc.),
+    /// consistent regardless of what kind of skill (tree-based or a Standard built-in move)
+    /// happens to occupy it. USS classes are `.skill-ring-color-0` etc. (see BattleHUD.uss) — only
+    /// the first few positions are reachable at low tiers (SkillSlotCapacity's T1 cap = 2), the
+    /// rest are forward-looking for higher tiers, wrapping via `% SkillRingColorCount`.
     /// </summary>
     private const int SkillRingColorCount = 7;
 
@@ -414,30 +396,30 @@ public class BattleHUDController : MonoBehaviour
     /// Per-slot "already acted this turn" flag (2026-08-06, user-directed — see DECISIONS.md ->
     /// [Combat]: "if the phasix already moved during its turn then it can still show, but will be
     /// greyed out for active skills"). Set by ShowMoveSelectionReadOnly, cleared by
-    /// ShowMoveSelection — read by SetMoveOptionsVisible (applies `.move-option-disabled`) and
-    /// BeginDrag (refuses to start a drag for a read-only slot).
+    /// ShowMoveSelection — read by SetSkillRingVisible (applies `.move-option-disabled`) and
+    /// BeginDragForSkill (refuses to start a drag for a read-only slot).
     /// </summary>
     private readonly bool[] _playerSlotReadOnly = new bool[BattleConfig.ActivePartySize];
 
     private VisualElement _enemyStageCreature;
 
     // Sonny 2-style click-and-drag move/target selection (2026-08-05/06, user-directed — see
-    // DECISIONS.md -> [Combat]). ShowMoveSelection shows the acting player's move placeholders;
-    // pressing one starts a drag (DragLineVisual follows the cursor) that resolves against
-    // whichever targets are valid for that move on release — enemies for "A", the caster's own
-    // creature only for "C"/"H"/"R" (MoveOptionIsSelfOnly). Releasing anywhere invalid cancels
-    // back to the placeholders (OnDragPointerUp's else branch) — the only cancel path that
-    // exists today, same for every move. A single onMoveConfirmed(optionIndex, target) callback
-    // (rather than one Action per move) is what lets a new move option get added without
-    // widening ShowMoveSelection's signature again — BattleManager switches on optionIndex.
+    // DECISIONS.md -> [Combat]). ShowMoveSelection shows the acting player's skill ring; pressing
+    // a populated slot starts a drag (DragLineVisual follows the cursor) that resolves against
+    // whichever target is valid for that skill on release — enemy for Attack/Capture-type moves,
+    // the caster's own creature for self-only ones (IsBuiltInMoveSelfTargeted /
+    // PlaceholderSkillResolver.SelfTargeted, depending on whether the skill is a Standard built-in
+    // move or a tree skill). Releasing anywhere invalid cancels back to the ring (OnDragPointerUp's
+    // else branch) — the only cancel path that exists today, same for every skill. A single
+    // onMoveConfirmed(ChosenMove) callback is what let move-selection unify onto one code path once
+    // built-in moves became real SkillData (2026-08 follow-up) instead of a fixed 5-index array.
     private DragLineVisual _dragLine;
     private BattleParticipant _self; // the acting participant — the only valid target for self-only moves
     private List<BattleParticipant> _enemyTargets; // valid targets for Attack
     private Action<ChosenMove> _onMoveConfirmed;
     private int _draggingFromSlotIndex = -1;
-    private int _draggingOptionIndex = -1;
 
-    /// <summary>Non-null while dragging a skill-ring slot (as opposed to one of the 5 built-in moves) — 2026-08 session, see DECISIONS.md -> [Combat].</summary>
+    /// <summary>The skill currently being dragged (always non-null once a drag is in progress — every skill-ring slot, built-in move or tree skill, is real SkillData now).</summary>
     private SkillData _draggingSkill;
 
     // Shared converging-ring timing visual (2026-08-05, user-directed — see DECISIONS.md ->
@@ -453,19 +435,12 @@ public class BattleHUDController : MonoBehaviour
     /// this one, in Play Mode or a real build alike. Replaced with a plain floating Label shown/
     /// hidden on PointerEnter/PointerLeave — same family of technique as _dragLine above. Added
     /// directly to _root (not _stage) and last among its siblings so it always paints on top,
-    /// following UI Toolkit's document-order paint rule. Generalized (renamed from _skillTooltip)
-    /// the same session it was added, once the nameplate bar mockup below needed the exact same
-    /// "show text on hover" behavior — one shared Label works fine since only one element can be
-    /// hovered at a time. Positioned relative to the HOVERED ELEMENT'S own bounds (2026-08 follow-
-    /// up — user explicit ask: "expecting it be near/next to the skill we're hovering"), not the
-    /// live cursor position as the first pass did — since the anchor element doesn't move while
-    /// hovered, this only needs to be computed once on Enter, so PointerMoveEvent tracking (the
-    /// original design) was removed as unneeded.
+    /// following UI Toolkit's document-order paint rule. Extracted into the standalone HudTooltip
+    /// class (2026-08 follow-up, see DECISIONS.md -> [UI]) once the overworld Party menu needed
+    /// the identical behavior for its own skill-ring orbs — see that class's own doc comment for
+    /// the full history (cursor-following vs. anchor-relative positioning, etc.).
     /// </summary>
-    private Label _hudTooltip;
-
-    /// <summary>Gap (px) between the hovered element's edge and the tooltip's near edge.</summary>
-    private const float HudTooltipAnchorGap = 8f;
+    private HudTooltip _tooltip;
 
     private void Awake()
     {
@@ -473,6 +448,12 @@ public class BattleHUDController : MonoBehaviour
 
         var document = GetComponent<UIDocument>();
         _root = document.rootVisualElement.Q<VisualElement>("BattleHUDRoot");
+        // Constructed immediately after _root — BuildNameplate (called later this method, for
+        // the Bars nameplate style) calls _tooltip.RegisterHover directly, not just from inside a
+        // deferred lambda, so _tooltip must already exist by the time that loop runs, unlike the
+        // Enter/Leave lambda closures elsewhere in this method which only touch _tooltip when an
+        // actual hover event fires, long after Awake has finished.
+        _tooltip = new HudTooltip(_root);
         _stage = _root.Q<VisualElement>("Stage");
         _playerStageArea = _root.Q<VisualElement>("PlayerStageArea");
         _stage.RegisterCallback<PointerDownEvent>(evt =>
@@ -487,107 +468,65 @@ public class BattleHUDController : MonoBehaviour
             int capturedCreatureSlotIndex = i;
             _playerStageCreatures[i].RegisterCallback<PointerDownEvent>(evt => PlayerCreatureClicked?.Invoke(capturedCreatureSlotIndex));
 
-            _playerMoveOptions[i] = new VisualElement[MoveOptionsPerSlot];
-            for (int j = 0; j < MoveOptionsPerSlot; j++)
-            {
-                VisualElement option = _root.Q<VisualElement>($"PlayerStageSlot{i}_MoveOption{j}");
-                _playerMoveOptions[i][j] = option;
-
-                int capturedSlotIndex = i; // avoid closing over the loop variable
-                int capturedOptionIndex = j;
-                // All move options use the same click-and-drag gesture (BeginDrag) — only the
-                // valid drop target differs per move (MoveOptionIsSelfOnly), resolved in
-                // OnDragPointerUp. Adding a new move is just extending the arrays above plus one
-                // more UXML element, no new registration branch needed here. StopPropagation so
-                // pressing a specific orb doesn't ALSO bubble up and fire PlayerCreatureClicked
-                // on the parent .stage-creature (2026-08-06, user-directed free-choice selection
-                // — see DECISIONS.md -> [Combat]) — a specific orb press means "use this move,"
-                // not "just select this creature."
-                option.RegisterCallback<PointerDownEvent>(evt =>
-                {
-                    evt.StopPropagation();
-                    BeginDrag(capturedSlotIndex, evt, capturedOptionIndex);
-                });
-
-                // Hover tooltip for the 5 built-in moves (2026-08 follow-up — user report: "C, H,
-                // A, R, K are not displaying at all," i.e. only the real skill-ring orbs had a
-                // tooltip before this). Content comes from MoveOptionTooltips, precomputed once
-                // from the same named BattleConfig/DamageCalculator/CaptureSystem constants that
-                // actually drive each move in BattleManager — same "use the real values" standard
-                // as BuildSkillTooltipText, just for the 5 moves that aren't SkillData-backed.
-                option.RegisterCallback<PointerEnterEvent>(evt =>
-                {
-                    _hudTooltip.text = MoveOptionTooltips[capturedOptionIndex];
-                    _hudTooltip.style.display = DisplayStyle.Flex;
-                    PositionHudTooltipNear(option);
-                });
-                option.RegisterCallback<PointerLeaveEvent>(evt => _hudTooltip.style.display = DisplayStyle.None);
-
-                option.style.display = DisplayStyle.None;
-            }
-            PositionMoveOptions(_playerMoveOptions[i]);
-
+            // Full 12-slot skill ring — every position is a real equip slot now (2026-08 follow-up:
+            // the old 5 hardcoded built-in-move positions became real, equippable SkillData, see
+            // BuiltInMoveType). Reads _playerSkillSlotSkills at CLICK/HOVER time (not registration
+            // time) so PopulateSkillRing can keep re-resolving skills freely across Initialize
+            // calls without needing to re-register handlers; a null entry (empty/locked slot) is a
+            // silent no-op, matching "no click handler, no functionality" for an unequipped slot.
             _playerSkillSlots[i] = new VisualElement[SkillSlotCount];
-            _playerSkillSlotSkills[i] = new SkillData[SkillRingSlotCount];
-            _playerSkillSlotComboBadges[i] = new Label[SkillRingSlotCount];
-            _playerSkillSlotLabels[i] = new Label[SkillRingSlotCount];
+            _playerSkillSlotSkills[i] = new SkillData[SkillSlotCount];
+            _playerSkillSlotComboBadges[i] = new Label[SkillSlotCount];
+            _playerSkillSlotLabels[i] = new Label[SkillSlotCount];
             for (int k = 0; k < SkillSlotCount; k++)
             {
                 VisualElement slot = _root.Q<VisualElement>($"PlayerStageSlot{i}_SkillSlot{k}");
                 _playerSkillSlots[i][k] = slot;
                 slot.style.display = DisplayStyle.None;
 
-                // Real equipped-skill slots only (SkillRingSlotOffset..+SkillRingSlotCount-1) —
-                // the other 5 sit under the built-in move orbs and stay purely decorative. Reads
-                // _playerSkillSlotSkills at CLICK time (not registration time) so PopulateSkillRing
-                // can be called freely from Initialize without needing to re-register handlers;
-                // a null entry (empty/locked slot) is a silent no-op, matching "no click handler,
-                // no functionality" for a slot the creature doesn't have equipped.
-                if (k >= SkillRingSlotOffset && k < SkillRingSlotOffset + SkillRingSlotCount)
+                var comboBadge = new Label();
+                comboBadge.AddToClassList("skill-combo-badge");
+                comboBadge.style.display = DisplayStyle.None;
+                comboBadge.pickingMode = PickingMode.Ignore; // decoration only — must never intercept the slot's own drag click
+                slot.Add(comboBadge);
+                _playerSkillSlotComboBadges[i][k] = comboBadge;
+
+                // Skill-name lettering (2026-08 follow-up — see _playerSkillSlotLabels' doc
+                // comment). Text set by PopulateSkillRing; empty for a locked/unequipped slot.
+                var skillLabel = new Label();
+                skillLabel.AddToClassList("move-option-label");
+                skillLabel.pickingMode = PickingMode.Ignore; // decoration only, same reasoning as comboBadge above
+                slot.Add(skillLabel);
+                _playerSkillSlotLabels[i][k] = skillLabel;
+
+                int capturedSlotIndex = i; // avoid closing over the loop variable
+                int capturedRingIndex = k;
+                // StopPropagation so pressing a populated orb doesn't ALSO bubble up and fire
+                // PlayerCreatureClicked on the parent .stage-creature (2026-08-06, user-directed
+                // free-choice selection) — a specific orb press means "use this move," not "just
+                // select this creature."
+                slot.RegisterCallback<PointerDownEvent>(evt =>
                 {
-                    var comboBadge = new Label();
-                    comboBadge.AddToClassList("skill-combo-badge");
-                    comboBadge.style.display = DisplayStyle.None;
-                    comboBadge.pickingMode = PickingMode.Ignore; // decoration only — must never intercept the slot's own drag click
-                    slot.Add(comboBadge);
-                    _playerSkillSlotComboBadges[i][k - SkillRingSlotOffset] = comboBadge;
+                    SkillData skill = _playerSkillSlotSkills[capturedSlotIndex][capturedRingIndex];
+                    if (skill == null) return;
+                    evt.StopPropagation();
+                    BeginDragForSkill(capturedSlotIndex, evt, skill);
+                });
 
-                    // Skill-name lettering (2026-08 follow-up — see _playerSkillSlotLabels' doc
-                    // comment). Reuses .move-option-label as-is, same visual language as A/C/H/R/K.
-                    // Text set by PopulateSkillRing; empty for a locked/unequipped slot.
-                    var skillLabel = new Label();
-                    skillLabel.AddToClassList("move-option-label");
-                    skillLabel.pickingMode = PickingMode.Ignore; // decoration only, same reasoning as comboBadge above
-                    slot.Add(skillLabel);
-                    _playerSkillSlotLabels[i][k - SkillRingSlotOffset] = skillLabel;
-
-                    int capturedSlotIndex = i;
-                    int capturedRingIndex = k - SkillRingSlotOffset;
-                    slot.RegisterCallback<PointerDownEvent>(evt =>
-                    {
-                        SkillData skill = _playerSkillSlotSkills[capturedSlotIndex][capturedRingIndex];
-                        if (skill == null) return;
-                        evt.StopPropagation();
-                        BeginDragForSkill(capturedSlotIndex, evt, skill);
-                    });
-
-                    // Runtime hover tooltip (see _hudTooltip's doc comment for why this replaced
-                    // the old VisualElement.tooltip assignment). Reads _playerSkillSlotSkills at
-                    // hover time, same "read at event time, not registration time" pattern as the
-                    // click handler above, so PopulateSkillRing can keep re-resolving skills freely.
-                    // Content built by BuildSkillTooltipText from the skill's own RESOLVED behavior
-                    // (2026-08 follow-up — user-directed: "use the values from each skill orb to
-                    // generate your content"), not the shared placeholder Description text.
-                    slot.RegisterCallback<PointerEnterEvent>(evt =>
-                    {
-                        SkillData skill = _playerSkillSlotSkills[capturedSlotIndex][capturedRingIndex];
-                        if (skill == null) return;
-                        _hudTooltip.text = BuildSkillTooltipText(skill);
-                        _hudTooltip.style.display = DisplayStyle.Flex;
-                        PositionHudTooltipNear(slot);
-                    });
-                    slot.RegisterCallback<PointerLeaveEvent>(evt => _hudTooltip.style.display = DisplayStyle.None);
-                }
+                // Runtime hover tooltip (see HudTooltip's own doc comment for why this
+                // replaced the old VisualElement.tooltip assignment). Reads _playerSkillSlotSkills at
+                // hover time, same "read at event time, not registration time" pattern as the
+                // click handler above, so PopulateSkillRing can keep re-resolving skills freely.
+                // Content built by BuildSkillTooltipText from the skill's own RESOLVED behavior
+                // (2026-08 follow-up — user-directed: "use the values from each skill orb to
+                // generate your content"), not the shared placeholder Description text.
+                slot.RegisterCallback<PointerEnterEvent>(evt =>
+                {
+                    SkillData skill = _playerSkillSlotSkills[capturedSlotIndex][capturedRingIndex];
+                    if (skill == null) return;
+                    _tooltip.Show(BuildSkillTooltipText(skill), slot);
+                });
+                slot.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
             }
             PositionSkillSlots(_playerSkillSlots[i]);
         }
@@ -640,10 +579,6 @@ public class BattleHUDController : MonoBehaviour
         _dragLine = new DragLineVisual { style = { display = DisplayStyle.None } };
         _stage.Add(_dragLine);
 
-        _hudTooltip = new Label { pickingMode = PickingMode.Ignore, style = { display = DisplayStyle.None } };
-        _hudTooltip.AddToClassList("hud-tooltip");
-        _root.Add(_hudTooltip); // added last -> paints above every other root child
-
         _timingRing = new RingVisual();
         _timingRing.AddToClassList("timing-ring");
         _timingRing.style.display = DisplayStyle.None;
@@ -663,7 +598,7 @@ public class BattleHUDController : MonoBehaviour
     /// Evolution Burst for the active style (ring-wrap, or the Evo bar's track); pass null for
     /// slots that shouldn't be clickable (enemies don't activate Evolution Burst yet). Instance
     /// method (not static, unlike before the Bars mockup) so the Bars branch can register hover
-    /// callbacks against this controller's shared _hudTooltip.
+    /// callbacks against this controller's shared _tooltip.
     /// </summary>
     private NameplateRefs BuildNameplate(Action onRingClicked)
     {
@@ -690,9 +625,9 @@ public class BattleHUDController : MonoBehaviour
             np.EvoBarFill = BuildNameplateBarRow(barsWrap, "nameplate-bar-evo", out VisualElement evoTrack);
             np.EvoBarTrack = evoTrack;
 
-            RegisterHudTooltipHover(hpTrack, () => np.HPTooltipText);
-            RegisterHudTooltipHover(auraTrack, () => np.AuraTooltipText);
-            RegisterHudTooltipHover(evoTrack, () => np.EvoTooltipText);
+            _tooltip.RegisterHover(hpTrack, () => np.HPTooltipText);
+            _tooltip.RegisterHover(auraTrack, () => np.AuraTooltipText);
+            _tooltip.RegisterHover(evoTrack, () => np.EvoTooltipText);
 
             if (onRingClicked != null)
                 evoTrack.RegisterCallback<PointerDownEvent>(evt => onRingClicked());
@@ -748,7 +683,43 @@ public class BattleHUDController : MonoBehaviour
         np.BurstIcon = burstIcon;
         np.BurstCounter = burstCounter;
 
+        // Generic status-effect icon pool (2026-08 follow-up — see NameplateRefs' own doc
+        // comment). Letter/color/tooltip are all set dynamically by RefreshStatusIcons since,
+        // unlike Regen/Burst, any of the 28 StatusEffectType values could occupy a given slot.
+        np.StatusIcons = new VisualElement[StatusIconPoolSize];
+        np.StatusIconLabels = new Label[StatusIconPoolSize];
+        np.StatusIconCounters = new Label[StatusIconPoolSize];
+        np.StatusIconTooltipText = new string[StatusIconPoolSize];
+        for (int i = 0; i < StatusIconPoolSize; i++)
+        {
+            (VisualElement icon, Label letterLabel, Label counter) = BuildStatusIconSlot(buffRow);
+            np.StatusIcons[i] = icon;
+            np.StatusIconLabels[i] = letterLabel;
+            np.StatusIconCounters[i] = counter;
+
+            int capturedIndex = i;
+            _tooltip.RegisterHover(icon, () => np.StatusIconTooltipText[capturedIndex]);
+        }
+
         return np;
+    }
+
+    /// <summary>Builds one empty (letter/color/counter all unset) status-icon slot, hidden by default — RefreshStatusIcons fills it in per-refresh. Mirrors BuildBuffIcon's structure but without a fixed letter/color, since the occupant varies.</summary>
+    private static (VisualElement icon, Label letterLabel, Label counter) BuildStatusIconSlot(VisualElement parent)
+    {
+        var icon = new VisualElement();
+        icon.AddToClassList("nameplate-buff-icon");
+
+        var letterLabel = new Label();
+        letterLabel.AddToClassList("nameplate-buff-icon-label");
+        icon.Add(letterLabel);
+
+        var counter = new Label();
+        counter.AddToClassList("nameplate-buff-icon-counter");
+        icon.Add(counter);
+
+        parent.Add(icon);
+        return (icon, letterLabel, counter);
     }
 
     /// <summary>Builds one Bars-style stat row (track + inner fill rect) inside `parent`, tagged with `colorClass` (nameplate-bar-hp/aura/evo — drives fill color via USS). Returns the fill element (width set to a percentage per-update); outputs the track (the hover/click target — stable full-width, unlike the fill which shrinks).</summary>
@@ -891,7 +862,51 @@ public class BattleHUDController : MonoBehaviour
 
         ApplyEvoVisual(np, evoPercent, ready); // also does the Radial branch's single Gauge.Refresh() call, after HP/Aura are already set above
 
+        RefreshStatusIcons(np, p);
+
         np.Container.style.opacity = p.IsAlive ? 1f : 0.4f;
+    }
+
+    /// <summary>Position-matched to StatusEffectCategory's enum order (Physical/Elemental/Signal/Universal/Positive) — see BattleHUD.uss for the actual colors.</summary>
+    private static readonly string[] StatusCategoryColorClasses =
+    {
+        "nameplate-status-physical", "nameplate-status-elemental", "nameplate-status-signal",
+        "nameplate-status-universal", "nameplate-status-positive",
+    };
+
+    /// <summary>
+    /// Fills up to StatusIconPoolSize generic status-effect icons from p.ActiveStatuses (2026-08
+    /// follow-up — user report: "on application for debuffs i dont see any debuffs on the enemy
+    /// hud"; see NameplateRefs' own doc comment for why this was missing entirely before). Any
+    /// statuses beyond the pool size simply don't get an icon — a fixed, generous-for-real-play
+    /// cap, not a hard gameplay limit (BattleParticipant itself has no cap on ActiveStatuses).
+    /// Runs every RefreshNameplateStats call (both sides, both Initialize and RefreshBars), so an
+    /// expired status (TickAllStatuses, once per round) clears its icon on the next refresh —
+    /// which happens well before the player would notice a stale one, given how often bars refresh.
+    /// </summary>
+    private static void RefreshStatusIcons(NameplateRefs np, BattleParticipant p)
+    {
+        IReadOnlyList<ActiveStatusInstance> statuses = p.ActiveStatuses;
+
+        for (int i = 0; i < StatusIconPoolSize; i++)
+        {
+            if (i >= statuses.Count)
+            {
+                np.StatusIcons[i].style.display = DisplayStyle.None;
+                continue;
+            }
+
+            ActiveStatusInstance instance = statuses[i];
+            StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(instance.Type);
+
+            np.StatusIcons[i].style.display = DisplayStyle.Flex;
+            np.StatusIconLabels[i].text = instance.Type.ToString().Substring(0, 1);
+            np.StatusIconCounters[i].text = instance.TurnsRemaining.ToString();
+            np.StatusIconTooltipText[i] = $"{instance.Type} ({entry.Category})\n{instance.TurnsRemaining} turn{(instance.TurnsRemaining == 1 ? "" : "s")} remaining";
+
+            foreach (string c in StatusCategoryColorClasses) np.StatusIcons[i].RemoveFromClassList(c);
+            np.StatusIcons[i].AddToClassList(StatusCategoryColorClasses[(int)entry.Category]);
+        }
     }
 
     private static readonly Color NameplateEvoFillingColor = new Color(150f / 255f, 90f / 255f, 220f / 255f);
@@ -1004,8 +1019,8 @@ public class BattleHUDController : MonoBehaviour
     /// centering depends on its box having a real size once its children are absolutely
     /// positioned (2026-08-06 — see LayoutPlayerStageCreatures' sibling doc comment on
     /// .stage-creature in BattleHUD.uss for why absolute over flex). Called once from Initialize,
-    /// after party size is known; each creature's own OWN internal box (move options/skill
-    /// slots — PositionMoveOptions/PositionSkillSlots) is a completely separate coordinate space
+    /// after party size is known; each creature's own OWN internal box (skill slots —
+    /// PositionSkillSlots) is a completely separate coordinate space
     /// and unaffected by this. Also the intended hook for a future "place this Phasix here"
     /// formation/positioning feature — flagged as deferred in DECISIONS.md, this method is where
     /// per-slot placement would stop being "always column i" and become player-chosen.
@@ -1022,8 +1037,8 @@ public class BattleHUDController : MonoBehaviour
     /// <summary>
     /// Applies StageCreatureStaggerY as a `translate` — a pure rendering-time transform, not a
     /// layout change, so it doesn't disturb LayoutPlayerStageCreatures' `left` positions and
-    /// doesn't affect PositionMoveOptions/PositionSkillSlots' math (both already computed relative
-    /// to each creature's own untransformed 72x72 box before this runs). Also reorders the
+    /// doesn't affect PositionSkillSlots' math (already computed relative to each creature's own
+    /// untransformed 72x72 box before this runs). Also reorders the
     /// siblings back-to-front by stagger offset (see below) — 2026-08-06, user caught the front
     /// lane's skill orbs rendering behind a further-back lane's creature. Safe to reorder freely
     /// now that .stage-creature is absolutely positioned (BringToFront no longer moves a creature
@@ -1063,33 +1078,9 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Places each option at its fixed clock-hour position (MoveOptionClockHours, index-matched)
-    /// at MoveOptionRadius from the creature's center — "1 and 11 o'clock" per the user's explicit
-    /// ask, rather than a computed even split. Computed once per slot in Awake since option
-    /// count/parent size are both fixed for the whole battle.
-    /// </summary>
-    private static void PositionMoveOptions(VisualElement[] options)
-    {
-        for (int i = 0; i < options.Length; i++)
-        {
-            float angleDegrees = 90f - 30f * MoveOptionClockHours[i];
-            float angleRadians = angleDegrees * Mathf.Deg2Rad;
-            float dx = Mathf.Cos(angleRadians) * MoveOptionRadius;
-            float dy = -Mathf.Sin(angleRadians) * MoveOptionRadius;
-
-            // .stage-creature is a fixed 72x72; .move-option-placeholder is a fixed 32x32 circle —
-            // self-centering offsets computed directly in px rather than via percent+translate,
-            // since both sizes are known constants (see BattleHUD.uss).
-            options[i].style.left = 36f - 16f + dx;
-            options[i].style.top = 36f - 16f + dy;
-        }
-    }
-
-    /// <summary>
-    /// Places all SkillSlotCount empty placeholder circles evenly around the creature, one per
-    /// clock hour (index 0 = 1 o'clock ... index 11 = 12 o'clock), on the SAME SkillSlotRadius
-    /// path as the move options — see the field doc comment for why these are unified, not a
-    /// separate ring. Computed once per slot in Awake, same as PositionMoveOptions.
+    /// Places all SkillSlotCount (12) skill-ring slots evenly around the creature, one per clock
+    /// hour (index 0 = 1 o'clock ... index 11 = 12 o'clock). Computed once per slot in Awake since
+    /// slot count/parent size are both fixed for the whole battle.
     /// </summary>
     private static void PositionSkillSlots(VisualElement[] slots)
     {
@@ -1102,8 +1093,7 @@ public class BattleHUDController : MonoBehaviour
             float dy = -Mathf.Sin(angleRadians) * SkillSlotRadius;
 
             // .stage-creature is a fixed 72x72; .skill-slot-placeholder is a fixed 32x32 circle —
-            // same size and same self-centering-in-px approach as PositionMoveOptions above (see
-            // the field doc comment for why they're now uniform).
+            // self-centering offsets computed directly in px since both sizes are known constants.
             slots[i].style.left = 36f - 16f + dx;
             slots[i].style.top = 36f - 16f + dy;
         }
@@ -1121,9 +1111,17 @@ public class BattleHUDController : MonoBehaviour
     /// Power; status skills show the resolved status and its REAL duration range from
     /// StatusEffectCatalog (the exact number still depends on live Resonance/Resolve at cast time —
     /// StatusDurationCalculator — so this is the base range, not a promise of the exact value).
+    ///
+    /// A built-in move (skill.BuiltInMove != None — Attack/Charge/Heal/Regen/Capture, 2026-08
+    /// follow-up) is checked FIRST and short-circuits to GetBuiltInMoveTooltipText — these 5 must
+    /// NEVER reach PlaceholderSkillResolver.Resolve below, which derives behavior from
+    /// SkillTreeCatalog's tree-based PrimaryAttribute table and would misresolve (or throw) for
+    /// the Standard tree these assets live in.
     /// </summary>
-    private static string BuildSkillTooltipText(SkillData skill)
+    public static string BuildSkillTooltipText(SkillData skill)
     {
+        if (skill.BuiltInMove != BuiltInMoveType.None) return GetBuiltInMoveTooltipText(skill.BuiltInMove);
+
         PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
 
         string effectLine;
@@ -1147,38 +1145,19 @@ public class BattleHUDController : MonoBehaviour
         return $"{skill.SkillName}\n{effectLine}\n{targetLine}\nAura Cost: {BattleConfig.PlaceholderSkillAuraCost}";
     }
 
-    /// <summary>Positions _hudTooltip just to the right of `anchor`'s own bounds, top-aligned with it, in _root's local space — "near/next to" the hovered element (2026-08 follow-up, user-directed: "expecting it be near/next to the skill we're hovering") rather than following the cursor, which the first pass did.</summary>
-    private void PositionHudTooltipNear(VisualElement anchor)
-    {
-        Rect localRect = _root.WorldToLocal(anchor.worldBound);
-        _hudTooltip.style.left = localRect.xMax + HudTooltipAnchorGap;
-        _hudTooltip.style.top = localRect.yMin;
-    }
-
-    /// <summary>Registers hover show/hide on `track`, pulling fresh text from `getText` at hover time (so a caller's live-updated cache, e.g. NameplateRefs.HPTooltipText, is always current — same "read at event time" pattern as the skill-ring tooltip above). Position is set once on Enter, not tracked on Move — `track` itself doesn't move while hovered, so there's nothing to re-follow.</summary>
-    private void RegisterHudTooltipHover(VisualElement track, Func<string> getText)
-    {
-        track.RegisterCallback<PointerEnterEvent>(evt =>
-        {
-            _hudTooltip.text = getText();
-            _hudTooltip.style.display = DisplayStyle.Flex;
-            PositionHudTooltipNear(track);
-        });
-        track.RegisterCallback<PointerLeaveEvent>(evt => _hudTooltip.style.display = DisplayStyle.None);
-    }
 
     /// <summary>
-    /// Resolves a participant's equippedSkillGuids into the SkillRingSlotCount real skill-ring
-    /// slots (2026-08 session — Combo/Status/Chain/Mastery wiring, see DECISIONS.md -> [Combat]).
-    /// Slots beyond the creature's equipped count (or all of them, if skillDatabase is null) stay
-    /// tagged .skill-slot-locked (dim, no cursor) — their registered click handler already no-ops
-    /// on a null entry, so nothing further is needed to make them inert. Call once per Initialize.
+    /// Resolves a participant's equippedSkillGuids into the SkillSlotCount (12) skill-ring slots
+    /// (2026-08 session — Combo/Status/Chain/Mastery wiring, see DECISIONS.md -> [Combat]). Slots
+    /// beyond the creature's equipped count (or all of them, if skillDatabase is null) stay tagged
+    /// .skill-slot-locked (dim, no cursor) — their registered click handler already no-ops on a
+    /// null entry, so nothing further is needed to make them inert. Call once per Initialize.
     /// </summary>
     private void PopulateSkillRing(int slotIndex, BattleParticipant participant, SkillDatabase skillDatabase)
     {
-        for (int ring = 0; ring < SkillRingSlotCount; ring++)
+        for (int ring = 0; ring < SkillSlotCount; ring++)
         {
-            VisualElement slot = _playerSkillSlots[slotIndex][SkillRingSlotOffset + ring];
+            VisualElement slot = _playerSkillSlots[slotIndex][ring];
             SkillData skill = null;
 
             if (skillDatabase != null && ring < participant.RuntimeData.equippedSkillGuids.Count)
@@ -1239,16 +1218,17 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Shows all of the acting player's move placeholders above their stage creature: "A"
-    /// (Attack, index 0) and "K" (Capture, index 4 — 2026-08-06 Phase 3 Gate wiring) press-and-
-    /// drag onto an ENEMY; "C"/"H"/"R" (Charge/Heal/Regen) are solo/self-only, press-and-drag onto
-    /// the CASTER's OWN creature — "this one happens to only make it so you can select the
-    /// character that is casting it". Whichever is released over a valid target fires
-    /// onMoveConfirmed(optionIndex, target) — target is the enemy for Attack/Capture, always
-    /// `self` for a self-only move. Releasing anywhere invalid cancels back to the placeholders,
-    /// same for every move. Clears any prior ShowMoveSelectionReadOnly state for this slot — a
-    /// creature that already acted only ever reaches THIS method again once a new player turn
-    /// resets HasActedThisTurn. Call HideMoveSelection to cancel/clean up early.
+    /// Shows all of the acting player's equipped skill orbs above their stage creature — every
+    /// populated slot, whether it's a Standard built-in move (Attack/Charge/Heal/Regen/Capture) or
+    /// a tree skill, is press-and-drag: enemy-target moves (Attack/Capture-type) drop onto the
+    /// ENEMY, self-only moves (Charge/Heal/Regen-type) drop onto the CASTER's own creature (2026-08
+    /// follow-up — built-ins became real, equippable SkillData, unifying what was a separate fixed-
+    /// 5 system into this one). Whichever is released over a valid target fires
+    /// onMoveConfirmed(ChosenMove) — target is the enemy for an enemy-target skill, always `self`
+    /// for a self-only one. Releasing anywhere invalid cancels back to the ring, same for every
+    /// skill. Clears any prior ShowMoveSelectionReadOnly state for this slot — a creature that
+    /// already acted only ever reaches THIS method again once a new player turn resets
+    /// HasActedThisTurn. Call HideMoveSelection to cancel/clean up early.
     /// </summary>
     public void ShowMoveSelection(int attackerSlotIndex, BattleParticipant self, List<BattleParticipant> enemyTargets,
         Action<ChosenMove> onMoveConfirmed)
@@ -1257,32 +1237,32 @@ public class BattleHUDController : MonoBehaviour
         _enemyTargets = enemyTargets;
         _onMoveConfirmed = onMoveConfirmed;
         _playerSlotReadOnly[attackerSlotIndex] = false;
-        SetMoveOptionsVisible(attackerSlotIndex, true);
+        SetSkillRingVisible(attackerSlotIndex, true);
         _playerStageCreatures[attackerSlotIndex].BringToFront();
     }
 
     /// <summary>
-    /// Shows a player's move wheel in READ-ONLY mode — every orb visible but greyed
-    /// (`.move-option-disabled`) and non-interactive (BeginDrag refuses to start a drag for a
-    /// read-only slot). Used when the player clicks a Phasix that's already used its action this
-    /// turn (2026-08-06, user-directed — see DECISIONS.md -> [Combat]: "if the phasix already
+    /// Shows a player's skill ring in READ-ONLY mode — every populated orb visible but greyed
+    /// (`.move-option-disabled`) and non-interactive (BeginDragForSkill refuses to start a drag
+    /// for a read-only slot). Used when the player clicks a Phasix that's already used its action
+    /// this turn (2026-08-06, user-directed — see DECISIONS.md -> [Combat]: "if the phasix already
     /// moved during its turn then it can still show, but will be greyed out for active skills").
     /// No target/callback state is set — there's nothing to confirm in this mode. Deliberately
-    /// greys out ALL current move options; see BattleParticipant.HasActedThisTurn's doc comment
+    /// greys out every populated slot; see BattleParticipant.HasActedThisTurn's doc comment
     /// for why this is a per-slot flag rather than something baked into a specific move, leaving
     /// room for a future synergy/passive exception without restructuring this method.
     /// </summary>
     public void ShowMoveSelectionReadOnly(int slotIndex)
     {
         _playerSlotReadOnly[slotIndex] = true;
-        SetMoveOptionsVisible(slotIndex, true);
+        SetSkillRingVisible(slotIndex, true);
         _playerStageCreatures[slotIndex].BringToFront();
     }
 
-    /// <summary>Hides any visible move options and cancels an in-progress drag, if any. Safe to call even when nothing is shown.</summary>
+    /// <summary>Hides the skill ring and cancels an in-progress drag, if any. Safe to call even when nothing is shown.</summary>
     public void HideMoveSelection()
     {
-        for (int i = 0; i < BattleConfig.ActivePartySize; i++) SetMoveOptionsVisible(i, false);
+        for (int i = 0; i < BattleConfig.ActivePartySize; i++) SetSkillRingVisible(i, false);
         EndDrag();
         _self = null;
         _enemyTargets = null;
@@ -1290,7 +1270,7 @@ public class BattleHUDController : MonoBehaviour
         // Belt-and-suspenders: a slot hidden (display: None) out from under a hovering pointer
         // doesn't reliably fire PointerLeaveEvent, so the tooltip could otherwise linger after
         // the wheel that owned it disappears.
-        _hudTooltip.style.display = DisplayStyle.None;
+        _tooltip.Hide();
         // Undo ShowMoveSelection/ShowMoveSelectionReadOnly's BringToFront override — back to
         // static lane-depth order now that no wheel is open.
         RestoreStageCreatureDepthOrder();
@@ -1336,29 +1316,23 @@ public class BattleHUDController : MonoBehaviour
         ApplyEvoVisual(_playerNameplates[slotIndex], fillPercent, ready);
     }
 
-    private void SetMoveOptionsVisible(int slotIndex, bool visible)
+    private void SetSkillRingVisible(int slotIndex, bool visible)
     {
         // Only grey out orbs while actually showing a read-only wheel — irrelevant while hiding.
         bool readOnly = visible && _playerSlotReadOnly[slotIndex];
-        foreach (VisualElement option in _playerMoveOptions[slotIndex])
-        {
-            option.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-            option.EnableInClassList("move-option-disabled", readOnly);
-        }
 
-        // Empty skill slots show/hide in lockstep with "A"/"C" — the whole radial wheel appears
-        // and disappears together (2026-08-06, user-directed — see DECISIONS.md -> [Combat]).
+        // Empty/populated skill slots all show/hide together — the whole radial wheel appears
+        // and disappears as one unit (2026-08-06, user-directed — see DECISIONS.md -> [Combat]).
         foreach (VisualElement slot in _playerSkillSlots[slotIndex])
             slot.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
-        // Real, populated skill-ring slots grey out in read-only mode too, same as the 5 built-in
-        // moves (2026-08 session, see DECISIONS.md -> [Combat]) — locked/empty slots are already
-        // visually dim via .skill-slot-locked regardless of read-only state, so only touch
-        // populated ones here.
-        for (int ring = 0; ring < SkillRingSlotCount; ring++)
+        // Populated slots grey out in read-only mode too (2026-08 session, see DECISIONS.md ->
+        // [Combat]) — locked/empty slots are already visually dim via .skill-slot-locked
+        // regardless of read-only state, so only touch populated ones here.
+        for (int ring = 0; ring < SkillSlotCount; ring++)
         {
             SkillData skill = _playerSkillSlotSkills[slotIndex] != null ? _playerSkillSlotSkills[slotIndex][ring] : null;
-            if (skill != null) _playerSkillSlots[slotIndex][SkillRingSlotOffset + ring].EnableInClassList("move-option-disabled", readOnly);
+            if (skill != null) _playerSkillSlots[slotIndex][ring].EnableInClassList("move-option-disabled", readOnly);
         }
     }
 
@@ -1366,31 +1340,9 @@ public class BattleHUDController : MonoBehaviour
     {
         if (_playerSlotReadOnly[slotIndex]) return;
 
-        SetMoveOptionsVisible(slotIndex, false);
+        SetSkillRingVisible(slotIndex, false);
         _draggingFromSlotIndex = slotIndex;
-        _draggingOptionIndex = -1;
         _draggingSkill = skill;
-
-        Vector2 startWorld = _playerStageCreatures[slotIndex].worldBound.center;
-        _dragLine.Start = _dragLine.WorldToLocal(startWorld);
-        _dragLine.End = _dragLine.WorldToLocal(evt.position);
-        _dragLine.style.display = DisplayStyle.Flex;
-        _dragLine.Refresh();
-
-        _root.CapturePointer(evt.pointerId);
-        _root.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
-        _root.RegisterCallback<PointerUpEvent>(OnDragPointerUp);
-    }
-
-    private void BeginDrag(int slotIndex, PointerDownEvent evt, int optionIndex)
-    {
-        // Greyed-out "already acted" wheel (ShowMoveSelectionReadOnly) — look, don't touch.
-        if (_playerSlotReadOnly[slotIndex]) return;
-
-        SetMoveOptionsVisible(slotIndex, false);
-        _draggingFromSlotIndex = slotIndex;
-        _draggingOptionIndex = optionIndex;
-        _draggingSkill = null;
 
         Vector2 startWorld = _playerStageCreatures[slotIndex].worldBound.center;
         _dragLine.Start = _dragLine.WorldToLocal(startWorld);
@@ -1413,16 +1365,16 @@ public class BattleHUDController : MonoBehaviour
     {
         _root.ReleasePointer(evt.pointerId);
         int fromSlotIndex = _draggingFromSlotIndex;
-        int optionIndex = _draggingOptionIndex;
         SkillData draggingSkill = _draggingSkill;
         EndDrag();
 
-        // Skill-ring drags resolve self-vs-enemy targeting the same way built-in moves do
-        // (MoveOptionIsSelfOnly), just via PlaceholderSkillResolver instead of a fixed per-index
-        // array — see DECISIONS.md -> [Combat], 2026-08 session.
-        bool selfOnly = draggingSkill != null
-            ? PlaceholderSkillResolver.Resolve(draggingSkill).SelfTargeted
-            : optionIndex >= 0 && MoveOptionIsSelfOnly[optionIndex];
+        // Self-vs-enemy targeting: a Standard built-in move (Attack/Charge/Heal/Regen/Capture)
+        // resolves via IsBuiltInMoveSelfTargeted; every other skill via PlaceholderSkillResolver
+        // (2026-08 follow-up — built-ins are real SkillData now, unifying what was a separate
+        // fixed-index array into one skill-driven path — see DECISIONS.md -> [Combat]).
+        bool selfOnly = draggingSkill.BuiltInMove != BuiltInMoveType.None
+            ? IsBuiltInMoveSelfTargeted(draggingSkill.BuiltInMove)
+            : PlaceholderSkillResolver.Resolve(draggingSkill).SelfTargeted;
         bool hit;
         BattleParticipant target = null;
 
@@ -1449,16 +1401,13 @@ public class BattleHUDController : MonoBehaviour
             _self = null;
             _enemyTargets = null;
             _onMoveConfirmed = null;
-            ChosenMove chosen = draggingSkill != null
-                ? new ChosenMove(null, draggingSkill, target)
-                : new ChosenMove(optionIndex, null, target);
-            callback?.Invoke(chosen);
+            callback?.Invoke(new ChosenMove(draggingSkill, target));
         }
         else if (fromSlotIndex >= 0)
         {
             // Released on nothing valid — let the player retry (the only cancel path today, same
             // for every move).
-            SetMoveOptionsVisible(fromSlotIndex, true);
+            SetSkillRingVisible(fromSlotIndex, true);
         }
     }
 
@@ -1468,7 +1417,6 @@ public class BattleHUDController : MonoBehaviour
         _root.UnregisterCallback<PointerUpEvent>(OnDragPointerUp);
         _dragLine.style.display = DisplayStyle.None;
         _draggingFromSlotIndex = -1;
-        _draggingOptionIndex = -1;
         _draggingSkill = null;
     }
 

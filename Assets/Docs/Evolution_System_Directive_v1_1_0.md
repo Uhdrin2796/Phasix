@@ -43,13 +43,20 @@ GDD §3 tier diagram shows T1–T3 as active range with T4–T5 as future and T6
 
 ### Natural Tier Structure — T1 to T5
 
+**Status: PDF SYNC REQUIRED (Active Slots column)** — 2026-08, user-directed: equip-slot counts
+changed to a flat 4/6/8/10/12 progression so all 12 skill-wheel positions are reachable at T5
+(was 2/3/4/5/5–7). See `SkillSlotCapacity.GetActiveSlotRange` and DECISIONS.md ->
+[Progression] for the implemented values and rationale. **This .md mirror reflects the new
+numbers; the PDF (canonical source per DOCUMENT_INDEX.md) still has the old table and needs a
+manual update outside Claude Code's reach.** Skill Trees Available is unaffected.
+
 | Tier | Name | Primal Types | Skill Trees | Active Slots | Notes |
 |---|---|---|---|---|---|
-| T1 | Base | 1–2 | 2 | 2 | All species start here. First branch choices. |
-| T2 | — | 2 | 4 | 3 | Exotic branches emerge. |
-| T3 | — | 3 | 5 | 4 | Boss conditionals appear. |
-| T4 | — | 4 | 6 | 5 | Loadout identity solidifies. Natural line ceiling. Fusion ingredient tier. |
-| T5 | Transcendent | 4 | 7 | 5–7 | Full expression. Slot count varies by species design. |
+| T1 | Base | 1–2 | 2 | 4 | All species start here. First branch choices. |
+| T2 | — | 2 | 4 | 6 | Exotic branches emerge. |
+| T3 | — | 3 | 5 | 8 | Boss conditionals appear. |
+| T4 | — | 4 | 6 | 10 | Loadout identity solidifies. Natural line ceiling. Fusion ingredient tier. |
+| T5 | Transcendent | 4 | 7 | 12 | Full expression — all 12 skill-wheel positions. Flat value for now; a per-species range may return once species design gets more granular (see DECISIONS.md -> [Progression]). |
 | T6 | Fusion I | Inherits from ingredients | Max of both parents | — | Fusion only. Requires two same-tier ingredients (T5+T5). May have forward branches. Can be T7 ingredient. |
 | T7 | Fusion II | Inherits from all four lineage parents | Max of all parents | — | Fusion only. Requires two T6 ingredients (T6+T6). Rarest forms in game. |
 
@@ -79,13 +86,15 @@ GDD §3 tier diagram shows T1–T3 as active range with T4–T5 as future and T6
 
 ### Skill Slot Count by Tier
 
+**Status: PDF SYNC REQUIRED** — see the sync note under "Natural Tier Structure — T1 to T5" above; same override applies here.
+
 | Tier | Skill Trees Available | Active Slots | Notes |
 |---|---|---|---|
-| T1 | 2 | 2 | Introductory constraint |
-| T2 | 4 | 3 | First tree expansion on evolution |
-| T3 | 5 | 4 | Midgame flexibility begins |
-| T4 | 6 | 5 | Loadout identity solidifies |
-| T5 | 7 | 5–7 | Full expression. Varies by species. |
+| T1 | 2 | 4 | Introductory constraint |
+| T2 | 4 | 6 | First tree expansion on evolution |
+| T3 | 5 | 8 | Midgame flexibility begins |
+| T4 | 6 | 10 | Loadout identity solidifies |
+| T5 | 7 | 12 | Full expression — all 12 skill-wheel positions. Flat for now, see DECISIONS.md -> [Progression]. |
 | T6 | Inherits from ingredients | Max of both parents | Pending species design |
 | T7 | Inherits from all four lineage parents | Max of all parents | Pending species design |
 

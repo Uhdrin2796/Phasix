@@ -41,9 +41,17 @@ public enum Personality
 /// 18-type skill tree taxonomy, A-R. GDD §14 — Taxonomy Locked, individual skill
 /// content pending species roster. Note: SkillTreeType.Personality and the standalone
 /// Personality enum share a name — different enum types, not a collision.
+///
+/// Standard (2026-08 follow-up) is a 19th, NON-GDD value — every creature always has it, unlike
+/// the 18 taxonomy trees which unlock per-species/tier. Groups the 5 built-in moves (Attack/
+/// Charge/Heal/Regen/Capture, see BuiltInMoveType) now that they're real, equippable SkillData
+/// instead of hardcoded battle moves (user: "if theres not particular skill tree for them they
+/// can all be grouped in their own as standard"). Same "new, not GDD content" precedent as
+/// ComboRuleType/ChainResultType — see DECISIONS.md -> [Combat].
 /// </summary>
 public enum SkillTreeType
 {
     Utility, Aura, Passive, Synergy, Reaction, Bond, Aspect, Resource,
-    Corruption, Mirror, Evolve, Territory, Memory, Fusion, Personality, Typing, Bastion, Phantom
+    Corruption, Mirror, Evolve, Territory, Memory, Fusion, Personality, Typing, Bastion, Phantom,
+    Standard
 }

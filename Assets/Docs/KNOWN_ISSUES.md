@@ -7,12 +7,43 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-None currently open — see `CHANGELOG.md` → "Repo audit triage" (2026-08-04) and the Closed Issues
-section below for the full trail, including the external repo audit (`AUDIT_202608.md`).
+### [UI-001] — Skill tree carousel needs a visual pass
+**Status:** Open — flagged by user after live use, not yet scoped
+**Affects:** `Assets/Scripts/UI/OverworldMenuController.cs`, `Assets/UI/OverworldMenu.uss`
+(`.tree-*` classes)
+**Description:** The Skyrim-style paged skill tree (2026-08-09, see `CHANGELOG.md` → "Skill tray
+reworked into a Skyrim-style paged tree carousel") is functionally complete — paging via buttons/
+arrow keys/drag-swipe, node equip/unequip with the "stays visible as a copy" behavior, peek effect
+at the page edges — but the visual presentation is still a plain functional placeholder: colored
+circles for nodes, a thin flat bar for connectors, no constellation-style background/art, small
+260×200px stage. User: "we need to fix the skill tree look." No specific direction given yet on
+what to change (art pass, sizing, background, node styling) — needs a follow-up conversation to
+scope before touching anything.
+**Next:** Ask the user what specifically feels off next session rather than guessing at a fix.
 
 ---
 
 ## Closed Issues
+
+### [SAVE-001] — Debug "New Game" reset didn't re-seed the party — CLOSED (fixed)
+**Status:** Closed — fixed, confirmed via live Play Mode test
+**Affects:** `Assets/Scripts/Core/GameManager.cs`
+**Description:** `GameManager.ResetToNewGame()` reloads the active scene while `GameManager`
+itself survives via `DontDestroyOnLoad`. The original boot-load logic ran in `Start()`, which
+only ever fires ONCE per component instance — it does not re-run just because the scene around a
+surviving `DontDestroyOnLoad` object reloads. Live-verified: clicking the debug reset button
+reloaded the scene, but the party stayed empty (no "seeded fallback starter" console log), and a
+previously-saved slot's stats lingered instead of resetting.
+**Fix:** Moved the load/seed logic from `Start()` into a handler registered on
+`SceneManager.sceneLoaded` (subscribed in `OnEnable`, unsubscribed in `OnDisable`) — fires for
+every scene load this object survives, including the very first one at boot, so no separate
+first-boot path is needed. See DECISIONS.md → [Core] for the full rationale.
+**Verified live:** After the fix, clicking debug reset produced the expected
+`"[GameManager] No save found — seeded fallback starter..."` log, the party's stats reset to a
+fresh baseline (Vitality 120, Aura 0, vs. the saved slot's 121/49), and the saved slot's file
+remained untouched on disk (`SaveSystem.SlotExists` still `true` afterward).
+**Closed:** 2026-08-08, same session — caught during the Full Overworld Menu session's own
+verification pass, never shipped.
 
 ### [EDITOR-001] — Evolution Burst gauge not clickable; nameplate hover not working — CLOSED (fixed)
 **Status:** Closed — fixed, confirmed via `panel.Pick()` hit-testing before/after

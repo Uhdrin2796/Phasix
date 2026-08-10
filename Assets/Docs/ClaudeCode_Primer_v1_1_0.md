@@ -109,7 +109,7 @@ Every Phasix has **all of the following fields**. Do not invent fields not liste
 ### Skill System
 - `List<SkillTreeType> unlockedTreeTypes`
 - `List<SkillData> learnedSkills` — **never shrinks**
-- `List<SkillData> equippedSkills` — T1=2, T2=3, T3=4, T4=5, T5=5–7 slots
+- `List<SkillData> equippedSkills` — T1=4, T2=6, T3=8, T4=10, T5=12 slots (2026-08 rework, see SkillSlotCapacity.GetActiveSlotRange, DECISIONS.md -> [Progression])
 
 ---
 
@@ -212,7 +212,7 @@ Internal role names (Edge/Anchor/Flux) never shown to player — only species-sp
 | Q | Bastion | Guard/Vitality | Fortify, Counter, Absorb. Physical defense primary. |
 | R | Phantom | Instinct | Evasion, Prediction, Ghost Step. Speed defense primary. |
 
-**Slot count:** T1=2 trees/2 slots · T2=4/3 · T3=5/4 · T4=6/5 · T5=7/5–7  
+**Slot count:** T1=2 trees/4 slots · T2=4/6 · T3=5/8 · T4=6/10 · T5=7/12 (slots overridden 2026-08, see SkillSlotCapacity.GetActiveSlotRange)  
 **Skill library never shrinks.** Combo system: Duo→Trio→Quad, discovered through use.
 
 ---

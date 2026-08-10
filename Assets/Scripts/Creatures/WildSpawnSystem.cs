@@ -39,13 +39,16 @@ public static class WildSpawnSystem
     /// a real skill-learning UI/flow that doesn't exist yet: every unlocked tree's 2 placeholder
     /// skills are auto-learned, and equipping is a ROUND-ROBIN across unlocked trees (one skill
     /// per tree per pass, 2026-08 follow-up fix — see DECISIONS.md -> [Combat]) up to the tier's
-    /// active-slot capacity, not a real choice the player makes. Shared by
-    /// WildSpawnSystem.CreateWildInstance and DebugPartyBootstrap, so both spawn paths seed
-    /// identically.
+    /// active-slot capacity, not a real choice the player makes. Every creature also always learns
+    /// the 5 Standard built-in moves (Attack/Charge/Heal/Regen/Capture — 2026-08 follow-up, see
+    /// BuiltInMoveType), seeded first so Attack claims the first equip slot by default — a
+    /// temporary placeholder default, not a real move-pool-assignment design (confirmed acceptable
+    /// with the user). Called from WildSpawnSystem.CreateWildInstance and GameManager's fallback-
+    /// starter seed path (SeedFallbackStarter), so every spawn path seeds identically.
     /// </summary>
     public static void SeedInitialSkills(PhasixRuntimeData runtime, PhasixData species, SkillDatabase skillDatabase)
     {
-        if (skillDatabase == null || species.AvailableTreeTypes == null) return;
+        if (skillDatabase == null) return;
 
         // SkillSlotCapacity only covers tiers 1-5 (throws for anything else — fusion tiers are
         // genuinely unresolvable pre-Phase 4, per its own doc comment). A species with an unset/
@@ -53,22 +56,45 @@ public static class WildSpawnSystem
         // just skip seeding, not crash the spawn that's asking for it.
         if (species.EvolutionTier < 1 || species.EvolutionTier > 5) return;
 
-        int treeCount = SkillSlotCapacity.GetTreeCount(species.EvolutionTier);
         int slotCap = SkillSlotCapacity.GetActiveSlotRange(species.EvolutionTier).max;
 
         var learnedByTree = new System.Collections.Generic.List<System.Collections.Generic.List<string>>();
-        foreach (SkillTreeType tree in species.AvailableTreeTypes.Take(treeCount))
-        {
-            runtime.unlockedTreeTypes.Add(tree);
 
-            var guids = new System.Collections.Generic.List<string>();
-            foreach (SkillData skill in skillDatabase.GetByTreeType(tree))
+        // Standard (2026-08 follow-up — the 5 built-in moves Attack/Charge/Heal/Regen/Capture
+        // became real, equippable SkillData, see BuiltInMoveType) is NOT one of the species'
+        // unlocked trees — every creature always has it, regardless of species.AvailableTreeTypes.
+        // Seeded FIRST in learnedByTree so its skills win round-robin pass 0, guaranteeing Attack
+        // (registered first in SkillDatabase among the 5 Standard assets) claims an equip slot
+        // before any tree skill does — a temporary default confirmed acceptable with the user
+        // pending a real move-pool-assignment design; players can freely unequip it afterward.
+        // unlockedTreeTypes deliberately does NOT get Standard added — that list means "unlocked
+        // skill TREES" in the GDD taxonomy sense, and Standard isn't one of the 18
+        // (SkillTreeType.Standard's own doc comment).
+        var standardGuids = new System.Collections.Generic.List<string>();
+        foreach (SkillData skill in skillDatabase.GetByTreeType(SkillTreeType.Standard))
+        {
+            if (!skillDatabase.TryGetGuid(skill, out string standardGuid)) continue;
+            runtime.learnedSkillGuids.Add(standardGuid);
+            standardGuids.Add(standardGuid);
+        }
+        learnedByTree.Add(standardGuids);
+
+        if (species.AvailableTreeTypes != null)
+        {
+            int treeCount = SkillSlotCapacity.GetTreeCount(species.EvolutionTier);
+            foreach (SkillTreeType tree in species.AvailableTreeTypes.Take(treeCount))
             {
-                if (!skillDatabase.TryGetGuid(skill, out string guid)) continue;
-                runtime.learnedSkillGuids.Add(guid);
-                guids.Add(guid);
+                runtime.unlockedTreeTypes.Add(tree);
+
+                var guids = new System.Collections.Generic.List<string>();
+                foreach (SkillData skill in skillDatabase.GetByTreeType(tree))
+                {
+                    if (!skillDatabase.TryGetGuid(skill, out string guid)) continue;
+                    runtime.learnedSkillGuids.Add(guid);
+                    guids.Add(guid);
+                }
+                learnedByTree.Add(guids);
             }
-            learnedByTree.Add(guids);
         }
 
         // Round-robin equip (2026-08 follow-up fix): one skill per unlocked tree per pass, instead

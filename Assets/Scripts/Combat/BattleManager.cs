@@ -62,7 +62,7 @@ public class BattleManager : MonoBehaviour
     private BattleState _state;
     private bool _playerActionChosen;
     private BattleParticipant _pendingTarget;
-    private SkillData _pendingSkill; // non-null when the confirmed move was a skill-ring drag, not a built-in move — 2026-08 session, see DECISIONS.md -> [Combat]
+    private SkillData _pendingSkill; // always non-null once a move is confirmed — every orb (built-in move or tree skill) is real SkillData now, see BuiltInMoveType
     private bool _battleEndedEarly; // set true by a successful Capture — EndBattle already ran, RunBattleLoop must not also call EnemyTurn
 
     // Running totals for the post-battle summary screen (2026-08 session — replaces the old
@@ -229,28 +229,22 @@ public class BattleManager : MonoBehaviour
         foreach (BattleParticipant p in _state.EnemySide) p.TickStatuses();
     }
 
-    /// <summary>Move option indices, index-matched to BattleHUDController.MoveOptionClockHours/MoveOptionIsSelfOnly — kept in one place so PlayerTurn's switch reads by name, not magic number.</summary>
-    private const int MoveOptionAttack = 0;
-    private const int MoveOptionCharge = 1;
-    private const int MoveOptionHeal = 2;
-    private const int MoveOptionRegen = 3;
-    private const int MoveOptionCapture = 4;
-
     /// <summary>
     /// Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md -> [Combat]),
     /// replacing the old strict-turn-order foreach: the player can click ANY of their alive
-    /// Phasix, in any order, to open its move wheel via the HUD's Sonny 2-style radial
-    /// placeholders — click-and-drag the "A" (Attack) or "K" (Capture) placeholder onto an ENEMY,
-    /// or "C" (Charge), "H" (Heal), or "R" (Regen) onto the CASTER's OWN creature (all three are
-    /// solo/self-only). Clicking a DIFFERENT creature while one's wheel is open (whether it's
-    /// still choosing a move, or just being viewed read-only) closes the current one and opens
-    /// the new one — no move is lost, since nothing is committed until a drag actually confirms a
-    /// target. A creature that's already acted this turn (BattleParticipant.HasActedThisTurn)
-    /// still opens on click, but read-only/greyed (ShowMoveSelectionReadOnly) — every current
-    /// move requires the turn's one action, so there's nothing to actually pick, but the wheel
-    /// stays inspectable. The player ends their own turn explicitly via the dedicated End Turn
-    /// button (EndTurnClicked) rather than the turn auto-ending once everyone's acted — matching
-    /// how the free-choice model doesn't force every creature to act every round.
+    /// Phasix, in any order, to open its skill ring — click-and-drag any populated orb onto its
+    /// valid target (enemy for Attack/Capture-type moves, the caster's own creature for Charge/
+    /// Heal/Regen-type ones — 2026-08 follow-up: every orb, built-in move or tree skill, is now
+    /// real SkillData routed through ResolveSkillAction, see BuiltInMoveType). Clicking a
+    /// DIFFERENT creature while one's wheel is open (whether it's still choosing a move, or just
+    /// being viewed read-only) closes the current one and opens the new one — no move is lost,
+    /// since nothing is committed until a drag actually confirms a target. A creature that's
+    /// already acted this turn (BattleParticipant.HasActedThisTurn) still opens on click, but
+    /// read-only/greyed (ShowMoveSelectionReadOnly) — every current move requires the turn's one
+    /// action, so there's nothing to actually pick, but the wheel stays inspectable. The player
+    /// ends their own turn explicitly via the dedicated End Turn button (EndTurnClicked) rather
+    /// than the turn auto-ending once everyone's acted — matching how the free-choice model
+    /// doesn't force every creature to act every round.
     ///
     /// Stops immediately (skipping the end-of-turn ticks/message below) if the enemy side is
     /// wiped mid-turn, checked at the top of every loop iteration — same "no swinging at a dead
@@ -275,7 +269,6 @@ public class BattleManager : MonoBehaviour
         if (firstAliveSlot >= 0) _pendingCreatureClickSlot = firstAliveSlot;
 
         int activeSlot = -1; // -1 = no wheel currently open
-        int chosenOptionIndex = -1; // set by ShowMoveSelection's callback once a drag confirms a target
 
         while (!_endTurnRequested)
         {
@@ -304,15 +297,13 @@ public class BattleManager : MonoBehaviour
                 else
                 {
                     _playerActionChosen = false;
-                    chosenOptionIndex = -1;
                     _pendingSkill = null;
                     List<BattleParticipant> aliveEnemiesForWheel = _state.EnemySide.FindAll(e => e.IsAlive);
                     BattleHUDController.Instance.ShowMoveSelection(activeSlot, clicked, aliveEnemiesForWheel,
                         chosen =>
                         {
-                            chosenOptionIndex = chosen.BuiltInOptionIndex ?? -1;
-                            _pendingSkill = chosen.Skill; // non-null for a skill-ring drag, null for a built-in move
-                            _pendingTarget = chosen.Target; // only meaningful for Attack/Capture/skills; self-only built-in moves ignore it
+                            _pendingSkill = chosen.Skill; // always non-null now — every orb (built-in move or tree skill) is real SkillData, see BuiltInMoveType
+                            _pendingTarget = chosen.Target;
                             _playerActionChosen = true;
                         });
                 }
@@ -353,143 +344,16 @@ public class BattleManager : MonoBehaviour
             BattleParticipant attacker = _state.PlayerSide[activeSlot];
             int attackerSlotIndex = activeSlot;
             _playerActionChosen = false;
-            activeSlot = -1; // the wheel this action came from is already hidden by BeginDrag's own confirm/drag flow
+            activeSlot = -1; // the wheel this action came from is already hidden by BeginDragForSkill's own confirm/drag flow
             attacker.HasActedThisTurn = true;
 
-            // "C" (Charge) — no attack, no timed input, just restores Aura and ends this
-            // attacker's action (2026-08-06, user-directed — see DECISIONS.md -> [Combat]).
-            if (chosenOptionIndex == MoveOptionCharge)
-            {
-                attacker.RestoreAura(BattleConfig.ChargeAuraRestore);
-                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} charges, restoring Aura!");
-                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
-
-                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                    $"{attacker.DisplayName} charges!", BattleConfig.AutoMessageDurationSeconds));
-                continue;
-            }
-
-            // "H" (Heal) — instant Aura-for-HP trade, no timed input (2026-08-06, user-directed —
-            // see DECISIONS.md -> [Combat]: "the heal should cost 6 aura and heals 4 HP").
-            if (chosenOptionIndex == MoveOptionHeal)
-            {
-                attacker.SpendAura(BattleConfig.HealAuraCost);
-                int hpBeforeHeal = attacker.CurrentHP;
-                attacker.Heal(BattleConfig.HealAmount);
-                _totalHealingDone += attacker.CurrentHP - hpBeforeHeal;
-                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} heals {BattleConfig.HealAmount} HP!");
-                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
-
-                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                    $"{attacker.DisplayName} uses H!", BattleConfig.AutoMessageDurationSeconds));
-                continue;
-            }
-
-            // "R" (Regen) — spends Aura to apply an over-time heal, ticking at the END of the
-            // player's turn for BattleConfig.RegenDurationTurns turns (2026-08-06, user-directed
-            // — see DECISIONS.md -> [Combat]: "costs 8 aura but heals 2 HP at the end of the
-            // players turn for 4 turns"). No immediate HP change on cast — SetRegenStatus shows
-            // the status icon right away with the full countdown so the player sees it took
-            // effect, but the first heal tick happens in TickPlayerRegen below, same as every
-            // subsequent turn's tick.
-            if (chosenOptionIndex == MoveOptionRegen)
-            {
-                attacker.SpendAura(BattleConfig.RegenAuraCost);
-                attacker.ApplyRegen(BattleConfig.RegenHealPerTurn, BattleConfig.RegenDurationTurns);
-                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-                BattleHUDController.Instance.SetRegenStatus(attackerSlotIndex, attacker.RegenTurnsRemaining);
-                // Battle log spells it out ("Aura Regen") rather than the bare orb letter
-                // (2026-08-06, user-directed) — the on-stage announcement below keeps the short
-                // "R" form, matching the orb the player just pressed.
-                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} uses Aura Regen!");
-                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
-
-                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                    $"{attacker.DisplayName} uses R!", BattleConfig.AutoMessageDurationSeconds));
-                continue;
-            }
-
-            // "K" (Capture) — attempts CaptureSystem's placeholder chance-roll against the
-            // targeted enemy (2026-08-06, wiring CaptureSystem into the live loop for the Phase 3
-            // Gate playtest — see DECISIONS.md -> [Combat]). Targets the enemy, same as Attack
-            // (MoveOptionIsSelfOnly = false for this option). No timed input, no Aura cost — no
-            // capture-item system exists yet (CLAUDE.md: "Economy and items (§22 pending)"), so
-            // this is a free attempt rather than inventing a cost mechanism that wasn't asked for.
-            if (chosenOptionIndex == MoveOptionCapture)
-            {
-                bool captured = CaptureSystem.AttemptCapture(_pendingTarget.RuntimeData, _pendingTarget.CurrentHP, _pendingTarget.MaxHP);
-
-                if (captured)
-                {
-                    PartySystem.Instance?.AddToParty(_pendingTarget.RuntimeData);
-                    BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} captured {_pendingTarget.DisplayName}!");
-
-                    yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                        $"{_pendingTarget.DisplayName} was captured!", BattleConfig.AutoMessageDurationSeconds));
-
-                    // Single-enemy battles only (see class doc comment) — capturing the only
-                    // enemy IS winning. Ends the battle immediately rather than relying on
-                    // RunBattleLoop's HP-based BattleEngine.CheckOutcome, which has no way to
-                    // detect a capture (the enemy's HP never changed).
-                    _battleEndedEarly = true;
-                    yield return StartCoroutine(EndBattle(BattleOutcome.Won));
-                    yield break;
-                }
-
-                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName}'s capture attempt failed!");
-
-                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                    "Capture failed!", BattleConfig.AutoMessageDurationSeconds));
-                continue;
-            }
-
-            // Skill-ring drag (2026-08 session — Combo/Status/Chain/Mastery wiring, see
-            // DECISIONS.md -> [Combat]) — _pendingSkill is only ever non-null when the confirmed
-            // move came from a skill-ring slot, never one of the 5 built-in moves above.
-            if (_pendingSkill != null)
-            {
-                yield return StartCoroutine(ResolveSkillAction(attacker, attackerSlotIndex, _pendingSkill, _pendingTarget));
-                continue;
-            }
-
-            // Aura cost (2026-08-05, user-directed — see DECISIONS.md -> [Combat]: "make them
-            // cost some aura"). Both placeholder attacks cost the same for now; spending never
-            // blocks the attack, it just floors at 0 Aura (BattleParticipant.SpendAura).
-            attacker.SpendAura(BattleConfig.AttackAuraCost);
-
-            // Offensive action command (Combat_Directive Part 4): a successful timed press boosts
-            // this attack's damage. Ring tolerance scales with the attacker's own Instinct + bond.
-            float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
-                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
-            yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                $"YOUR ATTACK — {attacker.DisplayName}", toleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
-            float attackMultiplier = BattleHUDController.Instance.LastTimedInputSuccess
-                ? TimedInputConfig.SuccessDamageMultiplier
-                : 1f;
-
-            // Real formula (Step 3): (AttackerStat / DefenderStat) x skillPower x
-            // primalTypeMultiplier. Basic Attack is treated as Physical (Force/Guard) — real
-            // skill categories arrive with the skill tree framework (Step 4).
-            int baseDamage = DamageCalculator.ComputeDamage(attacker, _pendingTarget, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
-            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, _pendingTarget, _typeChart);
-
-            BattleEngine.QueueBasicAttack(_state, attacker, _pendingTarget, attackMultiplier, baseDamage);
-            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
-            AccumulateDamageDealt(results);
-            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-            LogResults(results, typeMultiplier, BattleHUDController.Instance.LastTimedInputSuccess);
-
-            // "Skill use" fill always applies; a successful offense timing adds the extra "timed
-            // input" fill on top — both are GDD §9.3's locked fill sources.
-            float attackBurstFill = BattleConfig.BurstFillPerSkillUse
-                + (BattleHUDController.Instance.LastTimedInputSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
-            AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
-
-            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                $"{attacker.DisplayName} attacks!", BattleConfig.AutoMessageDurationSeconds));
+            // Every orb — built-in move or tree skill — is real SkillData now (2026-08 follow-up:
+            // Attack/Charge/Heal/Regen/Capture became equippable Standard-tree SkillData, see
+            // BuiltInMoveType), so _pendingSkill is always non-null here and ResolveSkillAction is
+            // the single dispatch point for every move a player can make. If capture succeeds,
+            // ResolveSkillAction/EndBattle sets _battleEndedEarly and this loop stops.
+            yield return StartCoroutine(ResolveSkillAction(attacker, attackerSlotIndex, _pendingSkill, _pendingTarget));
+            if (_battleEndedEarly) yield break;
         }
 
         BattleHUDController.Instance.SetEndTurnButtonVisible(false);
@@ -591,20 +455,38 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Resolves a skill-ring drag (2026-08 session — Combo/Status/Chain/Mastery wiring, see
-    /// DECISIONS.md -> [Combat]). `target` is already correctly resolved to either the enemy or
-    /// the caster's own creature by BattleHUDController's drag-drop hit-test (it uses the same
-    /// PlaceholderSkillResolver.Resolve(skill).SelfTargeted call this method's damage/status split
-    /// also depends on), so no further self-vs-enemy branching is needed here — `target` IS the
+    /// Resolves a skill-ring drag — every orb, built-in move or tree skill (2026-08 session —
+    /// Combo/Status/Chain/Mastery wiring; 2026-08 follow-up — built-ins became real, equippable
+    /// SkillData, see BuiltInMoveType; see DECISIONS.md -> [Combat] for both). `target` is already
+    /// correctly resolved to either the enemy or the caster's own creature by
+    /// BattleHUDController's drag-drop hit-test (it uses the same IsBuiltInMoveSelfTargeted/
+    /// PlaceholderSkillResolver.Resolve(skill).SelfTargeted split this method's own dispatch
+    /// depends on), so no further self-vs-enemy branching is needed here — `target` IS the
     /// recipient either way.
+    ///
+    /// RecordSkillTreeUse/RecordSkillUse run BEFORE the built-in-vs-tree-skill dispatch, uniformly
+    /// for every skill — this is what makes a built-in move correctly interrupt an in-progress
+    /// RepeatSameSkill streak the same way any other different skill would (2026-08 follow-up —
+    /// user: "the other skills dont reset the counter on C1... Do all the other skills not count
+    /// as normal skills?"). A built-in move (BuiltInMove != None) then short-circuits to
+    /// ResolveBuiltInMove — its own dedicated mechanics, unchanged from before this refactor
+    /// beyond being triggered by skill identity instead of a fixed wheel-position index — and
+    /// returns without running PlaceholderSkillResolver or the combo/chain/mastery tail below,
+    /// exactly as approved in the implementation plan for this change.
     /// </summary>
     private IEnumerator ResolveSkillAction(BattleParticipant attacker, int attackerSlotIndex, SkillData skill, BattleParticipant target)
     {
-        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
-
-        attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
         attacker.RecordSkillTreeUse(skill.TreeType);
         attacker.RecordSkillUse(skill);
+
+        if (skill.BuiltInMove != BuiltInMoveType.None)
+        {
+            yield return StartCoroutine(ResolveBuiltInMove(attacker, attackerSlotIndex, skill.BuiltInMove, target));
+            yield break;
+        }
+
+        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
+        attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
 
         bool timedInputHappened = false;
 
@@ -669,6 +551,152 @@ public class BattleManager : MonoBehaviour
 
         yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
             $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
+    }
+
+    /// <summary>
+    /// Runs one of the 5 built-in moves' own dedicated mechanics (2026-08 follow-up — relocated
+    /// verbatim from PlayerTurn's old chosenOptionIndex-keyed if/else chain, now triggered by
+    /// skill identity via ResolveSkillAction's dispatch instead of a fixed wheel-position index —
+    /// see BuiltInMoveType, DECISIONS.md -> [Combat]). No mechanical changes from the pre-refactor
+    /// behavior: same Aura costs, same HP/status effects, same battle-log/announcement text, same
+    /// early-EndBattle-on-successful-capture path (sets _battleEndedEarly, checked by PlayerTurn
+    /// right after this coroutine returns).
+    /// </summary>
+    private IEnumerator ResolveBuiltInMove(BattleParticipant attacker, int attackerSlotIndex, BuiltInMoveType move, BattleParticipant target)
+    {
+        switch (move)
+        {
+            case BuiltInMoveType.Charge:
+            {
+                // No attack, no timed input, just restores Aura and ends this attacker's action
+                // (2026-08-06, user-directed — see DECISIONS.md -> [Combat]).
+                attacker.RestoreAura(BattleConfig.ChargeAuraRestore);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} charges, restoring Aura!");
+                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} charges!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+
+            case BuiltInMoveType.Heal:
+            {
+                // Instant Aura-for-HP trade, no timed input (2026-08-06, user-directed — see
+                // DECISIONS.md -> [Combat]: "the heal should cost 6 aura and heals 4 HP").
+                attacker.SpendAura(BattleConfig.HealAuraCost);
+                int hpBeforeHeal = attacker.CurrentHP;
+                attacker.Heal(BattleConfig.HealAmount);
+                _totalHealingDone += attacker.CurrentHP - hpBeforeHeal;
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} heals {BattleConfig.HealAmount} HP!");
+                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} uses H!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+
+            case BuiltInMoveType.Regen:
+            {
+                // Spends Aura to apply an over-time heal, ticking at the END of the player's turn
+                // for BattleConfig.RegenDurationTurns turns (2026-08-06, user-directed — see
+                // DECISIONS.md -> [Combat]: "costs 8 aura but heals 2 HP at the end of the players
+                // turn for 4 turns"). No immediate HP change on cast — SetRegenStatus shows the
+                // status icon right away with the full countdown so the player sees it took
+                // effect, but the first heal tick happens in TickPlayerRegen, same as every
+                // subsequent turn's tick.
+                attacker.SpendAura(BattleConfig.RegenAuraCost);
+                attacker.ApplyRegen(BattleConfig.RegenHealPerTurn, BattleConfig.RegenDurationTurns);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.SetRegenStatus(attackerSlotIndex, attacker.RegenTurnsRemaining);
+                // Battle log spells it out ("Aura Regen") rather than the bare orb letter
+                // (2026-08-06, user-directed) — the on-stage announcement below keeps the short
+                // "R" form, matching the orb the player just pressed.
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} uses Aura Regen!");
+                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} uses R!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+
+            case BuiltInMoveType.Capture:
+            {
+                // Attempts CaptureSystem's placeholder chance-roll against the targeted enemy
+                // (2026-08-06, wiring CaptureSystem into the live loop for the Phase 3 Gate
+                // playtest — see DECISIONS.md -> [Combat]). No timed input, no Aura cost — no
+                // capture-item system exists yet (CLAUDE.md: "Economy and items (§22 pending)"),
+                // so this is a free attempt rather than inventing a cost mechanism.
+                bool captured = CaptureSystem.AttemptCapture(target.RuntimeData, target.CurrentHP, target.MaxHP);
+
+                if (captured)
+                {
+                    PartySystem.Instance?.AddToParty(target.RuntimeData);
+                    BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} captured {target.DisplayName}!");
+
+                    yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                        $"{target.DisplayName} was captured!", BattleConfig.AutoMessageDurationSeconds));
+
+                    // Single-enemy battles only (see class doc comment) — capturing the only
+                    // enemy IS winning. Ends the battle immediately rather than relying on
+                    // RunBattleLoop's HP-based BattleEngine.CheckOutcome, which has no way to
+                    // detect a capture (the enemy's HP never changed).
+                    _battleEndedEarly = true;
+                    yield return StartCoroutine(EndBattle(BattleOutcome.Won));
+                    yield break;
+                }
+
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName}'s capture attempt failed!");
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    "Capture failed!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+
+            case BuiltInMoveType.Attack:
+            default:
+            {
+                // Aura cost (2026-08-05, user-directed — see DECISIONS.md -> [Combat]: "make them
+                // cost some aura"). Spending never blocks the attack, it just floors at 0 Aura
+                // (BattleParticipant.SpendAura).
+                attacker.SpendAura(BattleConfig.AttackAuraCost);
+
+                // Offensive action command (Combat_Directive Part 4): a successful timed press
+                // boosts this attack's damage. Ring tolerance scales with the attacker's own
+                // Instinct + bond.
+                float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                    TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
+                    attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+                yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
+                    $"YOUR ATTACK — {attacker.DisplayName}", toleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+                float attackMultiplier = BattleHUDController.Instance.LastTimedInputSuccess
+                    ? TimedInputConfig.SuccessDamageMultiplier
+                    : 1f;
+
+                // Real formula (Step 3): (AttackerStat / DefenderStat) x skillPower x
+                // primalTypeMultiplier. Basic Attack is treated as Physical (Force/Guard) — real
+                // skill categories arrive with the skill tree framework (Step 4).
+                int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+                float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+                BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+                List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+                AccumulateDamageDealt(results);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                LogResults(results, typeMultiplier, BattleHUDController.Instance.LastTimedInputSuccess);
+
+                // "Skill use" fill always applies; a successful offense timing adds the extra
+                // "timed input" fill on top — both are GDD §9.3's locked fill sources.
+                float attackBurstFill = BattleConfig.BurstFillPerSkillUse
+                    + (BattleHUDController.Instance.LastTimedInputSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
+                AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} attacks!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+        }
     }
 
     /// <summary>

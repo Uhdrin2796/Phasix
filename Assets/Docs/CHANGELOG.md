@@ -18,6 +18,361 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ## Log
 
+[2026-08-09] Phase 3 — Equipping a skill from its tree no longer removes it from that tree
+- **Context:** User: "when attaching a skill from a tree into the skill wheel. It shouldnt
+  disappear from the tree, it should act more as a copy from the tree assuming its unlocked."
+- **Fixed:** `OverworldMenuController.RefreshSkillArea` no longer filters equipped skills out of
+  the tree grouping (`byTree`) — every skill in `SkillDatabase.AllSkills` always shows as a node on
+  its own tree page, equipped or not. Equipped nodes get a new dimmed/outlined look
+  (`.skill-tray-icon-equipped`) so it's still clear which ones are currently placed on the wheel,
+  without hiding them. A skill still can't occupy two wheel slots at once — dragging an
+  already-equipped node onto another slot silently no-ops, since `SkillLoadoutSystem.TryEquipAt`/
+  `TryEquip` already refuse to equip a skill that's already in `equippedSkillGuids` — no new guard
+  needed, this fell out of existing logic once the tray stopped hiding it.
+- **Verified live:** Standard's page (all 5 skills equipped in the debug loadout) previously showed
+  "No skills available to equip" — now shows all 5 nodes, all correctly marked
+  `.skill-tray-icon-equipped`. Dragged an already-equipped node ("A"/Attack) onto an empty wheel
+  slot — equipped count stayed unchanged (6 before, 6 after), confirming no duplicate equip and no
+  silent removal from its tree.
+- **Test count:** 239/239 EditMode tests still passing.
+
+[2026-08-09] Phase 3 — Skill tray reworked into a Skyrim-style paged tree carousel
+- **Context:** User: "make it so its a vertical tree that allows a player to swipe left and right
+  to see the tree. Similar to how skyrims skill tree mechanic is." Followed by AskUserQuestion
+  answers confirming: buttons + arrow keys + a real click-and-drag swipe gesture (not just
+  buttons), and every tree always gets a page (none skipped when empty) with adjacent trees
+  peeking in at the stage edges. Replaces the previous flat grouped-by-tree tray (entry below).
+- **Built:** `OverworldMenuController.BuildSkillArea` now renders one `SkillTreeType` per page —
+  a `tree-nav-header` (◀/▶ buttons + tree name + "N / 19" counter) above a fixed-size `tree-stage`
+  viewport clipping a `tree-strip` of 19 `tree-page` panels. Pages are narrower than the stage
+  (210px in a 260px stage) so neighboring pages peek in ~25px on each side. Each page holds its
+  unequipped skills as a vertical node column (`tree-node-column`) with a thin connector bar
+  (`tree-node-connector`) between consecutive nodes — a straight placeholder chain, since no
+  prerequisite/branch data exists yet (`SkillData.cs` has no position field — confirmed via
+  exploration before implementing). Nodes reuse the exact same drag-to-equip/hover-tooltip
+  mechanism as before, just relocated into per-tree columns; only the CURRENT page's nodes are
+  interactive (`capturedPageIndex == currentTreePageIndex` gate), so peeking neighbor slivers are
+  inert. `currentTreePageIndex` persists across `RefreshSkillArea` rebuilds (equip/unequip no
+  longer resets the view to page 1).
+- **Three paging inputs, all through one `PageTo`:** nav buttons; Left/Right arrow keys, polled in
+  `Update()` via a new `_treePageStepAction` field (matches this file's existing `Keyboard.current`
+  Tab-key pattern rather than a UI Toolkit `KeyDownEvent` registered on the long-lived `_root` —
+  avoided deliberately, since that would need manual unregister bookkeeping across every
+  `ShowDetail` rebuild to avoid stacking duplicate handlers); a real drag-swipe on the stage
+  background (`PointerDownEvent` not started on a node bubbles up naturally, since a node's own
+  handler only calls `StopPropagation()` when it's on the current page — no extra disambiguation
+  code needed), committing past a `TreePageWidth / 4` threshold or snapping back under it, with
+  `.tree-strip`'s CSS transition zeroed during the live drag and restored (`StyleKeyword.Null`) on
+  release so the commit/snap-back animates.
+- **Verified live:** Paged through all 19 trees via buttons (clamps correctly at both ends — 30
+  clicks past the last page stays on page 19/19) and via `_treePageStepAction` directly (keyboard
+  wiring). Simulated real drag-swipe events: an 80px drag committed to the next page, a 20px drag
+  correctly snapped back. Dragged a node from a mid-list page onto the wheel — equipped correctly
+  and the view stayed on that same page after the rebuild (not reset to page 1). Right-click-
+  unequipped it back — it reappeared as a node on its own page, view again unchanged. Took 2 UI
+  screenshots (`manage_ui render_ui`) confirming the vertical node+connector layout and the paged
+  nav header render as designed.
+- **Test count:** 239/239 EditMode tests still passing (UI-only change).
+
+[2026-08-09] Phase 3 — Party menu skill tray grouped by SkillTreeType instead of one flat list
+- **Context:** User: "when click into the skill menu. It looks like everything is just listed
+  out. Id like them to be on their own tree. we can do the finer details of what unlocks into what
+  but id like to be able to separet them out already."
+- **Built:** `OverworldMenuController`'s "All Skills" tray now renders a header + wrapped icon row
+  PER `SkillTreeType` (`TrayDisplayTreeOrder` — Standard first, then the 18 GDD tree types in their
+  `PhasixEnums.cs` declaration order), instead of one flat wrapped list of the whole catalog. Empty
+  groups (every skill of that tree already equipped) are skipped, not shown as a bare header. Pure
+  display grouping by each skill's EXISTING `TreeType` tag — no new unlock/progression logic;
+  "finer details of what unlocks into what" is still pending real skill-tree design (CLAUDE.md
+  "Actual skill content" pending item), unchanged by this fix.
+- **Changed:** `.skill-tray-scroll` max-height raised 90px → 160px — a 90px window fit one flat row
+  fine but made 18+ grouped headers unusably cramped. New `.skill-tray-group-label` style for the
+  per-tree headers (small, left-aligned, dimmer than the overall "All Skills" title).
+- **Verified live:** With the Tier-3 debug loadout equipped, opened the Party menu and read the
+  tray's actual group structure — 17 of 18 GDD trees appeared (each with their real unequipped-
+  skill count; `Mirror` correctly showed only 1, since its other skill, C1, is equipped), `Standard`
+  correctly absent (all 5 of its skills were equipped). Right-click-unequipped Attack from the ring
+  and re-checked the tray: `Standard` reappeared as the FIRST group (matching
+  `TrayDisplayTreeOrder`), containing Attack — confirms grouping stays live-correct across
+  equip/unequip, not just on initial open.
+- **Test count:** 239/239 EditMode tests still passing (UI-only change, no test-covered logic
+  touched).
+
+[2026-08-09] Phase 3 — Full live playtest of the new tier progression (T1-T5); debug starter tier changed 5 -> 3
+- **Context:** User: "do a full live playtest of all tiers, then at the end make the default
+  phasix i start with for testing purposes by tier 3."
+- **Verified live (structural, all 5 tiers):** Called `OverworldMenuController.BuildSkillArea`
+  directly for tier=1..5 against the live party wheel and inspected every physical slot's
+  usable/tier-locked/filled state. All 5 tiers matched `SkillSlotCapacity.GetActiveSlotRange`
+  exactly (T1: 4 usable/8 locked, T2: 6/6, T3: 8/4, T4: 10/2, T5: 12/0) and usable+locked always
+  summed to 12.
+- **Verified live (interactive, real events):** Discovered the Party menu's root container had
+  `display: None` in this headless Play session (not something my code changed — `Open()`'s normal
+  toggle just wasn't exercised by the reflection-driven test harness), which zeroed every child's
+  `worldBound` and made position-based drag/drop hit-testing silently fail. Forced `display: Flex`
+  + `panel.ValidateLayout()` for the test, then re-ran real `PointerDownEvent`/`PointerUpEvent`
+  drag-drop, right-click unequip, and cap-enforcement on the Tier-5 wheel: dragged 6 tray skills
+  onto the newly-reachable positions (slots 7-12), confirmed the cap correctly stopped growth at
+  exactly 12 (a 7th drag no-opped), then right-click-unequipped the skill in the literal 12th
+  position and confirmed it cleared. All three previously-fixed interactions (drag-into-empty,
+  cap enforcement, right-click-unequip) hold at the new, larger boundary.
+- **Changed:** `Test_FireType.asset`'s `EvolutionTier` 5 → 3 (was bumped to 5 earlier this session
+  specifically so the 6-skill debug loadout would fit under the OLD 5-7 cap; Tier 3's new cap of 8
+  fits it just as well while testing a mid-tier boundary instead of the max). Fresh-boot verified:
+  `species=Test Fire Placeholder tier=3 maxSlots=8 equippedCount=6`, loadout `[A, C, H, R, K, C1]`
+  intact, 2 slots free to playtest equip/unequip into.
+- **Test count:** 239/239 EditMode tests still passing (data-only asset change, no logic touched).
+
+[2026-08-09] Phase 3 — Equip-slot progression reworked: flat 4/6/8/10/12 by tier, all 12 wheel positions reachable at T5
+- **Context:** User, immediately after the previous fix (locked indicator on the 5 decorative
+  positions): "at max tier they should be able to access all 12 slots. say tier 1 they have access
+  to 3 slots, then increasing by 2 every tier." A pure start=3 progression lands on 11 at T5, not
+  12 — user confirmed shifting the start to 4 (4/6/8/10/12) to land exactly on 12, and to make
+  every tier a flat value (no more T5 "5-7, varies by species" range) for now, "but build in the
+  option to have it vary once we get more granular on phasix specific design."
+- **Changed:** `SkillSlotCapacity.GetActiveSlotRange` table: `(2,2)/(3,3)/(4,4)/(5,5)/(5,7)` →
+  `(4,4)/(6,6)/(8,8)/(10,10)/(12,12)`. This supersedes a number sourced from
+  `Evolution_System_Directive_v1_1_0.pdf` §1 — the PDF (canonical per DOCUMENT_INDEX.md) can't be
+  edited by Claude Code, so its `.md` mirror got a "PDF SYNC REQUIRED" note instead (same
+  convention the file already uses elsewhere) — **the PDF itself still needs a manual update.**
+  `GetTreeCount` (2/4/5/6/7 trees unlocked per tier) is unaffected.
+- **Fixed:** `OverworldMenuController`'s `WheelEquipSlotCount` (7 → 12) and the now-dead "5
+  permanently decorative positions beyond the 7-slot ceiling" branch removed — that concept (and
+  the tooltip added in the entry just above) no longer applies now that all 12 wheel positions are
+  reachable at T5. Positions beyond a creature's CURRENT tier still render tier-locked via the
+  existing `maxSlots` check.
+- **Tests:** `SkillSlotCapacityTests`, `SkillLoadoutSystemTests` (Tier-1 cap tests rebuilt for the
+  new cap of 4), `WildSpawnSystemTests` (round-robin regression test rebuilt with 4 skills per
+  tree so it still exercises the fix against the new, larger cap) all updated. 239/239 EditMode
+  tests pass.
+- **Docs:** `CLAUDE.md`, `ClaudeCode_Primer.md`, `ClaudeCode_Primer_v1_1_0.md`,
+  `Evolution_System_Directive_v1_1_0.md` (both Active Slots tables) updated. See DECISIONS.md ->
+  [Progression] for full rationale and the PDF-sync caveat.
+
+[2026-08-09] Phase 3 — Party menu skill wheel: locked indicator on the 5 permanently-decorative positions
+- **Context:** User, after the 1 o'clock offset fix: asked whether wheel positions 8-12 (hours
+  8-12, physical indices 7-11) unlock at higher tiers, and wanted a locked indicator either way.
+  Answer: no — `SkillSlotCapacity.GetActiveSlotRange` caps every natural tier at 7 max equip slots
+  (T5 is the ceiling), so those 5 positions can never hold a skill at ANY tier. They were
+  previously indistinguishable from a real, currently-empty, fillable slot (both used the plain
+  `.skill-slot-locked` 0.4-opacity look, and hover was disabled entirely on the decorative ones).
+- **Fixed:** `OverworldMenuController.BuildSkillArea` now also applies `.skill-slot-tier-locked`
+  (the existing dimmer 0.18-opacity look already used for tier-capped-but-someday-reachable slots)
+  to the 5 always-decorative positions, with hover re-enabled and its own tooltip text — "This
+  wheel position is never used — 7 is the maximum equip slots at any tier" — distinct from the
+  tier-cap tooltip's "Requires evolution tier N+" (which would be false here, since these never
+  resolve at any tier).
+- **Verified live:** Hovered physical slot 7 (8 o'clock) in Play Mode via a real `PointerEnterEvent`
+  and read the tooltip label's rendered text — matches exactly. Confirmed slot 6 (the real 7th
+  equip slot, empty-but-in-cap for a Tier-5 creature) still shows `tierLocked=False`, correctly
+  distinct from slots 7-11's `tierLocked=True`.
+- **Test count:** 239/239 EditMode tests still passing.
+
+[2026-08-09] Phase 3 — Party menu skill wheel: first usable slot moved to 1 o'clock
+- **Context:** User, after confirming the drag/right-click fixes worked: "right now the availble
+  slots are in the 4 oclock position to the 10 oclock position... I want it to start its first
+  usable slot index to start from the 1 oclock position."
+- **Fixed:** `OverworldMenuController.WheelEquipSlotOffset` changed from `3` to `0`. The 7
+  tier-based equip positions now start at physical wheel index 0 (1 o'clock, since
+  `PositionWheelSlot` maps `hour = physIndex + 1`) and run clockwise through hour 7, instead of
+  starting at physical index 3 (4 o'clock).
+- **Verified live:** With the debug playtest loadout `[A, C, H, R, K, C1]` equipped, opened the
+  Party menu detail view and read every physical slot's position/lock-state/label. Slot 0 (1
+  o'clock) through slot 5 (6 o'clock) hold the 6 equipped skills in order; slot 6 (7 o'clock) is
+  the 7th in-cap equip slot, correctly empty-but-not-tier-locked; slots 7-11 remain permanently
+  decorative. Matches the requested layout exactly.
+- **Test count:** 239/239 EditMode tests still passing (no logic change, constant-only).
+
+[2026-08-08] Phase 3 — Party menu: drag-into-empty-slot and right-click-unequip bugs fixed, debug playtest loadout added
+- **Context:** User, after playtesting the built-in-moves feature: "i still cant drag and drop
+  skills into the open slots that dont have any skills equipped. i can only drag and drop into
+  slots that already have skills on them. The right click unequip from the menu also doesnt
+  work." Plus a request for a richer default loadout to playtest with.
+- **Fixed (1):** `SkillLoadoutSystem.SwapEquipped` requires BOTH indices to already hold a skill
+  — dragging an equipped orb onto an empty (but unlocked) ring position silently no-opped since
+  the target index was `>= equippedSkillGuids.Count`. `OverworldMenuController.OnDragUp` now
+  detects an empty target and moves the dragged skill to the end of the compact equipped list
+  instead, giving a real, visible result.
+- **Fixed (2):** Right-click unequip relied solely on UI Toolkit's `ContextClickEvent`, whose
+  real-mouse synthesis in this runtime UIDocument panel wasn't confirmed reliable (same class of
+  gap as the earlier `VisualElement.tooltip` Editor-only issue). Added a direct
+  `PointerDownEvent.button == 1` check as the primary trigger, keeping `ContextClickEvent` as a
+  secondary/redundant registration.
+- **Built:** `GameManager.ApplyDebugPlaytestLoadout` — a clearly-labeled TEMPORARY override that
+  force-equips `[Attack, Charge, Heal, Regen, Capture, C1]` on the fallback starter for
+  playtesting. `Test_FireType.asset`'s EvolutionTier bumped 1 → 5 (SkillSlotCapacity cap 5-7) so
+  all 6 fit validly, without the UI's tier-lock display looking contradictory.
+- **Verified live:** Fresh boot (no save) confirmed `[A, C, H, R, K, C1]` all equipped on a
+  Tier-5 creature. Right-click on a populated slot (via a real `button=1` PointerDownEvent, not a
+  synthetic `ContextClickEvent`) correctly unequipped it. Dragging an equipped orb onto an empty
+  slot moved it there (visible reorder). Dragging a tray skill onto an empty slot equipped it
+  there directly.
+- **Test count:** 239/239 EditMode tests still passing.
+- **Next:** `ApplyDebugPlaytestLoadout` is explicitly temporary — remove once a real starter-
+  loadout design exists (see its own doc comment).
+
+[2026-08-08] Phase 3 — Built-in moves (Attack/Charge/Heal/Regen/Capture) become real, equippable/unequippable skills
+- **Context:** User, after the skill-configurator follow-up work: "dont make them inherent i want
+  them to also be selectable. This makes it so players can remove things that they dont need and
+  have full customizability for good or for worse." The largest architectural change this session
+  — removed a whole hardcoded, non-equip-managed battle system and rebuilt it as skill-driven.
+- **Built:** New `BuiltInMoveType` enum + `SkillData.BuiltInMove` field. 5 new real SkillData
+  assets (`Standard_Attack/Charge/Heal/Regen/Capture.asset`) registered in `SkillDatabase`,
+  grouped under a new, non-GDD `SkillTreeType.Standard`. `BattleHUDController`'s old fixed-5 +
+  7-equip split wheel is gone — a uniform 12-slot ring where every position is a real equip slot
+  (removed `MoveOptionClockHours`/`MoveOptionIsSelfOnly`/`MoveOptionTooltips`/`_playerMoveOptions`
+  and 15 UXML elements; `ChosenMove` simplified to just `Skill`+`Target`).
+  `BattleManager.ResolveSkillAction` now dispatches on `skill.BuiltInMove` first (new
+  `ResolveBuiltInMove`, relocating the exact pre-existing per-move mechanics unchanged) before
+  ever reaching `PlaceholderSkillResolver` — the old `chosenOptionIndex`-keyed if/else chain in
+  `PlayerTurn` is gone, every move now flows through one path. `WildSpawnSystem` always learns all
+  5 Standard skills and seeds Standard first in the round-robin equip pass (Attack claims a slot
+  by default — confirmed acceptable with the user as a temporary placeholder). The Party menu's
+  old "5 built-ins, informational-only, not draggable" special case is deleted — they're just
+  skills in the tray now, real color/label/drag/unequip like everything else.
+- **Verified live:** Fresh-seeded creature defaults to `[Attack, C1]`. All 5 built-in moves
+  independently confirmed correct through the new dispatch (Attack damage logged, Charge restored
+  Aura, Heal restored HP, Regen applied its turn-counter, Capture added the enemy to the party and
+  ended the battle). Party menu: all 5 show in "All Skills" with real per-skill colors, can be
+  drag-equipped into any within-cap slot, and right-click-unequipped back to the tray. A creature
+  with every skill unequipped (including Attack) completed a full player turn and the following
+  enemy turn with no errors — the "for good or for worse" freedom doesn't break the battle loop.
+- **Test count:** 239/239 EditMode tests still passing — `WildSpawnSystemTests`' fixture
+  `SkillDatabase`s never register a Standard-tree skill, so the new unconditional-seeding logic
+  contributes nothing extra there and every existing assertion held unchanged.
+- **Next:** None outstanding from this request.
+
+[2026-08-08] Phase 3 — Combo-streak interruption bug + party-menu tier-cap UX both fixed (user report)
+- **Context:** User: "the other skills dont reset the counter on C1 if it has stacks, only C2
+  does... Do all the other skills not count as normal skills?" plus, separately, "i cant drag and
+  drop the new skills onto the open placeholders either, but i can swap them with the existing C1
+  and C2."
+- **Fixed (1) — combo streak:** `RecordSkillUse` was only ever called from the skill-ring
+  resolution path (`ResolveSkillAction`) — built-in moves (Attack/Charge/Heal/Regen/Capture) left
+  zero trace, so `RepeatSameSkill`'s trailing-match check never saw them, and a built-in used
+  between two C1 casts didn't break the streak, it just froze it — the next C1 picked the same
+  streak back up. `BattleManager.PlayerTurn` now records a null entry for built-in moves, which
+  correctly breaks the trailing match (deliberately NOT touching `RecentSkillTrees`, whose own
+  built-in exclusion is a separate, already-documented design choice).
+- **Fixed (2) — tier-cap clarity:** the party menu's skill wheel always renders all 7 physical
+  equip positions (a deliberate "replica of battle" choice from the prior pass), but only
+  `SkillSlotCapacity`'s tier-based `maxSlots` of them can ever hold a skill — the enforcement was
+  already correct (`SkillLoadoutSystem.TryEquipAt` already refused beyond-cap indices), but the UI
+  gave no signal why, so a beyond-cap drop looked identical to a broken empty slot. Added a
+  distinct `.skill-slot-tier-locked` look, an explanatory "Requires evolution tier N+" hover
+  tooltip, and excluded beyond-cap positions from the drop-target hit-test.
+- **Verified live:** Combo fix — recorded C1×2 (streak 2) → built-in move (streak 0) → C1 again
+  (streak 1, not 3). Tier-cap fix — for a Tier-1 creature, slots 0-1 correctly unlocked, 2-6
+  correctly tier-locked with the right tooltip; dropping onto a locked slot correctly no-ops,
+  dropping onto an unlocked one still works.
+- **Test count:** 239/239 EditMode tests still passing (both fixes are integration-level wiring;
+  the evaluator/system logic they route through was already covered).
+- **Next:** None outstanding from this report.
+
+[2026-08-08] Phase 3 — Debuff/buff icons added to nameplate HUD (were entirely invisible before)
+- **Context:** User: "for c1 on application for debuffs i dont seee any debuffs on the enemy hud,
+  please include that." Investigation found the underlying gap was general, not C1-specific:
+  `BattleParticipant.ActiveStatuses` was already fully tracked (status-applying skills already
+  call `ApplyStatus` in `BattleManager.ResolveSkillAction`) but `BattleHUDController` never
+  rendered ANY of it — zero references to status icons anywhere in the HUD code before this pass.
+- **Built:** A fixed pool of 4 generic status-icon slots per nameplate (both sides), reusing the
+  existing `.nameplate-buff-icon` visual language (lettered circle + countdown subscript, same as
+  Regen/Burst). Letter = status type's own initial; color = by `StatusEffectCategory` (5 new
+  placeholder USS color classes); hover shows full name/category/turns-remaining via the shared
+  tooltip. Refreshes every nameplate stat update, so an expired status clears automatically.
+- **Verified live:** Applied Bleed + Regenerate directly to a live enemy mid-battle — both showed
+  correct letter/color/countdown, hover tooltip correct, unused slots stayed hidden.
+- **Test count:** 239/239 EditMode tests still passing (display-logic-only change, no new testable
+  system).
+- **Next:** None outstanding from this report.
+
+[2026-08-08] Phase 3 — Skill configurator follow-up: per-skill color, built-in moves + full catalog in tray, compact labels
+- **Context:** Same-day follow-up to the full overworld menu session, 2 user feedback passes: (1)
+  "the colors and stuff should be dedicated to that specific skill not just on the slot" plus "all
+  the other skills we have right now and the full skill wheel should be displayed... the skill
+  wheel in the party configurator should be a replica of what we see in the battle scene"; (2)
+  "the other skills the C, H, A, etc. are all skills that should be on the all skills list" plus
+  "the skills in the menu have to many items right now. It should only show their icon maxium a
+  letter and a number... they should all have the hover over description similar to the in battle
+  game."
+- **Built:** `SkillDatabase.AllSkills` (new public enumerable of every registered skill+GUID).
+  `OverworldMenuController` reworked: (a) skill-ring/tray color is now a deterministic hash of the
+  skill's own GUID, identical everywhere that skill appears, replacing the old position-owned
+  palette; (b) the equipped-skill wheel is now a literal 12-position replica of
+  `BattleHUDController`'s battle ring (same radius/clock-hour math) — the 5 positions battle
+  reserves for A/C/H/R/K render as permanently inert grey circles, the other 7 are the real equip
+  slots at the exact same clock positions battle uses; (c) the tray now lists the 5 built-in moves
+  (A/C/H/R/K, battle's real colors + real hover text, informational-only — not draggable, they're
+  not part of `SkillLoadoutSystem`) plus the ENTIRE `SkillDatabase` catalog (not just this
+  creature's learned skills), in a scrollable list; dragging an unlearned skill onto the wheel
+  auto-adds it to `learnedSkillGuids` first, keeping `SkillLoadoutSystem`'s "equip requires
+  learned" contract intact; (d) every orb label is now a short code (`GetShortSkillLabel`) instead
+  of the full `SkillName`, which was overflowing a 32px circle for 34 of the 36 placeholder
+  skills — full name/mechanics still show on hover, unchanged.
+- **Bug found and fixed during live verification:** Corruption is the only `SkillTreeType` whose
+  own initial is `C`, so its auto-generated codes collided with the real, hand-set `C1`/`C2`
+  short names (which `ComboRuleEvaluator`'s `RepeatSameSkill` rule specifically references — a
+  genuine identity collision, not just cosmetic). Caught live: unequipping the real C1 and
+  re-finding it in the tray showed a DIFFERENT color than it had on the ring — the tray search for
+  label "C1" was sometimes matching Corruption's first skill instead. Fixed by reserving the
+  letter `C` for hand-authored short names (`GetShortSkillLabel` substitutes `X` for Corruption).
+  Re-verified live: ring/tray color now matches for the same skill, exactly one tray entry reads
+  "C1".
+- **Exposed:** `BattleHUDController.MoveOptionTooltips` changed from `private` to `public` so the
+  Party menu can reuse the same real hover text for A/C/H/R/K.
+- **Verified live:** wheel shows 12 slots (7 labeled/equippable, 5 permanently locked/decorative);
+  tray shows 39 entries (5 built-ins + 34 unequipped catalog skills) with correct short labels;
+  hover tooltips correct for both a ring orb and a built-in tray entry; ring/tray color now stays
+  consistent for the same skill across an unequip round-trip.
+- **Test count:** 239/239 EditMode tests still passing (no new tests — this pass was UI/display
+  logic only, no new testable system).
+- **Next:** None outstanding from this feedback round.
+
+[2026-08-08] Phase 3 — Full overworld menu: Party/Save/Bag/Options tabs, skill loadout drag/drop, real save/load persistence, debug New Game
+- **Context:** User: "In the overworld UI when i press tab. It just goes to stat allocation. I
+  need a Full menu = party, save, bag, options" — plus real cross-session save/load (previously
+  nonexistent; a hardcoded `DebugPartyBootstrap` reseeded the party every Play Mode start) and a
+  debug reset button.
+- **Built — Species lookup:** New `SpeciesDatabase.cs`/`SpeciesDatabase.asset`, mirroring
+  `SkillDatabase`'s GUID-index pattern exactly, so save data can reference a species without
+  `AssetDatabase` (Editor-only, unusable in a build).
+- **Built — Save/Load:** New `Assets/Scripts/Save/` — `PhasixSaveData`/`PartySaveData`/`SaveFile`
+  (JsonUtility-compatible DTOs, flattening `Dictionary`/`HashSet` fields to parallel lists) +
+  `SaveSystem` (3 slots at `Application.persistentDataPath`, `TryGetNewestSlot` picks the most
+  recently written file as the auto-continue target — no separate "current slot" marker needed).
+  6 new EditMode tests, all passing.
+- **Built — Boot wiring:** `GameManager` rewritten to own "auto-load newest save, or seed a
+  fallback starter" — absorbs and replaces `DebugPartyBootstrap.cs` (deleted, per its own
+  "TEMPORARY... DELETE once superseded" doc comment). Runs on `SceneManager.sceneLoaded`, not
+  `Start()` (see DECISIONS.md -> [Core] — `Start()` only fires once per object lifetime and
+  doesn't re-run when a `DontDestroyOnLoad` object survives a scene reload; caught live when the
+  debug reset button silently failed to reseed the party on the first pass).
+- **Built — Skill loadout:** New `SkillLoadoutSystem.cs` (`TryEquip`/`TryEquipAt`/`Unequip`/
+  `SwapEquipped`, respecting `SkillSlotCapacity`'s tier-based active-slot cap). 10 new EditMode
+  tests, all passing.
+- **Built — Shared tooltip:** Extracted `HudTooltip` out of `BattleHUDController` into
+  `Assets/Scripts/UI/HudTooltip.cs` so the new Party menu's skill ring can reuse the exact same
+  runtime hover tooltip behavior. Pure refactor — all 3 battle tooltip sites (nameplate bars,
+  skill orbs, built-in moves) re-verified unchanged after the extraction.
+- **Built — The menu itself:** `PartyMenuController`/`PartyMenu.uxml`/`.uss` deleted, replaced by
+  `OverworldMenuController`/`OverworldMenu.uxml`/`.uss`. Party tab: roster -> per-creature detail
+  (ported Aura stat-allocation rows + a radial equipped-skill ring reusing battle's own orb
+  classes/lettering/hover tooltip + a learned-but-unequipped tray). Drag one equipped orb onto
+  another to swap; drag a tray skill onto any ring orb to equip it there; right-click an equipped
+  orb to unequip. Save tab: 3 slots, click to overwrite. Bag/Options: "pending design" placeholders.
+  Always-visible debug "New Game" button top-center, outside the Tab-toggled menu root. Every new
+  label/button holds to the battle log's own text-size floor (13px body / 15px header), per
+  explicit user follow-up on legibility.
+- **Verified live:** Tab menu open/close, all 4 tabs, roster -> detail navigation, stat allocation
+  spending real Aura, skill-ring swap/tray-equip/right-click-unequip (each driven via real
+  `PointerDownEvent`/`PointerUpEvent`/`ContextClickEvent` dispatch through the live UI tree, not
+  just unit tests), Save-tab overwrite writing a real file, a genuine Play Mode stop/start cycle
+  auto-loading the saved slot (not a fresh seed), and the debug reset producing a fresh seed while
+  leaving the saved slot's file untouched on disk.
+- **Test count:** 239/239 EditMode tests passing (16 new since the prior session's 223).
+- **Next:** Bag/Options tabs once an item/settings system exists. A real "load a different slot"
+  UI if the save-only model ever needs one.
+
 [2026-08-08] Phase 3 — Skill-ring lettering/colors, Evo-ready flash, bigger buff icons, auto-open wheel; plus a real equip-slot bug found along the way
 - **Context:** Same-day follow-up batch, 4 user requests: (1) C1/C2 orbs needed visible lettering
   like A/C/H/R/K, colors at my discretion; (2) no indicator when Evolution Burst is ready —

@@ -36,36 +36,47 @@ namespace Phasix.Tests.EditMode
         }
 
         [Test]
-        public void SeedInitialSkills_TwoTreesTwoSkillsEach_EquipsOneFromEachTree()
+        public void SeedInitialSkills_TwoTreesFourSkillsEach_EquipsFairlyAcrossTrees()
         {
-            // Regression case for the round-robin fix: Tier 1 (treeCount=2, slotCap=2) with two
-            // unlocked trees, each contributing 2 skills. The OLD sequential-fill logic equipped
-            // both of the FIRST tree's skills, leaving the second tree's skills learned but never
-            // equipped — exactly what made Reaction_Placeholder1 (C2)'s TimedInputStreak grant
-            // unreachable in live play despite Reaction being correctly unlocked.
+            // Regression case for the round-robin fix: Tier 1 slotCap is 4 (2026-08 rework, see
+            // SkillSlotCapacity.GetActiveSlotRange's own doc comment — was 2 before) with two
+            // unlocked trees, each contributing enough skills (4) to fill the whole cap alone if
+            // given the chance. The OLD sequential-fill logic equipped ALL of the FIRST tree's
+            // skills, leaving the second tree's skills learned but never equipped — exactly what
+            // made Reaction_Placeholder1 (C2)'s TimedInputStreak grant unreachable in live play
+            // despite Reaction being correctly unlocked.
             SkillData mirror1 = MakeSkill(SkillTreeType.Mirror);
             SkillData mirror2 = MakeSkill(SkillTreeType.Mirror);
+            SkillData mirror3 = MakeSkill(SkillTreeType.Mirror);
+            SkillData mirror4 = MakeSkill(SkillTreeType.Mirror);
             SkillData reaction1 = MakeSkill(SkillTreeType.Reaction);
             SkillData reaction2 = MakeSkill(SkillTreeType.Reaction);
+            SkillData reaction3 = MakeSkill(SkillTreeType.Reaction);
+            SkillData reaction4 = MakeSkill(SkillTreeType.Reaction);
 
             var database = ScriptableObject.CreateInstance<SkillDatabase>();
-            SetPrivateField(database, "_allSkills", new List<SkillData> { mirror1, mirror2, reaction1, reaction2 });
-            SetPrivateField(database, "_guids", new List<string> { "mirror1", "mirror2", "reaction1", "reaction2" });
+            SetPrivateField(database, "_allSkills", new List<SkillData> { mirror1, mirror2, mirror3, mirror4, reaction1, reaction2, reaction3, reaction4 });
+            SetPrivateField(database, "_guids", new List<string> { "mirror1", "mirror2", "mirror3", "mirror4", "reaction1", "reaction2", "reaction3", "reaction4" });
 
             PhasixData species = MakeSpecies(tier: 1, availableTrees: new List<SkillTreeType> { SkillTreeType.Mirror, SkillTreeType.Reaction });
             var runtime = new PhasixRuntimeData("test-node-guid");
 
             WildSpawnSystem.SeedInitialSkills(runtime, species, database);
 
-            Assert.AreEqual(2, runtime.equippedSkillGuids.Count, "Slot cap for Tier 1 is 2.");
+            Assert.AreEqual(4, runtime.equippedSkillGuids.Count, "Slot cap for Tier 1 is 4.");
             Assert.IsTrue(runtime.equippedSkillGuids.Contains("mirror1"), "Mirror's first skill must be equipped.");
             Assert.IsTrue(runtime.equippedSkillGuids.Contains("reaction1"), "Reaction's first skill must ALSO be equipped — this is the regression this test guards against.");
-            Assert.IsFalse(runtime.equippedSkillGuids.Contains("mirror2"), "Mirror's second skill should lose out to round-robin fairness, not get a second slot while Reaction gets none.");
+            Assert.IsFalse(runtime.equippedSkillGuids.Contains("mirror3"), "Mirror's third skill should lose out to round-robin fairness once the cap is reached, not get extra slots while Reaction gets fewer.");
+            Assert.IsFalse(runtime.equippedSkillGuids.Contains("reaction3"), "Reaction's third skill should also lose out at the cap, mirroring Mirror's treatment.");
 
             Object.DestroyImmediate(mirror1);
             Object.DestroyImmediate(mirror2);
+            Object.DestroyImmediate(mirror3);
+            Object.DestroyImmediate(mirror4);
             Object.DestroyImmediate(reaction1);
             Object.DestroyImmediate(reaction2);
+            Object.DestroyImmediate(reaction3);
+            Object.DestroyImmediate(reaction4);
             Object.DestroyImmediate(database);
             Object.DestroyImmediate(species);
         }
