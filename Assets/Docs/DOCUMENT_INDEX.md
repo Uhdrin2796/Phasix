@@ -38,6 +38,20 @@ When documents conflict — the more specific Directive always wins over the GDD
 
 ---
 
+## Design Mockups — Interaction/Visual Reference Only, NOT Data
+
+Standalone interactive HTML files the user built to demo a UI *interaction pattern* before it's
+implemented in Unity. **Do not treat any content inside these as real game data** — node names,
+stat requirements, and branch relationships are all randomly generated or hand-picked flavor
+text for the demo, not designed values. Read these for HOW something should feel to use, never
+for WHAT the numbers/names should be.
+
+| Document | Location | What it demos | Status |
+|---|---|---|---|
+| evolution_web_mockup.html | Docs/evolution_web_mockup.html | The player's original vision for the **Evolution Web** screen (Phase 4, not yet built): a pannable/zoomable canvas graph of 10 evolution lines × 5 tiers (50 nodes), glowing gradient nodes, curved dashed "crossover" edges between lines, a 3-state Hidden/Sighted/Discovered fog-of-war (undiscovered forms show as "???" silhouettes until evolved into or scouted), a per-line filter bar, and a BFS "Plan Mode" that highlights the shortest evolve/devolve path between two forms with an animated step-by-step overlay. Everything renders on a raw `<canvas>` with hand-rolled pan (drag)/zoom (wheel + pinch) — no framework. | Reference only — mockup, not implemented. 2026-08-09 session ported the pan/zoom + glowing-node + `Painter2D`-drawn-edge INTERACTION pattern from this into Unity for the **skill tree**'s web view first (`Assets/Scripts/UI/SkillWebEdgeVisual.cs`, `OverworldMenuController.BuildSkillArea`) as a proving ground, since the real Evolution Web is blocked — see `DECISIONS.md` → [Creatures] "Evolution_System_Directive_v1_1_0.md has internal inconsistencies." Crossover branches, BFS Plan Mode, and the Hidden fog state were deliberately left out of that skill-tree port (nothing in skills needs them yet) and should be added back in once the real Evolution Web is built against this mockup — see `DECISIONS.md` → [UI] "Skill tree carousel replaced by a pan/zoom skill web" for the exact scope split and its own "Revisit if." |
+
+---
+
 ## Skill Files
 
 | File | Purpose | Status |

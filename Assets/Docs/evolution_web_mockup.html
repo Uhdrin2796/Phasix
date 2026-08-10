@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phasix — Evolution Web</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@300;400;500;600&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #080b0f;
+    --bg2: #0d1117;
+    --bg3: #111820;
+    --border: #1e2d3d;
+    --border2: #2a3f55;
+    --text1: #e8eef5;
+    --text2: #8fa8c0;
+    --text3: #4a6278;
+    --accent: #00d4ff;
+    --accent2: #0088bb;
+    --gold: #f0b840;
+    --gold2: #a07820;
+    --danger: #ff4466;
+    --green: #00ff88;
+
+    /* Line colors — 10 distinct */
+    --line-A: #ff6b6b;
+    --line-B: #ffa94d;
+    --line-C: #ffd43b;
+    --line-D: #69db7c;
+    --line-E: #38d9a9;
+    --line-F: #4dabf7;
+    --line-G: #748ffc;
+    --line-H: #da77f2;
+    --line-I: #f783ac;
+    --line-J: #a9e34b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text1);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Header */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    height: 56px;
+    background: linear-gradient(180deg, rgba(8,11,15,0.98) 0%, rgba(8,11,15,0.0) 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 20px;
+    border-bottom: 1px solid rgba(30,45,61,0.4);
+  }
+
+  .logo {
+    font-family: 'Cinzel', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .divider-v { width: 1px; height: 24px; background: var(--border); }
+
+  .header-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text2);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .legend-dot.discovered { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .legend-dot.sighted { background: transparent; border: 1.5px solid var(--text3); }
+  .legend-dot.hidden { background: var(--bg3); border: 1.5px solid var(--border); }
+  .legend-line-natural { width: 20px; height: 2px; background: #ffffff30; }
+  .legend-line-crossover { width: 20px; height: 2px; background: var(--gold); opacity: 0.7;
+    background: repeating-linear-gradient(90deg, var(--gold) 0, var(--gold) 4px, transparent 4px, transparent 7px); }
+
+  /* Canvas area */
+  #canvas-wrap {
+    position: fixed;
+    inset: 0;
+    cursor: grab;
+  }
+  #canvas-wrap:active { cursor: grabbing; }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    z-index: 200;
+    background: rgba(8,11,15,0.97);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 12px 16px;
+    min-width: 180px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  #tooltip.visible { opacity: 1; }
+
+  .tt-line-bar {
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+    margin-bottom: 10px;
+  }
+
+  .tt-name {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text1);
+    margin-bottom: 2px;
+  }
+
+  .tt-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .tt-req {
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .tt-req span {
+    color: var(--gold);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+  }
+
+  .tt-sighted {
+    font-size: 11px;
+    color: var(--text3);
+    font-style: italic;
+    letter-spacing: 0.5px;
+  }
+
+  .tt-crossover-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 8px;
+    background: rgba(240,184,64,0.12);
+    border: 1px solid rgba(240,184,64,0.3);
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--gold);
+    letter-spacing: 1px;
+  }
+
+  /* Controls */
+  .controls {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    background: rgba(13,17,23,0.9);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text2);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent2);
+    color: var(--accent);
+  }
+
+  .filter-bar {
+    position: fixed;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 100;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 700px;
+  }
+
+  .filter-btn {
+    padding: 4px 12px;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    opacity: 0.5;
+  }
+
+  .filter-btn.active { opacity: 1; }
+
+  .tier-labels {
+    position: fixed;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Phasix</div>
+  <div class="divider-v"></div>
+  <div class="header-label">Evolution Web — α Demo</div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot discovered"></div>Discovered</div>
+    <div class="legend-item"><div class="legend-dot sighted"></div>Sighted</div>
+    <div class="legend-item"><div class="legend-dot hidden"></div>Hidden</div>
+    <div class="divider-v"></div>
+    <div class="legend-item"><div class="legend-line-natural"></div>Natural</div>
+    <div class="legend-item"><div class="legend-line-crossover"></div>Crossover</div>
+  </div>
+</header>
+
+<div class="filter-bar" id="filterBar"></div>
+
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="tooltip"></div>
+
+<div class="controls">
+  <button class="btn" id="btnReset">RESET VIEW</button>
+  <button class="btn" id="btnToggleFog">FOG: ON</button>
+  <button class="btn" id="btnPlanMode">PLAN MODE</button>
+  <button class="btn" id="btnRevealAll">REVEAL ALL</button>
+</div>
+
+<div id="planBar" style="display:none;position:fixed;top:56px;left:0;right:0;z-index:99;background:rgba(8,11,15,0.95);border-bottom:1px solid rgba(240,184,64,0.3);padding:8px 20px;font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1.5px;color:#f0b840;text-align:center;">TAP ORIGIN NODE</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// ─── DATA ───────────────────────────────────────────────────────────────────
+
+const LINE_COLORS = {
+  A:'#ff6b6b', B:'#ffa94d', C:'#ffd43b', D:'#69db7c', E:'#38d9a9',
+  F:'#4dabf7', G:'#748ffc', H:'#da77f2', I:'#f783ac', J:'#a9e34b'
+};
+
+const LINES = ['A','B','C','D','E','F','G','H','I','J'];
+const TIERS = [1,2,3,4,5];
+
+// Form names — flavor
+const FORM_NAMES = {
+  A:['Ashveil','Ashmere','Ashcrown','Ashpyre','Ashthrone'],
+  B:['Brackfin','Brackmaw','Brackfang','Brackspire','Bracklord'],
+  C:['Cinderbit','Cinderash','Cinderpeak','Cinderwall','Cindergod'],
+  D:['Dustmote','Dustwhirl','Dustclaw','Dustknight','Dusttitan'],
+  E:['Emberkin','Embershard','Emberwing','Emberstorm','Embercrown'],
+  F:['Frostpup','Frostbite','Frostmantle','Frostwarden','Frostlord'],
+  G:['Gloomspore','Gloomshard','Gloomfang','Gloomreaper','Gloomgod'],
+  H:['Hollowchit','Hollowshard','Hollowthorn','Hollowguard','Hollowlord'],
+  I:['Ironmote','Ironbark','Ironclaw','Ironwall','Irontitan'],
+  J:['Jadewing','Jadeclaw','Jadefang','Jadespire','Jadethrone'],
+};
+
+// Requirements flavor
+const STAT_REQS = [
+  'Force ≥ 40', 'Resonance ≥ 35', 'Aptitude ≥ 20', 'Instinct ≥ 45',
+  'Bond ≥ 30%', 'Vitality ≥ 50', 'Guard ≥ 38', 'Aura ≥ 42',
+  'Aptitude ≥ 35 · Resonance ≥ 60', 'Force ≥ 55 · Bond ≥ 50%',
+  'Instinct ≥ 48 · Aptitude ≥ 28', 'Resonance ≥ 70 · Void Shard held',
+];
+
+// Build nodes
+const nodes = {};
+LINES.forEach(line => {
+  TIERS.forEach(tier => {
+    const id = `${line}${tier}`;
+    nodes[id] = {
+      id,
+      line,
+      tier,
+      name: FORM_NAMES[line][tier-1],
+      color: LINE_COLORS[line],
+      forwardBranches: [],   // {targetId, crossover}
+      naturalParent: tier > 1 ? `${line}${tier-1}` : null,
+      // state: 'hidden' | 'sighted' | 'discovered'
+      state: 'hidden',
+      x: 0, y: 0, // set in layout
+    };
+  });
+});
+
+// Natural forward branches
+LINES.forEach(line => {
+  TIERS.forEach(tier => {
+    if (tier < 5) {
+      nodes[`${line}${tier}`].forwardBranches.push({
+        targetId: `${line}${tier+1}`,
+        crossover: false,
+        req: STAT_REQS[Math.floor(Math.random() * STAT_REQS.length)],
+        levelFloor: tier * 8 + Math.floor(Math.random()*5),
+      });
+    }
+  });
+});
+
+// Crossover branches — 2 per natural line
+const crossovers = [
+  // [source, target]
+  ['A2','B3'], ['A4','C5'],
+  ['B3','E4'], ['B1','J2'],
+  ['C2','D3'], ['C4','A5'],
+  ['D3','G4'], ['D1','C2'],
+  ['E2','F3'], ['E4','H5'],
+  ['F3','I4'], ['F1','A2'],
+  ['G2','H3'], ['G4','J5'],
+  ['H3','B4'], ['H1','G2'],
+  ['I2','J3'], ['I4','E5'],
+  ['J3','F4'], ['J1','I2'],
+];
+
+crossovers.forEach(([src, tgt]) => {
+  if (nodes[src] && nodes[tgt]) {
+    nodes[src].forwardBranches.push({
+      targetId: tgt,
+      crossover: true,
+      req: STAT_REQS[Math.floor(Math.random() * STAT_REQS.length)],
+      levelFloor: parseInt(src[1]) * 10 + 5,
+    });
+  }
+});
+
+// ─── DISCOVERY STATE ─────────────────────────────────────────────────────────
+
+// Start: player has A1, A2, A3 discovered + seen B2, E3 via wild encounters
+const initialDiscovered = new Set(['A1','A2','A3','B2','E3']);
+
+let fogEnabled = true;
+let discoveredForms = new Set(initialDiscovered);
+
+function computeVisibility() {
+  if (!fogEnabled) {
+    Object.values(nodes).forEach(n => n.state = 'discovered');
+    return;
+  }
+  // Reset
+  Object.values(nodes).forEach(n => n.state = 'hidden');
+  // Mark discovered
+  discoveredForms.forEach(id => { if (nodes[id]) nodes[id].state = 'discovered'; });
+  // Compute sighted — neighbours of discovered
+  discoveredForms.forEach(id => {
+    const node = nodes[id];
+    if (!node) return;
+    // forward branches
+    node.forwardBranches.forEach(b => {
+      if (nodes[b.targetId] && nodes[b.targetId].state === 'hidden')
+        nodes[b.targetId].state = 'sighted';
+    });
+    // natural parent
+    if (node.naturalParent && nodes[node.naturalParent] && nodes[node.naturalParent].state === 'hidden')
+      nodes[node.naturalParent].state = 'sighted';
+  });
+}
+
+// ─── LAYOUT ──────────────────────────────────────────────────────────────────
+
+const COLS = LINES.length;   // 10
+const ROWS = TIERS.length;   // 5
+
+let layout = { offsetX: 0, offsetY: 0, scale: 1 };
+let baseLayout = {};
+
+function computeLayout() {
+  const H = canvas.height;
+  const padX = 120, padY = 100;
+  const colW = 180; // fixed wide spacing regardless of window width
+  const totalW = padX * 2 + colW * (COLS - 1);
+  const rowH = (H - padY*2) / (ROWS - 1);
+
+  LINES.forEach((line, ci) => {
+    TIERS.forEach((tier, ri) => {
+      const id = `${line}${tier}`;
+      baseLayout[id] = {
+        x: padX + ci * colW,
+        y: padY + (ROWS - 1 - ri) * rowH,
+      };
+    });
+  });
+  // Auto-center horizontally on first layout
+  if (layout.offsetX === 0 && layout.offsetY === 0) {
+    layout.offsetX = (canvas.width - (padX * 2 + colW * (COLS - 1))) / 2;
+  }
+}
+
+function getNodePos(id) {
+  const b = baseLayout[id];
+  return {
+    x: b.x * layout.scale + layout.offsetX,
+    y: b.y * layout.scale + layout.offsetY,
+  };
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+
+const NODE_R = 18;
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+function drawEdge(src, tgt, crossover, srcState, tgtState) {
+  const s = getNodePos(src);
+  const t = getNodePos(tgt);
+  const bothVisible = srcState !== 'hidden' && tgtState !== 'hidden';
+  if (!bothVisible && fogEnabled) return;
+
+  ctx.save();
+  ctx.beginPath();
+
+  const srcColor = nodes[src].color;
+  const tgtColor = nodes[tgt].color;
+
+  if (crossover) {
+    // Dashed gold crossover line
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = fogEnabled ? (bothVisible ? 1.5 : 0.5) : 1.5;
+
+    // gradient from src to tgt color
+    const grad = ctx.createLinearGradient(s.x, s.y, t.x, t.y);
+    grad.addColorStop(0, `rgba(${hexToRgb(srcColor)}, 0.7)`);
+    grad.addColorStop(1, `rgba(${hexToRgb(tgtColor)}, 0.7)`);
+    ctx.strokeStyle = grad;
+
+    // Slight curve
+    const mx = (s.x + t.x) / 2;
+    const my = (s.y + t.y) / 2 - 20 * layout.scale;
+    ctx.moveTo(s.x, s.y);
+    ctx.quadraticCurveTo(mx, my, t.x, t.y);
+  } else {
+    // Straight natural line
+    ctx.setLineDash([]);
+    ctx.lineWidth = fogEnabled ? (bothVisible ? 2 : 0.5) : 2;
+
+    const alpha = fogEnabled ? (bothVisible ? 0.35 : 0.1) : 0.35;
+    const grad = ctx.createLinearGradient(s.x, s.y, t.x, t.y);
+    grad.addColorStop(0, `rgba(${hexToRgb(srcColor)}, ${alpha})`);
+    grad.addColorStop(1, `rgba(${hexToRgb(tgtColor)}, ${alpha})`);
+    ctx.strokeStyle = grad;
+
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(t.x, t.y);
+  }
+
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawNode(node) {
+  const pos = getNodePos(node.id);
+  const r = NODE_R * layout.scale;
+  const state = node.state;
+
+  if (fogEnabled && state === 'hidden') return;
+
+  ctx.save();
+
+  if (state === 'discovered') {
+    // Outer glow ring
+    const glowR = r + 6 * layout.scale;
+    const grd = ctx.createRadialGradient(pos.x, pos.y, r*0.5, pos.x, pos.y, glowR);
+    grd.addColorStop(0, `rgba(${hexToRgb(node.color)}, 0.25)`);
+    grd.addColorStop(1, `rgba(${hexToRgb(node.color)}, 0)`);
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, glowR, 0, Math.PI*2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    // Main circle
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(${hexToRgb(node.color)}, 0.18)`;
+    ctx.fill();
+    ctx.strokeStyle = node.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner dot
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 0.3, 0, Math.PI*2);
+    ctx.fillStyle = node.color;
+    ctx.fill();
+
+    // Tier indicator (small dots at bottom)
+    for (let i = 0; i < node.tier; i++) {
+      ctx.beginPath();
+      ctx.arc(pos.x - (node.tier-1)*3*layout.scale + i*6*layout.scale, pos.y + r + 5*layout.scale, 2*layout.scale, 0, Math.PI*2);
+      ctx.fillStyle = node.color;
+      ctx.fill();
+    }
+
+    // Label
+    ctx.font = `${Math.max(9, 11*layout.scale)}px 'Rajdhani', sans-serif`;
+    ctx.fillStyle = node.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(node.id, pos.x, pos.y - r - 6*layout.scale);
+
+  } else if (state === 'sighted') {
+    // Silhouette — faint ring only
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ??? label
+    ctx.font = `${Math.max(8, 10*layout.scale)}px 'Share Tech Mono', monospace`;
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.textAlign = 'center';
+    ctx.fillText('???', pos.x, pos.y - r - 5*layout.scale);
+  }
+
+  ctx.restore();
+}
+
+function drawTierLabels() {
+  TIERS.forEach((tier, ri) => {
+    const dummy = getNodePos(`A${tier}`);
+    ctx.save();
+    ctx.font = `600 ${Math.max(10, 12*layout.scale)}px 'Share Tech Mono', monospace`;
+    ctx.fillStyle = 'rgba(74,98,120,0.6)';
+    ctx.textAlign = 'right';
+    ctx.fillText(`T${tier}`, dummy.x - NODE_R * layout.scale - 14, dummy.y + 4);
+    ctx.restore();
+  });
+}
+
+function drawLineLabels() {
+  LINES.forEach((line) => {
+    const pos = getNodePos(`${line}1`);
+    ctx.save();
+    ctx.font = `700 ${Math.max(11, 13*layout.scale)}px 'Cinzel', serif`;
+    ctx.fillStyle = LINE_COLORS[line];
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(line, pos.x, pos.y + NODE_R * layout.scale + 22 * layout.scale);
+    ctx.restore();
+  });
+}
+
+// ─── INTERACTION ─────────────────────────────────────────────────────────────
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  computeLayout();
+  render();
+}
+
+function getHoveredNode(mx, my) {
+  for (const id in nodes) {
+    const node = nodes[id];
+    // In plan mode, allow tapping any node. Otherwise only visible ones.
+    if (!planMode && fogEnabled && node.state === 'hidden') continue;
+    const pos = getNodePos(id);
+    const r = NODE_R * layout.scale;
+    const dx = mx - pos.x, dy = my - pos.y;
+    if (dx*dx + dy*dy < r*r) return node;
+  }
+  return null;
+}
+
+// ─── PAN + HOVER — single unified mousemove ──────────────────────────────────
+let isDragging = false, wasDragging = false;
+let lastMouse = { x: 0, y: 0 };
+
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  wasDragging = false;
+  lastMouse = { x: e.clientX, y: e.clientY };
+  canvas.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mouseup', () => {
+  isDragging = false;
+  canvas.style.cursor = 'grab';
+  setTimeout(() => { wasDragging = false; }, 50);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (isDragging) {
+    const dx = e.clientX - lastMouse.x;
+    const dy = e.clientY - lastMouse.y;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) wasDragging = true;
+    layout.offsetX += dx;
+    layout.offsetY += dy;
+    lastMouse = { x: e.clientX, y: e.clientY };
+    tooltip.classList.remove('visible');
+    render();
+    return;
+  }
+
+  const hovered = getHoveredNode(mx, my);
+  if (hovered) {
+    showTooltip(hovered, e.clientX, e.clientY);
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'grab';
+  }
+});
+
+canvas.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+
+canvas.addEventListener('click', (e) => {
+  if (wasDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hovered = getHoveredNode(mx, my);
+  if (!hovered) return;
+
+  if (planMode) {
+    handlePlanTap(hovered.id);
+    return;
+  }
+
+  if (hovered.state === 'sighted') {
+    discoveredForms.add(hovered.id);
+    render();
+  }
+});
+
+// ─── TOUCH EVENTS ────────────────────────────────────────────────────────────
+let lastTouchDist = null;
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  wasDragging = false;
+  if (e.touches.length === 1) {
+    isDragging = true;
+    lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else if (e.touches.length === 2) {
+    isDragging = false;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastTouchDist = Math.sqrt(dx*dx + dy*dy);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1 && isDragging) {
+    const dx = e.touches[0].clientX - lastMouse.x;
+    const dy = e.touches[0].clientY - lastMouse.y;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) wasDragging = true;
+    layout.offsetX += dx;
+    layout.offsetY += dy;
+    lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    render();
+  } else if (e.touches.length === 2 && lastTouchDist !== null) {
+    // Pinch to zoom
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const delta = dist / lastTouchDist;
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const newScale = Math.max(0.3, Math.min(2.5, layout.scale * delta));
+    layout.offsetX = midX - (midX - layout.offsetX) * (newScale / layout.scale);
+    layout.offsetY = midY - (midY - layout.offsetY) * (newScale / layout.scale);
+    layout.scale = newScale;
+    lastTouchDist = dist;
+    render();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    if (!wasDragging && e.changedTouches.length === 1) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.changedTouches[0].clientX - rect.left;
+      const my = e.changedTouches[0].clientY - rect.top;
+      const hovered = getHoveredNode(mx, my);
+
+      if (hovered) {
+        if (planMode) {
+          handlePlanTap(hovered.id);
+        } else if (hovered.state === 'sighted') {
+          discoveredForms.add(hovered.id);
+          render();
+        } else if (hovered.state === 'discovered') {
+          showTooltip(hovered, e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+        }
+      }
+    }
+    isDragging = false;
+    lastTouchDist = null;
+    setTimeout(() => { wasDragging = false; }, 50);
+  }
+}, { passive: false });
+
+// Wheel zoom (desktop)
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const delta = e.deltaY > 0 ? 0.92 : 1.08;
+  const newScale = Math.max(0.3, Math.min(2.5, layout.scale * delta));
+  layout.offsetX = mx - (mx - layout.offsetX) * (newScale / layout.scale);
+  layout.offsetY = my - (my - layout.offsetY) * (newScale / layout.scale);
+  layout.scale = newScale;
+  render();
+}, { passive: false });
+
+function showTooltip(node, cx, cy) {
+  let html = `<div class="tt-line-bar" style="background:${node.color}"></div>`;
+
+  if (node.state === 'discovered') {
+    html += `<div class="tt-name">${node.name}</div>`;
+    html += `<div class="tt-sub">${node.line}-LINE · TIER ${node.tier}</div>`;
+
+    const branches = node.forwardBranches;
+    if (branches.length > 0) {
+      html += `<div class="tt-req">`;
+      branches.forEach(b => {
+        const tgt = nodes[b.targetId];
+        const tgtName = tgt.state === 'discovered' ? tgt.name : '???';
+        html += `→ ${tgtName} <span>${b.req}</span><br>`;
+      });
+      html += `</div>`;
+    }
+
+    const xoCount = branches.filter(b => b.crossover).length;
+    if (xoCount > 0) {
+      html += `<div class="tt-crossover-badge">⟋ ${xoCount} CROSSOVER PATH${xoCount>1?'S':''}</div>`;
+    }
+  } else {
+    html += `<div class="tt-name" style="color:rgba(255,255,255,0.3)">???</div>`;
+    html += `<div class="tt-sub" style="color:rgba(255,255,255,0.15)">${node.line}-LINE · TIER ${node.tier}</div>`;
+    html += `<div class="tt-sighted">Form sighted — evolve to discover</div>`;
+    html += `<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.2);font-family:'Share Tech Mono',monospace">CLICK TO SIMULATE DISCOVERY</div>`;
+  }
+
+  tooltip.innerHTML = html;
+
+  let tx = cx + 16, ty = cy - 10;
+  if (tx + 200 > window.innerWidth) tx = cx - 216;
+  if (ty + 180 > window.innerHeight) ty = cy - 180;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
+  tooltip.classList.add('visible');
+}
+
+// ─── FILTER BAR ──────────────────────────────────────────────────────────────
+
+const filterBar = document.getElementById('filterBar');
+let activeFilters = new Set(LINES);
+
+LINES.forEach(line => {
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn active';
+  btn.textContent = `${line}-LINE`;
+  btn.style.borderColor = LINE_COLORS[line];
+  btn.style.color = LINE_COLORS[line];
+  btn.style.background = `rgba(${hexToRgb(LINE_COLORS[line])}, 0.1)`;
+  btn.addEventListener('click', () => {
+    if (activeFilters.has(line)) {
+      activeFilters.delete(line);
+      btn.classList.remove('active');
+      btn.style.opacity = '0.25';
+    } else {
+      activeFilters.add(line);
+      btn.classList.add('active');
+      btn.style.opacity = '1';
+    }
+    // For now just re-render (full filter would hide nodes not in active set)
+    render();
+  });
+  filterBar.appendChild(btn);
+});
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────────
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  layout = { offsetX: 0, offsetY: 0, scale: 1 };
+  computeLayout();
+  render();
+});
+
+document.getElementById('btnToggleFog').addEventListener('click', (e) => {
+  fogEnabled = !fogEnabled;
+  e.target.textContent = `FOG: ${fogEnabled ? 'ON' : 'OFF'}`;
+  render();
+});
+
+document.getElementById('btnRevealAll').addEventListener('click', () => {
+  LINES.forEach(l => TIERS.forEach(t => discoveredForms.add(`${l}${t}`)));
+  render();
+});
+
+// ─── PATHFINDING (BFS) ────────────────────────────────────────────────────────
+// Graph is directed (forward branches) + reverse (natural parent + crossover reverse)
+// We need undirected traversal so the player can path via evolve AND devolve
+
+function buildAdjacency() {
+  const adj = {}; // id → [{neighborId, crossover}]
+  Object.keys(nodes).forEach(id => adj[id] = []);
+
+  Object.values(nodes).forEach(node => {
+    // Forward edges
+    node.forwardBranches.forEach(b => {
+      adj[node.id].push({ id: b.targetId, crossover: b.crossover });
+      // Reverse edge so BFS can traverse backwards too
+      adj[b.targetId].push({ id: node.id, crossover: b.crossover });
+    });
+  });
+  return adj;
+}
+
+function findPath(fromId, toId) {
+  if (fromId === toId) return [fromId];
+  const adj = buildAdjacency();
+  const visited = new Set();
+  const queue = [[fromId]];
+  visited.add(fromId);
+
+  while (queue.length > 0) {
+    const path = queue.shift();
+    const current = path[path.length - 1];
+    for (const neighbor of (adj[current] || [])) {
+      if (visited.has(neighbor.id)) continue;
+      const newPath = [...path, neighbor.id];
+      if (neighbor.id === toId) return newPath;
+      visited.add(neighbor.id);
+      queue.push(newPath);
+    }
+  }
+  return null; // no path found
+}
+
+// ─── PLAN MODE STATE ─────────────────────────────────────────────────────────
+let planMode = false;
+let planOrigin = null;    // first tapped node id
+let planTarget = null;    // second tapped node id
+let planPath = null;      // array of node ids
+
+const planBar = document.getElementById('planBar');
+
+function enterPlanMode() {
+  planMode = true;
+  planOrigin = null;
+  planTarget = null;
+  planPath = null;
+  planBar.style.display = 'block';
+  planBar.textContent = 'PLAN MODE — TAP ORIGIN NODE';
+  document.getElementById('btnPlanMode').style.color = '#f0b840';
+  document.getElementById('btnPlanMode').style.borderColor = '#f0b840';
+  render();
+}
+
+function exitPlanMode() {
+  planMode = false;
+  planOrigin = null;
+  planTarget = null;
+  planPath = null;
+  planBar.style.display = 'none';
+  document.getElementById('btnPlanMode').style.color = '';
+  document.getElementById('btnPlanMode').style.borderColor = '';
+  render();
+}
+
+function handlePlanTap(nodeId) {
+  if (!planOrigin) {
+    planOrigin = nodeId;
+    planBar.textContent = `PLAN MODE — ORIGIN: ${nodeId} · TAP DESTINATION`;
+    render();
+  } else if (nodeId === planOrigin) {
+    // Tapped origin again — reset
+    planOrigin = null;
+    planTarget = null;
+    planPath = null;
+    planBar.textContent = 'PLAN MODE — TAP ORIGIN NODE';
+    render();
+  } else {
+    planTarget = nodeId;
+    planPath = findPath(planOrigin, planTarget);
+    if (planPath) {
+      planBar.textContent = `${planOrigin} → ${planTarget} · ${planPath.length - 1} STEP${planPath.length > 2 ? 'S' : ''}`;
+    } else {
+      planBar.textContent = `${planOrigin} → ${planTarget} · NO PATH FOUND`;
+    }
+    render();
+  }
+}
+
+// ─── PLAN PATH RENDERING ─────────────────────────────────────────────────────
+function drawPlanOverlay() {
+  if (!planMode || !planPath || planPath.length < 2) return;
+
+  const pathSet = new Set(planPath);
+
+  // Dim everything not on path
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,11,15,0.55)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  // Draw path edges
+  for (let i = 0; i < planPath.length - 1; i++) {
+    const fromId = planPath[i];
+    const toId = planPath[i + 1];
+    const from = getNodePos(fromId);
+    const to = getNodePos(toId);
+    const fromNode = nodes[fromId];
+    const toNode = nodes[toId];
+
+    // Determine if this edge is a crossover
+    const branch = fromNode.forwardBranches.find(b => b.targetId === toId);
+    const isCrossover = branch ? branch.crossover : false;
+    // Could also be a reverse/devolve step — check reverse
+    const isForward = !!branch;
+
+    ctx.save();
+    ctx.beginPath();
+
+    if (isCrossover) {
+      ctx.setLineDash([6, 4]);
+    } else {
+      ctx.setLineDash([]);
+    }
+
+    ctx.lineWidth = 3;
+
+    // Animated marching ants effect via dash offset
+    const grad = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
+    grad.addColorStop(0, fromNode.color);
+    grad.addColorStop(1, toNode.color);
+    ctx.strokeStyle = grad;
+    ctx.shadowColor = isForward ? fromNode.color : '#ffffff';
+    ctx.shadowBlur = 8;
+
+    if (isCrossover) {
+      const mx = (from.x + to.x) / 2;
+      const my = (from.y + to.y) / 2 - 20 * layout.scale;
+      ctx.moveTo(from.x, from.y);
+      ctx.quadraticCurveTo(mx, my, to.x, to.y);
+    } else {
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+    }
+
+    ctx.stroke();
+    ctx.restore();
+
+    // Step number label on edge midpoint
+    const mx = isCrossover ? (from.x + to.x) / 2 : (from.x + to.x) / 2;
+    const my2 = isCrossover ? (from.y + to.y) / 2 - 20 * layout.scale : (from.y + to.y) / 2;
+    ctx.save();
+    ctx.font = `700 ${Math.max(9, 11 * layout.scale)}px 'Share Tech Mono', monospace`;
+    ctx.fillStyle = '#f0b840';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(`${i + 1}`, mx, my2);
+    ctx.restore();
+  }
+
+  // Draw path nodes
+  planPath.forEach((id, idx) => {
+    const node = nodes[id];
+    const pos = getNodePos(id);
+    const r = NODE_R * layout.scale;
+    const isOrigin = idx === 0;
+    const isTarget = idx === planPath.length - 1;
+    const isDiscovered = node.state === 'discovered';
+
+    ctx.save();
+
+    // Glow
+    const glowColor = isOrigin ? '#00ff88' : isTarget ? '#f0b840' : node.color;
+    const grd = ctx.createRadialGradient(pos.x, pos.y, r * 0.3, pos.x, pos.y, r * 2);
+    grd.addColorStop(0, `${glowColor}55`);
+    grd.addColorStop(1, `${glowColor}00`);
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 2, 0, Math.PI * 2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    // Circle
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = isDiscovered ? `rgba(${hexToRgb(node.color)}, 0.2)` : 'rgba(255,255,255,0.05)';
+    ctx.fill();
+    ctx.strokeStyle = isOrigin ? '#00ff88' : isTarget ? '#f0b840' : node.color;
+    ctx.lineWidth = isOrigin || isTarget ? 3 : 2;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+
+    // Inner dot
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = isOrigin ? '#00ff88' : isTarget ? '#f0b840' : node.color;
+    ctx.fill();
+
+    // Label — respect fog: undiscovered nodes on path show ??? 
+    const label = isDiscovered ? id : '???';
+    const sublabel = isDiscovered ? node.name : (isOrigin ? 'ORIGIN' : isTarget ? 'TARGET' : `STEP ${idx}`);
+    ctx.shadowBlur = 0;
+    ctx.font = `700 ${Math.max(9, 11 * layout.scale)}px 'Share Tech Mono', monospace`;
+    ctx.fillStyle = isOrigin ? '#00ff88' : isTarget ? '#f0b840' : '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, pos.x, pos.y - r - 6 * layout.scale);
+
+    ctx.font = `${Math.max(8, 9 * layout.scale)}px 'Rajdhani', sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(sublabel, pos.x, pos.y - r - 16 * layout.scale);
+
+    ctx.restore();
+  });
+
+  // If only origin selected (no target yet), just highlight origin
+  if (!planTarget) {
+    const origin = nodes[planOrigin];
+    const pos = getNodePos(planOrigin);
+    const r = NODE_R * layout.scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r * 1.6, 0, Math.PI * 2);
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// Patch render to include plan overlay
+const _baseRender = render;
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30,45,61,0.15)';
+  ctx.lineWidth = 1;
+  TIERS.forEach(tier => {
+    const pos = getNodePos(`A${tier}`);
+    ctx.beginPath();
+    ctx.moveTo(0, pos.y);
+    ctx.lineTo(canvas.width, pos.y);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  computeVisibility();
+
+  Object.values(nodes).forEach(node => {
+    node.forwardBranches.forEach(branch => {
+      if (!branch.crossover) drawEdge(node.id, branch.targetId, false, node.state, nodes[branch.targetId].state);
+    });
+  });
+  Object.values(nodes).forEach(node => {
+    node.forwardBranches.forEach(branch => {
+      if (branch.crossover) drawEdge(node.id, branch.targetId, true, node.state, nodes[branch.targetId].state);
+    });
+  });
+
+  Object.values(nodes).forEach(drawNode);
+  drawTierLabels();
+  drawLineLabels();
+
+  // Plan overlay drawn last — on top of everything
+  if (planMode) drawPlanOverlay();
+}
+
+// ─── PLAN MODE BUTTON ────────────────────────────────────────────────────────
+document.getElementById('btnPlanMode').addEventListener('click', () => {
+  if (planMode) exitPlanMode(); else enterPlanMode();
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>

@@ -16,6 +16,26 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-10] Docs — Evolution Web mockup added to the repo as a reference doc
+- **Context:** User asked whether `evolution_web.html` (their original design mockup, shared
+  earlier this session and used as the direct inspiration for the skill web pan/zoom rework) had
+  been added to the project's reference docs — it hadn't; it only existed as prose mentions in
+  `CHANGELOG.md`/`DECISIONS.md` and as a local file in Downloads.
+- **Built:** Copied verbatim into `Assets/Docs/evolution_web_mockup.html` (self-contained
+  HTML/canvas/JS, no external deps besides a Google Fonts import). Registered in
+  `DOCUMENT_INDEX.md` under a new "Design Mockups — Interaction/Visual Reference Only, NOT Data"
+  section — explicit about the fact that node names/stat requirements/branch pairs inside it are
+  randomly generated or hand-picked flavor for the demo, not real design data; only the
+  interaction pattern (pan/zoom, glowing nodes, curved dashed crossover edges, 3-state fog-of-war,
+  BFS "Plan Mode" path highlighting) is meaningful reference. Updated the existing
+  `DECISIONS.md` → [UI] mention to point at the new path.
+- **Why this matters going forward:** This is the source-of-truth interaction reference for the
+  REAL Evolution Web (Phase 4, currently blocked — see `DECISIONS.md` → [Creatures]
+  "Evolution_System_Directive_v1_1_0.md has internal inconsistencies"). When that directive doc is
+  fixed and Phase 4 evolution graph work starts, this file is where the crossover branches, BFS
+  Plan Mode, and Hidden fog state — all deliberately left out of the skill-tree web port — should
+  get ported back in from.
+
 [2026-08-10] Phase 3 — Two more wild spawn points, completing a symmetric 4-corner layout
 - **Context:** User: "Can we load 2 more phasix onto the map. One in the top right and one in the
   top left." Scene already had a `Test_WildSpawnPoint_TopLeft` (-10, 6) the user didn't know about

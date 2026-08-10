@@ -3344,8 +3344,10 @@ re-derive the reasoning from scratch before deciding whether to build these.
   (`Assets/Scripts/UI/SkillWebEdgeVisual.cs`) is the custom-painted piece, same
   `generateVisualContent`/`MarkDirtyRepaint()` convention as `DragLineVisual.cs`.
 - **Why:** User: "we need to fix the skill tree look... this looks awful," then shared their
-  original Evolution Web design mockup (`evolution_web.html`) and asked whether the same pan/zoom
-  node-graph concept could work in Unity. Verified live via `unity_reflect` against the actual
+  original Evolution Web design mockup (`evolution_web.html` — added to the repo 2026-08-10 as
+  `Assets/Docs/evolution_web_mockup.html`, see `DOCUMENT_INDEX.md` → "Design Mockups" for full
+  context) and asked whether the same pan/zoom node-graph concept could work in Unity. Verified
+  live via `unity_reflect` against the actual
   Unity 6000.3.11f1 API (not assumed from training data) that `Painter2D` has near feature-parity
   with the mockup's Canvas 2D techniques (`QuadraticCurveTo`, `SetDashPattern`+`dashOffset`,
   `strokeFillGradient`/`fillGradient` linear+radial gradients, a native `Blur` USS filter) and that
