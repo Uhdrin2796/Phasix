@@ -11,8 +11,8 @@ using UnityEngine.UIElements;
 /// timing visual (offense on the targeted enemy, defense on the defending player creature), a
 /// fully auto-paced beat message (ShowTimedMessage — no click-to-proceed gate anywhere in the
 /// battle as of 2026-08-06, see DECISIONS.md -> [Combat]), and a scrolling text battle log for
-/// BattleScene_Main. MonoBehaviour singleton wrapping a UIDocument, matching
-/// EncounterPromptController's convention (see DECISIONS.md -> [UI] for why UI Toolkit over uGUI).
+/// BattleScene_Main. MonoBehaviour singleton wrapping a UIDocument (see DECISIONS.md -> [UI] for
+/// why UI Toolkit over uGUI).
 /// The STAGE (creature balls + move wheels) is still fixed at 3 player slots
 /// (BattleConfig.ActivePartySize) and 1 enemy slot — multi-enemy battles (trainer fights,
 /// Roadmap_v2 Mo 14-15) aren't built yet — but the nameplate SIDEBAR is a separate, wider-capacity

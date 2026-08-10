@@ -2571,7 +2571,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690957583}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.22129934, w: 0.97520596}
+  m_LocalRotation: {x: -0, y: -0, z: 0.22129849, w: 0.97520614}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 0.47427186, y: 0.65494686, z: 0.60225}
   m_ConstrainProportionsScale: 0
@@ -2846,7 +2846,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1260338095}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: 0.38758764, w: 0.9218329}
+  m_LocalRotation: {x: -0, y: -0, z: 0.38758782, w: 0.92183286}
   m_LocalPosition: {x: 1.0819378, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -4862,74 +4862,6 @@ Tilemap:
     e31: 0
     e32: 0
     e33: 1
---- !u!1 &1812031106
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1812031109}
-  - component: {fileID: 1812031108}
-  - component: {fileID: 1812031107}
-  m_Layer: 0
-  m_Name: UIRoot_EncounterPrompt
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1812031107
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1812031106}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a26a2061661aec44286a911c6a137e5f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EncounterPromptController
---- !u!114 &1812031108
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1812031106}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
-  m_PanelSettings: {fileID: 11400000, guid: 1af485cdda6b6c64d95379014f18f908, type: 2}
-  m_ParentUI: {fileID: 0}
-  sourceAsset: {fileID: 9197481963319205126, guid: 3837c0eaedc98f949af6d82f9ec95947, type: 3}
-  m_SortingOrder: 0
-  m_Position: 0
-  m_WorldSpaceSizeMode: 1
-  m_WorldSpaceWidth: 1920
-  m_WorldSpaceHeight: 1080
-  m_PivotReferenceSize: 0
-  m_Pivot: 0
-  m_WorldSpaceCollider: {fileID: 0}
---- !u!4 &1812031109
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1812031106}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &1819319118 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
@@ -5108,7 +5040,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.1669602
+      value: 0.16696
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -5116,7 +5048,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.9859637
+      value: -0.98596376
       objectReference: {fileID: 0}
     - target: {fileID: 3823675484743635484, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5124,7 +5056,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.12751323
+      value: 0.12751238
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.y
@@ -5132,7 +5064,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.9918369
+      value: 0.991837
       objectReference: {fileID: 0}
     - target: {fileID: 6569913435558804382, guid: 42a47c02f65a672419fa77492ff69a3b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -5476,7 +5408,6 @@ SceneRoots:
   - {fileID: 1351876111511071880}
   - {fileID: 480252711}
   - {fileID: 1090428280}
-  - {fileID: 1812031109}
   - {fileID: 523886304}
   - {fileID: 1559289767}
   - {fileID: 501279399}

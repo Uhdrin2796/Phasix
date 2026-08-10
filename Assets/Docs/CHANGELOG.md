@@ -16,6 +16,37 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-10] Cleanup + Docs — Dead EncounterPromptController deleted, Evolution Directive inconsistencies fixed
+- **Context:** Asked "what's next" with no specific feature in mind. Ran the CLAUDE.md
+  planning-session checklist (PhasixGuide.md, Unity editor state, console) plus a scan of
+  CHANGELOG/KNOWN_ISSUES/DECISIONS to compile the real backlog — zero open bugs, 256/256 tests
+  passing. User picked two follow-up items already flagged in earlier sessions.
+- **Built/Deleted (Task 1):** Deleted `EncounterPromptController.cs`, `EncounterPrompt.uxml/.uss`,
+  `EncounterPromptPanelSettings.asset` (+ `.meta`s), and the `UIRoot_EncounterPrompt` scene object
+  — confirmed genuinely dead (grepped the whole `Assets/Scripts` tree, nothing calls `.Show()`
+  since the 2026-08-10 auto-engage change earlier this session). Reworded the two stale "matching
+  EncounterPromptController's convention" doc comments in `BattleHUDController.cs`/
+  `BattleSummaryController.cs`; left the already-correctly-historical mentions in
+  `WildEncounterCreature.cs`/`BattleManager.cs` untouched.
+- **Verified live (Task 1):** Clean compile, 256/256 EditMode tests, Play Mode — teleported the
+  player onto a wild spawn point via `execute_code`, confirmed `BattleScene_Main` still loads
+  (auto-engage intact) with no missing-component errors from the deleted GameObject.
+- **Fixed (Task 2):** Read the full 2005-line `Evolution_System_Directive_v1_1_0.md` end to end
+  and resolved every declared-vs-used field/method mismatch DECISIONS.md had flagged (and several
+  more found in the process — see that file's `[Creatures] Evolution_System_Directive_v1_1_0.md
+  internal inconsistencies — RESOLVED` entry for the full list: `EvolutionNodeSO`/
+  `EvolutionBranchSO` field renames, the missing `EvolutionGraphSO.GetBranchesFrom`, a full
+  `ConditionalType`/`EvaluateConditional` rewrite to match §4's locked table, a duplicate `§15`
+  heading). Doc-only change — no `Evolution/` code exists yet, zero compile/runtime surface.
+- **Blocked:** Two conditional types (`CreatureCaptured`, `SkillTreeUnlocked`) still need a real
+  design answer (a roster-query interface doesn't exist yet; per-creature vs. account-wide scope
+  is ambiguous) — left as `// TODO: pending design` inline rather than invented. The canonical
+  `.pdf` also still needs a manual sync — outside Claude Code's reach, same as the pre-existing
+  Active Slots table gap.
+- **Next:** Someone needs to manually port the `.md` fixes into the PDF before Phase 4 treats it
+  as authoritative. The two open conditional-type design gaps need a real answer before Phase 4
+  implementation can build `EvolutionEvaluator` against them.
+
 [2026-08-10] Docs — Evolution Web mockup added to the repo as a reference doc
 - **Context:** User asked whether `evolution_web.html` (their original design mockup, shared
   earlier this session and used as the direct inspiration for the skill web pan/zoom rework) had

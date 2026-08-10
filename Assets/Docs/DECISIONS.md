@@ -2263,20 +2263,49 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
   as if it were never a discrepancy.
 - **Date:** July 2026
 
-### [Creatures] Evolution_System_Directive_v1_1_0.md has internal inconsistencies — flagged, not fixed
-- **Found:** `EvolutionNodeSO`, `EvolutionBranchSO`, `EvolutionGraphSO`, and
+### [Creatures] Evolution_System_Directive_v1_1_0.md internal inconsistencies — RESOLVED (.md mirror)
+- **Found (July 2026):** `EvolutionNodeSO`, `EvolutionBranchSO`, `EvolutionGraphSO`, and
   `EvolutionEvaluator`/`EvolutionExecutor` as specified in the Directive have real
   conflicts between declared field names (in the class definitions) and actually-used
   field names (in the logic that references them) — e.g. `EvolutionNodeSO.formID`
   (declared) vs. `node.nodeGuid` (used); `ConditionalType` has 6 declared members but 7
   different members are switched on elsewhere; `BranchConditional` is used as a type but
   never defined (only the similarly-shaped `ConditionalRequirement` is).
-- **Why not fixed now:** None of these types are needed for Phase 2 Wk 9 (PhasixData) —
-  they're Phase 4 scope. Fixing them requires a design pass on the source document itself,
-  which is out of scope for a code implementation task.
-- **Action needed:** Before Phase 4 (Evolution system) implementation starts, resolve these
-  inconsistencies in `Evolution_System_Directive_v1_1_0.md` (or its PDF source) first.
-- **Date:** July 2026
+- **Fixed (2026-08-10):** Read the full 2005-line `.md` mirror end to end and resolved every
+  declared-vs-used mismatch directly in that file (each fix marked inline with a "Consistency fix
+  (2026-08-10)" note and a "PDF SYNC REQUIRED" flag, same pattern already used for the Active
+  Slots table):
+  - `EvolutionNodeSO.formID` → `nodeGuid`; added missing `speciesData`/`tierStatFloor`/
+    `uiPosition` fields that were used everywhere but never declared.
+  - `EvolutionBranchSO.targetNode`/`requiredItem` (object refs) → `targetNodeGuid`/
+    `requiredItemGuid` (GUID strings), matching the project's established
+    GUID-string-not-object-reference convention (see the `PhasixRuntimeData` entry above); added
+    missing `commonAuraCost`/`specificAuraGates`/`rareVariantAuraCost` fields.
+  - `EvolutionGraphSO.GetBranchesFrom(nodeGuid)` added — derives from
+    `EvolutionNodeSO.forwardBranches` rather than a second, redundant flat `AllBranches` list +
+    `sourceNodeGuid` field (avoids two sources of truth for graph structure); rewrote the two call
+    sites (`EvolutionWebController`, `EvolutionGraphValidator`) that assumed the flat list.
+  - `ConditionalType`/`EvaluateConditional` rewritten to match §4's own LOCKED 6-member table
+    (`BossDefeated, ItemInPossession, CreatureCaptured, SkillTreeUnlocked, RealmReached,
+    OriginType`) instead of the unrelated 7-member set the old switch body actually handled;
+    `BranchConditional` → `ConditionalRequirement` (the type §9 actually declares); renamed
+    `RegionReached` → `RealmReached` to match "Realm" terminology used everywhere else in the
+    project (WorldDesign_Directive, `IPlayerProgressData.HasVisitedRealm`).
+  - Fixed a duplicate `§15` heading (`Editor Tooling` and `Build Order` both had it) →
+    `Build Order` renumbered to `§16`, and added to the previously-incomplete Table of Contents.
+  - Verified `EventBus`/`ServiceLocator`/`IPlayerInventory`/`IPlayerProgressData` against the
+    *real* `Assets/Scripts/Core/EventBus.cs` — already correct, no changes needed there.
+- **Two gaps genuinely NOT resolved** (real missing interfaces, not renames — flagged inline in
+  the doc as `// TODO: pending design` rather than invented): the `CreatureCaptured` conditional
+  needs a roster-query interface that doesn't exist yet (no way to ask "does the player have
+  species X at ≥40% bond"); the `SkillTreeUnlocked` conditional's scope (per-creature vs.
+  account-wide) is ambiguous in §4's own example — recommended per-creature via the existing
+  `SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime)`, not yet confirmed.
+- **Still open:** The `.pdf` (canonical source per the doc's own header) was NOT updated — outside
+  Claude Code's reach, same situation as the pre-existing Active Slots table sync gap. Someone
+  needs to manually port these fixes into the PDF before Phase 4 implementation treats it as
+  authoritative over the `.md` mirror.
+- **Date:** Found July 2026, resolved (`.md` mirror only) 2026-08-10.
 
 ---
 

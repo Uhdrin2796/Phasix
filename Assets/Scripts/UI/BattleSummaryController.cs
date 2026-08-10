@@ -10,9 +10,9 @@ using UnityEngine.UIElements;
 /// the new Tab-key overworld menu (PartyMenuController), per explicit user direction: "It should
 /// just be an after menu for aura gained, damage done, healed... not where we spend it."
 ///
-/// MonoBehaviour singleton wrapping a UIDocument, matching EncounterPromptController/
-/// BattleHUDController's convention. Lives on a GameObject in BattleScene_Main alongside
-/// BattleHUDController, so it shares that scene's lifetime.
+/// MonoBehaviour singleton wrapping a UIDocument, matching BattleHUDController's convention.
+/// Lives on a GameObject in BattleScene_Main alongside BattleHUDController, so it shares that
+/// scene's lifetime.
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class BattleSummaryController : MonoBehaviour

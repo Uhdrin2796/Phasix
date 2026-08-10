@@ -74,7 +74,6 @@
 | SaveSystem + PhasixSaveData/PartySaveData/SaveFile DTOs | `SaveSystem.cs` etc. | `Assets/Scripts/Save/` | ✅ Done (2026-08, real `Application.persistentDataPath` persistence, 3 slots, auto-continue by newest write time) |
 | Supporting types (StatType, BondZone, Temper, OriginType, TempoType, SignalType, Personality, SkillTreeType, PrimalType, StatBlock, EvolutionHistoryEntry) | `PhasixEnums.cs`, `PrimalType.cs`, `StatType.cs`, `BondZone.cs`, `StatBlock.cs`, `EvolutionHistoryEntry.cs` | `Assets/Scripts/Creatures/` | ✅ Phase 2 Wk 9 |
 | SkillData stub (+ BuiltInMoveType field, 2026-08) | `SkillData.cs` | `Assets/Scripts/Creatures/` | ✅ Stub (full skill content pending roster) |
-| EncounterPromptController (first UI Toolkit screen — Flee/Engage prompt) | `EncounterPromptController.cs` | `Assets/Scripts/UI/` | ⚠️ Dead code (2026-08-10) — WildEncounterCreature no longer calls Show(); contact auto-engages instead (Flee moved into the battle, see BattleManager). Left in place, not deleted, this pass — flagged as a cleanup follow-up. |
 | HudTooltip (shared runtime hover tooltip, extracted from BattleHUDController) | `HudTooltip.cs` | `Assets/Scripts/UI/` | ✅ Done (2026-08, shared by battle + Party menu; screen-edge clamping added 2026-08-09 — flips left/clamps vertically instead of always placing right of the anchor, fixing off-screen tooltips near the panel's right edge, e.g. the enemy nameplate) |
 | OverworldMenuController (Tab-key Party/Save/Bag/Options menu, replaces PartyMenuController) | `OverworldMenuController.cs` | `Assets/Scripts/UI/` | ✅ Done (2026-08, see DECISIONS.md → [UI]) — Party detail view's skill tray is now a pan/zoom skill web (2026-08-09, replaced the paged carousel), with a debug tier stepper (`PhasixRuntimeData.DebugTierOverride`). Always-visible `DebugBar` also has a "DEBUG: Add Party Member" button (2026-08-10, spawns `Test_SteamType` via `WildSpawnSystem.CreateWildInstance` into `PartySystem`) |
 | SkillWebEdgeVisual (Painter2D edge/glow overlay for the skill web) | `SkillWebEdgeVisual.cs` | `Assets/Scripts/UI/` | ✅ Done (2026-08-09), same `DragLineVisual` convention |
@@ -141,8 +140,7 @@ Assets/
                    system per Evolution_System_Directive is still pending (Phase 4).
     World/       ← WorldChunkManager, EncounterTrigger (now skill-database-aware, 2026-08);
                    ZoneManager (pending)
-    UI/          ← EncounterPromptController (first UI Toolkit screen); BattleHUDController
-                   (see Combat/); BattleSummaryController (2026-08, read-only post-battle recap
+    UI/          ← BattleHUDController (see Combat/); BattleSummaryController (2026-08, read-only post-battle recap
                    — Aura gained/damage dealt/healing done, NOT where Aura is spent);
                    HudTooltip (2026-08, shared runtime hover tooltip, extracted from
                    BattleHUDController so battle and the Party menu use the identical
@@ -203,9 +201,8 @@ Assets/
     TypeCharts/  ← PrimalTypeChart SO + PrimalTypeChart.asset — ✅ wired into BattleManager,
                    no longer pending
     Aura/        ← AuraTypeData SOs (pending)
-  UI/            ← EncounterPrompt.uxml/.uss/PanelSettings (320×180 reference resolution,
-                   matches the Pixel Perfect Camera); BattleHUD.uxml/.uss/PanelSettings;
-                   BattleSummary.uxml/.uss (2026-08, read-only post-battle recap, reuses
+  UI/            ← BattleHUD.uxml/.uss/PanelSettings (320×180 reference resolution, matches the
+                   Pixel Perfect Camera); BattleSummary.uxml/.uss (2026-08, read-only post-battle recap, reuses
                    AuraAllocationPanelSettings.asset — name is stale, asset itself is fine);
                    OverworldMenu.uxml/.uss (2026-08, Tab-key Party/Save/Bag/Options menu,
                    replaces PartyMenu.uxml/.uss — reuses BattleHUD.uss directly for skill-ring

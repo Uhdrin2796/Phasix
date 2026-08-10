@@ -29,6 +29,7 @@
 - §13 UI Implementation
 - §14 Supporting Interfaces & Stubs
 - §15 Editor Tooling
+- §16 Build Order
 
 ---
 
@@ -178,13 +179,18 @@ Every Standard and Item-Gated branch has a requirement profile composed of three
 
 ### Valid Conditional Types
 
+> **Consistency fix (2026-08-10):** renamed "Region Reached" → "Realm Reached" — the rest of the
+> project (`WorldDesign_Directive_v0_1_0.md`, `IPlayerProgressData.HasVisitedRealm`,
+> `PlayerProgressData.visitedRealmGuids`) uses "Realm" throughout; "Region" was this directive's
+> own isolated term. `ConditionalType.RegionReached` renamed to `RealmReached` in §9 to match.
+
 | Type | Example |
 |---|---|
-| Boss Defeated | Must have defeated Ashenveil (Region 2 boss) at least once |
+| Boss Defeated | Must have defeated Ashenveil (Realm 2 boss) at least once |
 | Item In Possession | Must have a Void Shard in inventory (not consumed — just present) |
 | Creature Captured / Befriended | Must have a specific species at 40%+ bond in current roster |
 | Skill Tree Unlocked | Must have unlocked at least one Type G (Aspect) skill tree node |
-| Region Reached | Must have reached Region 3 |
+| Realm Reached | Must have reached Realm 3 |
 | Origin Type | Creature must currently have Corrupted or Hollow Origin |
 
 ### Aptitude as the Exotic Gate
@@ -333,6 +339,14 @@ The evolution graph is defined entirely as ScriptableObject assets. One global r
 ### Step 1 — EvolutionNodeSO
 `Assets/Scripts/Evolution/EvolutionNodeSO.cs`
 
+> **Consistency fix (2026-08-10):** earlier drafts of this section named the identity field
+> `formID` and omitted `speciesData`/`tierStatFloor`/`uiPosition` entirely, even though every
+> other section (§10-§13, §15) already reads/writes them under the names below. This revision
+> makes the declaration match actual usage throughout the rest of the document — no behavior
+> changed, only what was declared here. **PDF SYNC REQUIRED** — the canonical PDF still has the
+> old `formID`-only shape and needs a manual update outside Claude Code's reach, same situation as
+> the Active Slots table in §1.
+
 ```csharp
 using UnityEngine;
 using System.Collections.Generic;
@@ -340,12 +354,15 @@ using System.Collections.Generic;
 [CreateAssetMenu(fileName = "EvoNode_", menuName = "Phasix/Evolution/Node")]
 public class EvolutionNodeSO : ScriptableObject
 {
-    public string formID;           // unique key, e.g. "A3_Ashcrown"
-    public string displayName;
-    public int    tier;             // 1–7
-    public string speciesLine;      // "A", "B", etc. null for fusion forms
-    public Sprite formSprite;
-    public Color  lineColor;
+    public string   nodeGuid;        // unique key, e.g. "A3_Ashcrown"
+    public string   displayName;
+    public int      tier;            // 1–7
+    public string   speciesLine;     // "A", "B", etc. null for fusion forms
+    public PhasixData speciesData;   // the species/form this node represents — read-only SO, see CLAUDE.md
+    public StatBlock tierStatFloor;  // base stat floor at this tier — reset target on evolve/devolve
+    public Sprite   formSprite;
+    public Color    lineColor;
+    public Vector2  uiPosition;      // Evolution Web layout position, see §8
 
     [Header("Graph Structure")]
     public List<EvolutionBranchSO> forwardBranches;
@@ -364,9 +381,12 @@ public class EvolutionNodeSO : ScriptableObject
 
 | Field | Value |
 |---|---|
-| `formID` | Unique string. Convention: LineCode + Tier + FormName. e.g. `"A3_Ashcrown"`, `"F-AB_Ashbrack"` |
+| `nodeGuid` | Unique string. Convention: LineCode + Tier + FormName. e.g. `"A3_Ashcrown"`, `"F-AB_Ashbrack"` |
 | `tier` | Integer 1–7. T6 and T7 for fusion nodes only. |
 | `speciesLine` | Single-letter code ("A"–"T") for natural forms. Leave empty for fusion nodes. |
+| `speciesData` | The `PhasixData` SO this node represents. Drag in the matching species/form asset. |
+| `tierStatFloor` | The 8-stat floor a creature resets to when it evolves into or devolves back to this node. Values pending NumericalCalibration.md — use tier-appropriate placeholders. |
+| `uiPosition` | Evolution Web layout position (§8). Set once the web layout pass happens; `(0,0)` placeholder until then. |
 | `forwardBranches` | List of EvolutionBranchSO assets. Drag in all outgoing branches. |
 | `naturalParent` | The node directly below in this line (e.g. A2 for A3). Null for T1 and all fusion nodes. |
 | `isFusionNode` | True for fusion origin nodes only. |
@@ -376,6 +396,15 @@ public class EvolutionNodeSO : ScriptableObject
 ### Step 2 — EvolutionBranchSO
 `Assets/Scripts/Evolution/EvolutionBranchSO.cs`
 
+> **Consistency fix (2026-08-10):** `targetNode`/`requiredItem` were previously declared as direct
+> object references, but §11's logic layer always treats them as GUID strings
+> (`targetNodeGuid`/`requiredItemGuid`) — matching the project's established convention of storing
+> SO cross-references as GUID strings rather than direct references (see DECISIONS.md →
+> `[Creatures] PhasixRuntimeData matches Evolution_System_Directive_v1_1_0.md's spec`). Also added
+> three Aura-cost fields (`commonAuraCost`, `specificAuraGates`, `rareVariantAuraCost`) that
+> `EvolutionEvaluator.CheckAuraGate`/`EvolutionExecutor.DeductAuraCosts` (§11) always read but this
+> section never declared. **PDF SYNC REQUIRED**, same as §9 Step 1 above.
+
 ```csharp
 using UnityEngine;
 using System.Collections.Generic;
@@ -383,7 +412,7 @@ using System.Collections.Generic;
 public enum BranchTriggerType  { Standard, ItemGated, FusionLink }
 public enum BranchPathType     { Natural, Crossover, FusionLink }
 public enum ConditionalType    { BossDefeated, ItemInPossession, CreatureCaptured,
-                                 SkillTreeUnlocked, RegionReached, OriginType }
+                                 SkillTreeUnlocked, RealmReached, OriginType }
 public enum StatType           { Vitality, Force, Resonance, Guard, Ward, Resolve,
                                  Instinct, Aura }
 public enum OriginType         { Wild, Synthetic, Corrupted, Ascended, Hollow, Primordial }
@@ -400,21 +429,34 @@ public class StatRequirement
 public class ConditionalRequirement
 {
     public ConditionalType type;
-    public string          referenceID;    // boss ID, region ID, species ID, etc.
+    public string          referenceID;    // boss ID, realm ID, species ID, etc.
     public OriginType      requiredOrigin; // only used when type == OriginType
+}
+
+[System.Serializable]
+public class SpecificAuraGate
+{
+    public string emotionalTypeKey; // matches AuraTypeData SO's key, e.g. "grief", "joy"
+    public int    cost;
 }
 
 [CreateAssetMenu(fileName = "Branch_", menuName = "Phasix/Evolution/Branch")]
 public class EvolutionBranchSO : ScriptableObject
 {
-    public EvolutionNodeSO          targetNode;
+    public string                   targetNodeGuid;
     public BranchTriggerType        triggerType;
     public BranchPathType           pathType;
     public int                      levelFloor;
     public StatRequirement[]        statRequirements;
     public ConditionalRequirement[] conditionals;
-    public ItemSO                   requiredItem;   // null unless ItemGated
-    public EvolutionNodeSO          fusionPartner;  // null unless FusionLink
+
+    [Header("Aura Gate — values pending NumericalCalibration.md")]
+    public int                commonAuraCost;      // T1→T2 gate
+    public SpecificAuraGate[] specificAuraGates;    // T2→T3 and above
+    public int                rareVariantAuraCost;  // exotic branch gate
+
+    public string           requiredItemGuid; // null/empty unless ItemGated
+    public EvolutionNodeSO  fusionPartner;    // null unless FusionLink
 }
 ```
 
@@ -422,19 +464,33 @@ public class EvolutionBranchSO : ScriptableObject
 
 | Field | Value |
 |---|---|
-| `targetNode` | Drag in the destination EvolutionNodeSO. |
+| `targetNodeGuid` | The destination `EvolutionNodeSO.nodeGuid`. |
 | `triggerType` | Standard for most. ItemGated if key item consumed. FusionLink for T5→T6 and T6→T7 branches. |
 | `pathType` | Natural if same species line. Crossover if exiting to another line. FusionLink for fusion branches. |
 | `levelFloor` | Low anti-exploit value. Pending NumericalCalibration.md — use 1 as placeholder. |
 | `statRequirements` | Up to 3 entries. Each: pick stat, set minimum, leave `countUnnamedPool = true`. |
 | `conditionals` | Up to 2 entries. Each: pick conditional type, set referenceID. |
-| `requiredItem` | Null for Standard branches. Assign ItemSO for ItemGated only. |
+| `commonAuraCost` | Common Aura required (T1→T2 gate). Pending NumericalCalibration.md — use 0 as placeholder. |
+| `specificAuraGates` | Emotional-type-keyed Specific Aura costs (T2→T3+). Pending NumericalCalibration.md. |
+| `rareVariantAuraCost` | Rare Variant Aura required for exotic branches. Pending NumericalCalibration.md. |
+| `requiredItemGuid` | Empty for Standard branches. Set to the required item's GUID for ItemGated only (Items pending §22 — placeholder GUID until then). |
 | `fusionPartner` | Null except on FusionLink branches. Assign the other required ingredient's node. |
 
 ### Step 3 — EvolutionGraphSO
 `Assets/Scripts/Evolution/EvolutionGraphSO.cs`
 
 One global registry asset holding every node. Single source of truth for the entire web.
+
+> **Consistency fix (2026-08-10):** every other section (§11, §13, §15) calls
+> `graph.GetBranchesFrom(nodeGuid)` and reads `graph.AllNodes`, but this class never declared
+> either — only `GetNode`/`GetNeighbours` existed, and the field was lowercase `allNodes`. Rather
+> than adding a second, redundant flat branch list (`AllBranches`) plus a `sourceNodeGuid` field on
+> `EvolutionBranchSO` — a second source of truth for graph structure that could drift out of sync
+> with `EvolutionNodeSO.forwardBranches` — `GetBranchesFrom` is defined here to simply return the
+> requested node's own `forwardBranches`, which already IS that node's authoritative outgoing-edge
+> list. Sections that assumed a flat `graph.AllBranches` (§13's `EvolutionWebController`, §15's
+> `EvolutionGraphValidator`) are rewritten below to iterate `node.forwardBranches` per node
+> instead. **PDF SYNC REQUIRED**, same as §9 Step 1/2 above.
 
 ```csharp
 using UnityEngine;
@@ -443,21 +499,33 @@ using System.Collections.Generic;
 [CreateAssetMenu(fileName = "EvolutionGraph", menuName = "Phasix/Evolution/Graph")]
 public class EvolutionGraphSO : ScriptableObject
 {
-    public List<EvolutionNodeSO> allNodes;
+    public List<EvolutionNodeSO> AllNodes;
     private Dictionary<string, EvolutionNodeSO> _lookup;
 
-    public EvolutionNodeSO GetNode(string formID)
+    public EvolutionNodeSO GetNode(string nodeGuid)
     {
         if (_lookup == null) BuildLookup();
-        _lookup.TryGetValue(formID, out var node);
+        _lookup.TryGetValue(nodeGuid, out var node);
         return node;
+    }
+
+    /// <summary>Returns the outgoing branches from the given node, by GUID. Empty list if the node isn't found or has none.</summary>
+    public List<EvolutionBranchSO> GetBranchesFrom(string nodeGuid)
+    {
+        var node = GetNode(nodeGuid);
+        return node != null && node.forwardBranches != null
+            ? node.forwardBranches
+            : new List<EvolutionBranchSO>();
     }
 
     public List<EvolutionNodeSO> GetNeighbours(EvolutionNodeSO node)
     {
         var result = new List<EvolutionNodeSO>();
         foreach (var branch in node.forwardBranches)
-            if (branch.targetNode != null) result.Add(branch.targetNode);
+        {
+            var target = GetNode(branch.targetNodeGuid);
+            if (target != null) result.Add(target);
+        }
         if (node.naturalParent != null) result.Add(node.naturalParent);
         if (node.isFusionNode)
         {
@@ -470,8 +538,8 @@ public class EvolutionGraphSO : ScriptableObject
     private void BuildLookup()
     {
         _lookup = new Dictionary<string, EvolutionNodeSO>();
-        foreach (var n in allNodes)
-            if (n != null) _lookup[n.formID] = n;
+        foreach (var n in AllNodes)
+            if (n != null) _lookup[n.nodeGuid] = n;
     }
 
     private void OnEnable() => _lookup = null; // clear cache on reload
@@ -799,7 +867,7 @@ public static class EvolutionEvaluator
         return CheckTriggerRequirements(branch, runtime, inventory)
             && CheckStatMinimums(branch, runtime)
             && CheckAuraGate(branch, runtime)
-            && CheckConditionals(branch, runtime);
+            && CheckConditionals(branch, runtime, inventory);
     }
 
     // ── Trigger Requirements ───────────────────────────────────────────────────
@@ -838,7 +906,7 @@ public static class EvolutionEvaluator
 
     private static bool CheckStatMinimums(EvolutionBranchSO branch, PhasixRuntimeData runtime)
     {
-        foreach (var req in branch.statMinimums)
+        foreach (var req in branch.statRequirements)
         {
             int effective = runtime.EffectiveStat(req.stat); // baseStats + unnamedPool
             if (effective < req.minimumValue)
@@ -872,43 +940,74 @@ public static class EvolutionEvaluator
 
     // ── Conditionals ──────────────────────────────────────────────────────────
 
-    private static bool CheckConditionals(EvolutionBranchSO branch, PhasixRuntimeData runtime)
+    // Consistency fix (2026-08-10): this method's switch previously handled a 7-member set
+    // (BondZone, PhaseSaturation, AptitudeMinimum, OriginType, BossDefeated, RealmVisited,
+    // DevolutionCount) that only overlapped 2 members with the ConditionalType enum §9 actually
+    // declares (BossDefeated, ItemInPossession, CreatureCaptured, SkillTreeUnlocked, RealmReached,
+    // OriginType — itself matching §4's own LOCKED "Valid Conditional Types" table exactly). The
+    // switch is rewritten below to match §4/§9, since that table is the actual design authority.
+    // The parameter type is also corrected from the never-declared `BranchConditional` to the
+    // actually-declared `ConditionalRequirement` (fields: type, referenceID, requiredOrigin — not
+    // the floatValue/stringValue the old switch body read).
+    // PDF SYNC REQUIRED, same as the other §9/§11 fixes above.
+
+    private static bool CheckConditionals(
+        EvolutionBranchSO branch,
+        PhasixRuntimeData runtime,
+        IPlayerInventory  inventory)
     {
         foreach (var cond in branch.conditionals)
         {
-            if (!EvaluateConditional(cond, runtime)) return false;
+            if (!EvaluateConditional(cond, runtime, inventory)) return false;
         }
         return true;
     }
 
-    private static bool EvaluateConditional(BranchConditional cond, PhasixRuntimeData runtime)
+    private static bool EvaluateConditional(
+        ConditionalRequirement cond,
+        PhasixRuntimeData       runtime,
+        IPlayerInventory        inventory)
     {
         switch (cond.type)
         {
-            case ConditionalType.BondZone:
-                return runtime.bondFloor >= cond.floatValue;
-
-            case ConditionalType.PhaseSaturation:
-                return runtime.phaseSaturation >= cond.floatValue;
-
-            case ConditionalType.AptitudeMinimum:
-                return runtime.aptitude >= (int)cond.floatValue;
-
-            case ConditionalType.OriginType:
-                if (runtime.speciesData == null) return false;
-                return runtime.speciesData.origin.ToString() == cond.stringValue;
-
             case ConditionalType.BossDefeated:
                 // Delegates to PlayerProgressData — accessed via ServiceLocator
                 var progress = ServiceLocator.Get<IPlayerProgressData>();
-                return progress != null && progress.HasDefeatedBoss(cond.stringValue);
+                return progress != null && progress.HasDefeatedBoss(cond.referenceID);
 
-            case ConditionalType.RealmVisited:
+            case ConditionalType.ItemInPossession:
+                // Not consumed — just present. Same inventory the ItemGated trigger type uses.
+                return inventory != null && inventory.HasItem(cond.referenceID);
+
+            case ConditionalType.CreatureCaptured:
+                // TODO: pending design — no interface exists yet to query "does the player
+                // currently have species X at ≥40% bond in their roster." Needs either a new
+                // IPlayerRoster-shaped service registered via ServiceLocator, or folding a
+                // roster query into IPlayerProgressData. Not invented here per CLAUDE.md's
+                // "no invented content for pending systems" rule — real design call needed.
+                Debug.LogWarning("[EvolutionEvaluator] CreatureCaptured conditional not yet implementable — no roster-query interface exists.");
+                return false;
+
+            case ConditionalType.SkillTreeUnlocked:
+                // Recommended: per-creature, reusing the SkillTreeUnlockSystem that already
+                // exists (Assets/Scripts/Combat/SkillTreeUnlockSystem.cs) rather than inventing a
+                // new account-wide tracker. referenceID names the required SkillTreeType.
+                // TODO: confirm this is the intended scope — §4's example ("must have unlocked at
+                // least one Type G node") doesn't disambiguate per-creature vs. account-wide.
+                if (!System.Enum.TryParse(cond.referenceID, out SkillTreeType requiredTree))
+                {
+                    Debug.LogWarning($"[EvolutionEvaluator] SkillTreeUnlocked conditional has unrecognized referenceID '{cond.referenceID}'.");
+                    return false;
+                }
+                return SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime).Contains(requiredTree);
+
+            case ConditionalType.RealmReached:
                 var prog2 = ServiceLocator.Get<IPlayerProgressData>();
-                return prog2 != null && prog2.HasVisitedRealm(cond.stringValue);
+                return prog2 != null && prog2.HasVisitedRealm(cond.referenceID);
 
-            case ConditionalType.DevolutionCount:
-                return runtime.aptitude >= (int)cond.floatValue; // aptitude == devo count
+            case ConditionalType.OriginType:
+                if (runtime.speciesData == null) return false;
+                return runtime.speciesData.origin == cond.requiredOrigin;
 
             default:
                 Debug.LogWarning($"[EvolutionEvaluator] Unknown ConditionalType: {cond.type}");
@@ -1645,15 +1744,21 @@ public class EvolutionWebController : MonoBehaviour
             }
         }
 
-        // Render branches
-        foreach (var branch in _graphAsset.AllBranches)
+        // Render branches — iterate each node's own forwardBranches (the graph has no separate
+        // flat branch list; a node's outgoing edges ARE its forwardBranches, see §9 Step 3 fix)
+        foreach (var sourceNode in _graphAsset.AllNodes)
         {
-            bool fromDiscovered = _activeRuntime.discoveredNodeGuids.Contains(branch.sourceNodeGuid);
-            bool toDiscovered   = _activeRuntime.discoveredNodeGuids.Contains(branch.targetNodeGuid);
-            if (!fromDiscovered) continue; // don't draw lines to undiscovered targets
+            bool fromDiscovered = _activeRuntime.discoveredNodeGuids.Contains(sourceNode.nodeGuid);
+            if (!fromDiscovered) continue; // don't draw lines from undiscovered sources
 
-            // TODO: draw LineRenderer/Image connecting source node UI pos to target node UI pos
-            // pending UI implementation session
+            foreach (var branch in sourceNode.forwardBranches)
+            {
+                bool toDiscovered = _activeRuntime.discoveredNodeGuids.Contains(branch.targetNodeGuid);
+
+                // TODO: draw LineRenderer/Image connecting sourceNode.uiPosition to the
+                // target node's uiPosition (look up via _graphAsset.GetNode(branch.targetNodeGuid))
+                // pending UI implementation session
+            }
         }
 
         RefreshNodeColors();
@@ -1904,31 +2009,37 @@ public static class EvolutionGraphValidator
                 { Debug.LogWarning($"  [WARN] Node '{node.name}' tierStatFloor is all zeros — pending calibration?"); totalWarnings++; }
             }
 
-            // 2. Check for broken branch references
+            // 2. Check for broken branch references — iterate each node's own forwardBranches
+            // (no separate flat branch list on the graph, see §9 Step 3 fix)
             var nodeGuids = new HashSet<string>();
             foreach (var node in graph.AllNodes)
                 if (node != null) nodeGuids.Add(node.nodeGuid);
 
-            foreach (var branch in graph.AllBranches)
+            foreach (var sourceNode in graph.AllNodes)
             {
-                if (branch == null)
-                { Debug.LogError($"  [ERROR] Null branch entry in graph '{graph.name}'"); totalErrors++; continue; }
+                if (sourceNode == null || sourceNode.forwardBranches == null) continue;
+                foreach (var branch in sourceNode.forwardBranches)
+                {
+                    if (branch == null)
+                    { Debug.LogError($"  [ERROR] Null branch entry on node '{sourceNode.name}'"); totalErrors++; continue; }
 
-                if (!nodeGuids.Contains(branch.sourceNodeGuid))
-                { Debug.LogError($"  [ERROR] Branch '{branch.name}' sourceNodeGuid not found in graph nodes"); totalErrors++; }
-
-                if (!nodeGuids.Contains(branch.targetNodeGuid))
-                { Debug.LogError($"  [ERROR] Branch '{branch.name}' targetNodeGuid not found in graph nodes"); totalErrors++; }
+                    if (!nodeGuids.Contains(branch.targetNodeGuid))
+                    { Debug.LogError($"  [ERROR] Branch '{branch.name}' targetNodeGuid not found in graph nodes"); totalErrors++; }
+                }
             }
 
             // 3. Check for orphaned nodes (no incoming or outgoing branches)
             var hasIncoming = new HashSet<string>();
             var hasOutgoing = new HashSet<string>();
-            foreach (var branch in graph.AllBranches)
+            foreach (var sourceNode in graph.AllNodes)
             {
-                if (branch == null) continue;
-                hasOutgoing.Add(branch.sourceNodeGuid);
-                hasIncoming.Add(branch.targetNodeGuid);
+                if (sourceNode == null || sourceNode.forwardBranches == null) continue;
+                foreach (var branch in sourceNode.forwardBranches)
+                {
+                    if (branch == null) continue;
+                    hasOutgoing.Add(sourceNode.nodeGuid);
+                    hasIncoming.Add(branch.targetNodeGuid);
+                }
             }
             foreach (var node in graph.AllNodes)
             {
@@ -1970,7 +2081,10 @@ A full node-graph visual editor (like Bolt/XNode style) is **deferred to Phase 4
 
 ---
 
-## §15 · Build Order
+## §16 · Build Order
+
+> **Consistency fix (2026-08-10):** was previously numbered §15, duplicating "Editor Tooling"
+> above and missing from the Table of Contents entirely. Renumbered to §16 and added to the TOC.
 
 Implement the evolution system in this sequence to avoid forward-reference compilation errors. Each step assumes the previous step compiles cleanly.
 
