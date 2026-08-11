@@ -24,10 +24,15 @@ using UnityEngine.SceneManagement;
 /// turn-switch to read clearly.
 /// Reads BattleTransition.PendingEnemy + PartySystem.Instance (still valid — overworld stays
 /// loaded underneath combat, additive load per Combat_Directive_v0_1_0.md Part 1) to build the
-/// BattleState, then hands all turn-resolution rules to the static BattleEngine. Enemy uses
-/// random target selection for now (Roadmap_v2 Mo 5 Wk 1-2: "Enemy uses random move selection
-/// for now") — there's only one move (Attack) until the skill tree framework exists, so "random
-/// move" reduces to "random target" here.
+/// BattleState, then hands all turn-resolution rules to the static BattleEngine.
+///
+/// 2026-08-10 close-out pass (see DECISIONS.md -> [Combat]): enemy target/skill selection now
+/// runs through EnemyAI's weighted heuristics instead of pure Random.Range target choice with a
+/// single hardcoded basic attack — enemies use their actual equipped skills (seeded via
+/// WildSpawnSystem.SeedInitialSkills) when a SkillDatabase is assigned, falling back to today's
+/// exact basic-attack behavior otherwise. This is a heuristic upgrade only, not the real AI
+/// decision-making framework Combat_Directive_v0_1_0.md flags as pending design (GDD §18.6) — see
+/// EnemyAI.cs's class doc comment.
 ///
 /// Phase 3 Gate wiring (2026-08-06 — see DECISIONS.md -> [Combat]): CaptureSystem ("K" move
 /// option — a successful attempt ends the battle immediately via EndBattle(Won), see
@@ -463,6 +468,10 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    /// <summary>Primal type used for hit-VFX tinting (BattleHUDController.PlayHitVfx) — falls back to Fire when speciesData isn't set (edge case, see PhasixRuntimeData.speciesData's own doc comment; matches BattleAudioVfxHooks.OnDamageTaken's identical defensive fallback).</summary>
+    private static PrimalType GetPrimalTypeOrDefault(BattleParticipant participant)
+        => participant.RuntimeData.speciesData != null ? participant.RuntimeData.speciesData.PrimalType : PrimalType.Fire;
+
     /// <summary>
     /// Counts down every alive player-side participant's active Evolution Burst by one turn,
     /// logging + updating the status icon when one expires (2026-08-06 — see DECISIONS.md ->
@@ -517,6 +526,7 @@ public class BattleManager : MonoBehaviour
     {
         attacker.RecordSkillTreeUse(skill.TreeType);
         attacker.RecordSkillUse(skill);
+        EventBus.Raise_SkillUsed(attacker.RuntimeData, skill);
 
         if (skill.BuiltInMove != BuiltInMoveType.None)
         {
@@ -534,8 +544,15 @@ public class BattleManager : MonoBehaviour
             float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
                 TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
                 attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+
+            // Launches the projectile now, concurrently with the ring below — sweepDuration is
+            // sized off the projectile's own real travel time so the ring's "perfect" instant
+            // lines up with when it visually connects (2026-08-11 timing-sync pass).
+            int targetSlotIndex = _state.EnemySide.IndexOf(target);
+            float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
+                attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
             yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                $"{skill.SkillName} — {attacker.DisplayName}", toleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+                $"{skill.SkillName} — {attacker.DisplayName}", toleranceHalfWidth, sweepDuration));
 
             bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
             bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
@@ -544,6 +561,7 @@ public class BattleManager : MonoBehaviour
             // rests." See BattleParticipant.RecentTimedInputPerfects.
             attacker.RecordTimedInputPerfect(timedPerfect);
             timedInputHappened = true;
+            if (timedSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
 
             float attackMultiplier = timedSuccess ? TimedInputConfig.SuccessDamageMultiplier : 1f;
             int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, resolution.Category, BattleConfig.PlaceholderSkillPower);
@@ -707,11 +725,18 @@ public class BattleManager : MonoBehaviour
                 float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
                     TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
                     attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+
+                // Launches the projectile now, concurrently with the ring below — see
+                // ResolveSkillAction's identical pattern for the full rationale.
+                int targetSlotIndex = _state.EnemySide.IndexOf(target);
+                float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
+                    attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
                 yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                    $"YOUR ATTACK — {attacker.DisplayName}", toleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+                    $"YOUR ATTACK — {attacker.DisplayName}", toleranceHalfWidth, sweepDuration));
                 float attackMultiplier = BattleHUDController.Instance.LastTimedInputSuccess
                     ? TimedInputConfig.SuccessDamageMultiplier
                     : 1f;
+                if (BattleHUDController.Instance.LastTimedInputSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
 
                 // Real formula (Step 3): (AttackerStat / DefenderStat) x skillPower x
                 // primalTypeMultiplier. Basic Attack is treated as Physical (Force/Guard) — real
@@ -868,22 +893,14 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Each alive enemy attacks a random alive player-side target, resolving immediately so only
-    /// that target takes damage. Stops early if the player side is wiped mid-turn. Every beat
-    /// (attack announcement, resolved result, counter-attack) auto-paces via
-    /// BattleHUDController.ShowTimedMessage instead of gating on a click — the enemy's whole turn
-    /// plays out on its own once the player has clicked Continue at the end of their own turn
-    /// (2026-08-05, user-directed — see DECISIONS.md -> [Combat]).
-    ///
-    /// Defense is full-avoidance Dodge/Parry (Combat_Directive Part 4, Expedition 33-inspired —
-    /// see DECISIONS.md -> [Combat]), not a damage-reduction multiplier, and is a single LIVE
-    /// click: BattleHUDController.RunDefenseTimedInput shows a converging ring — a white marker
-    /// ring shrinks past a fixed target ring — above the defending creature; left-click anywhere
-    /// to attempt Dodge (succeeds within a wider ratio tolerance), right-click anywhere to attempt
-    /// Parry (succeeds within a tighter tolerance), no menu. This is the one real interactive
-    /// moment in the enemy's turn; success fully avoids the hit (0 damage multiplier), failure
-    /// takes the full hit, same as a missed offensive timing — no extra penalty for attempting the
-    /// harder Parry and missing.
+    /// Each alive enemy picks a target (EnemyAI.ChooseTarget — weighted toward lower-HP%/type-
+    /// effective targets, replacing the old pure Random.Range choice) and a move (EnemyAI.
+    /// ChooseSkill — resolves the attacker's actual equipped skills when a SkillDatabase is
+    /// assigned, bucketed into Damage/SelfSupport/Debuff), then dispatches to the matching
+    /// Resolve* coroutine below. Stops early if the player side is wiped mid-turn. Every beat
+    /// auto-paces via BattleHUDController.ShowTimedMessage instead of gating on a click — the
+    /// enemy's whole turn plays out on its own once the player has clicked Continue at the end of
+    /// their own turn (2026-08-05, user-directed — see DECISIONS.md -> [Combat]).
     /// </summary>
     private IEnumerator EnemyTurn()
     {
@@ -894,74 +911,211 @@ public class BattleManager : MonoBehaviour
             List<BattleParticipant> aliveTargets = _state.PlayerSide.FindAll(p => p.IsAlive);
             if (aliveTargets.Count == 0) yield break;
 
-            BattleParticipant target = aliveTargets[Random.Range(0, aliveTargets.Count)];
+            BattleParticipant target = EnemyAI.ChooseTarget(attacker, aliveTargets, _typeChart);
             int targetSlotIndex = _state.PlayerSide.IndexOf(target);
 
-            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                $"{attacker.DisplayName} is attacking!", BattleConfig.AutoMessageDurationSeconds));
+            SkillData chosenSkill = EnemyAI.ChooseSkill(attacker, _skillDatabase, out EnemyAI.EnemyMoveIntent intent);
 
-            // Both tolerances scale off the DEFENDER's own Instinct + bond, from their respective
-            // bases (Dodge wide/easy, Parry narrow/hard).
-            float dodgeToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
-                target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
-            float parryToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
-                target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
-            yield return StartCoroutine(BattleHUDController.Instance.RunDefenseTimedInput(
-                targetSlotIndex, $"DEFEND — {attacker.DisplayName}! Left-Click Dodge · Right-Click Parry",
-                dodgeToleranceHalfWidth, parryToleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
-
-            BattleHUDController.DefenseOutcome outcome = BattleHUDController.Instance.LastDefenseOutcome;
-            bool defended = outcome != BattleHUDController.DefenseOutcome.Miss;
-            bool isParry = outcome == BattleHUDController.DefenseOutcome.Parry;
-            bool wasPerfect = BattleHUDController.Instance.LastDefenseWasPerfect;
-            float defenseMultiplier = defended ? 0f : 1f;
-
-            int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
-            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
-
-            BattleEngine.QueueBasicAttack(_state, attacker, target, defenseMultiplier, baseDamage);
-            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
-
-            // Perfect Dodge/Parry reward (2026-08-05, user-directed — see DECISIONS.md ->
-            // [Combat]: "Perfect dodges and parrys restore aura"), on top of avoiding the hit
-            // (and, for Parry, the counter-attack below).
-            if (defended && wasPerfect) target.RestoreAura(BattleConfig.PerfectDefenseAuraRestore);
-
-            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-            LogDefenseResult(results, attacker, target, typeMultiplier, defended, isParry);
-            if (defended && wasPerfect) BattleHUDController.Instance.AppendBattleLog($"{target.DisplayName} restores Aura!");
-
-            // "Taking hits" (GDD §9.3's third Evolution Burst fill source) — only when the hit
-            // actually landed (defended means 0 damage was applied, so a full Dodge/Parry
-            // shouldn't count as "taking a hit").
-            if (!defended) AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken);
-
-            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                defended ? $"{target.DisplayName} defended!" : $"{target.DisplayName} was hit!",
-                BattleConfig.AutoMessageDurationSeconds));
-
-            // Parry's reward half: a successful Parry triggers an automatic counter-attack against
-            // the now-vulnerable attacker. No timing check on the counter — it's a bonus for
-            // landing the harder input, not another QTE.
-            if (defended && isParry && attacker.IsAlive)
+            switch (intent)
             {
-                int counterDamage = DamageCalculator.ComputeDamage(target, attacker, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
-                float counterTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(target, attacker, _typeChart);
+                case EnemyAI.EnemyMoveIntent.SelfSupport when chosenSkill != null:
+                    yield return StartCoroutine(ResolveEnemySelfSupportAction(attacker, chosenSkill));
+                    break;
 
-                BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
-                List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
-                AccumulateDamageDealt(counterResults);
-                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-                LogResults(counterResults, counterTypeMultiplier, timedInputSuccess: false);
+                case EnemyAI.EnemyMoveIntent.Debuff when chosenSkill != null:
+                    yield return StartCoroutine(ResolveEnemyDebuffAction(attacker, target, chosenSkill));
+                    break;
 
-                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
-                    $"{target.DisplayName} counter-attacks!", BattleConfig.AutoMessageDurationSeconds));
+                default:
+                    yield return StartCoroutine(ResolveEnemyDamageAction(attacker, target, targetSlotIndex, chosenSkill));
+                    break;
             }
         }
 
         BattleHUDController.Instance.HideMoveSelection();
+    }
+
+    /// <summary>
+    /// Resolves an enemy's damaging action against target — a full-avoidance Dodge/Parry defense
+    /// (Combat_Directive Part 4, Expedition 33-inspired — see DECISIONS.md -> [Combat]) followed
+    /// by the hit itself, same flow regardless of which move produced it. skillOrNull null OR a
+    /// BuiltInMoveType.Attack skill reproduces the exact pre-EnemyAI behavior (Physical/
+    /// DamageCalculator.BasicAttackPower, generic "is attacking!" announcement, no Aura spend) —
+    /// this is the critical backward-compat path. A named, non-built-in tree skill mirrors
+    /// ResolveSkillAction's player-side damage-skill branch (PlaceholderSkillResolver's category,
+    /// BattleConfig.PlaceholderSkillPower/PlaceholderSkillAuraCost, named announcement).
+    /// </summary>
+    private IEnumerator ResolveEnemyDamageAction(BattleParticipant attacker, BattleParticipant target, int targetSlotIndex, SkillData skillOrNull)
+    {
+        bool isNamedTreeSkill = skillOrNull != null && skillOrNull.BuiltInMove == BuiltInMoveType.None;
+        if (isNamedTreeSkill) attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            isNamedTreeSkill ? $"{attacker.DisplayName} uses {skillOrNull.SkillName}!" : $"{attacker.DisplayName} is attacking!",
+            BattleConfig.AutoMessageDurationSeconds));
+
+        // Both tolerances scale off the DEFENDER's own Instinct + bond, from their respective
+        // bases (Dodge wide/easy, Parry narrow/hard).
+        float dodgeToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+            target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
+        float parryToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
+            target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
+        // Launches the incoming projectile now, concurrently with the ring below, and pauses it
+        // at the player's edge on arrival (holdForOutcome: true) — whether it actually lands isn't
+        // known until the ring resolves, since the player can click (and therefore Dodge/Parry) at
+        // any point in the sweep, including after the projectile's own scheduled arrival instant.
+        // Resolved into a hit-flash/vanish/deflect below once the real outcome is known
+        // (2026-08-11 timing-sync pass).
+        float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
+            _state.EnemySide.IndexOf(attacker), false, targetSlotIndex, true, GetPrimalTypeOrDefault(attacker), holdForOutcome: true);
+        yield return StartCoroutine(BattleHUDController.Instance.RunDefenseTimedInput(
+            targetSlotIndex, $"DEFEND — {attacker.DisplayName}! Left-Click Dodge · Right-Click Parry",
+            dodgeToleranceHalfWidth, parryToleranceHalfWidth, sweepDuration));
+
+        BattleHUDController.DefenseOutcome outcome = BattleHUDController.Instance.LastDefenseOutcome;
+        bool defended = outcome != BattleHUDController.DefenseOutcome.Miss;
+        bool isParry = outcome == BattleHUDController.DefenseOutcome.Parry;
+        bool wasPerfect = BattleHUDController.Instance.LastDefenseWasPerfect;
+        float defenseMultiplier = defended ? 0f : 1f;
+        if (defended) EventBus.Raise_TimedInputSuccess(target.RuntimeData);
+
+        DamageCategory category = isNamedTreeSkill ? PlaceholderSkillResolver.Resolve(skillOrNull).Category : DamageCategory.Physical;
+        int power = isNamedTreeSkill ? BattleConfig.PlaceholderSkillPower : DamageCalculator.BasicAttackPower;
+        int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, category, power);
+        float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+        BattleEngine.QueueBasicAttack(_state, attacker, target, defenseMultiplier, baseDamage);
+        List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+
+        // Perfect Dodge/Parry reward (2026-08-05, user-directed — see DECISIONS.md ->
+        // [Combat]: "Perfect dodges and parrys restore aura"), on top of avoiding the hit
+        // (and, for Parry, the counter-attack below).
+        if (defended && wasPerfect) target.RestoreAura(BattleConfig.PerfectDefenseAuraRestore);
+
+        BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+        // Hit-flash and Dodge-dissolve for the held projectile launched above already fired
+        // inside RunDefenseTimedInput itself, the instant the outcome was determined (2026-08-11
+        // fix — waiting until here added a real, playtest-confirmed delay). Parry's outline flash
+        // fired there too; only the deflect-and-counter projectile — which needs the
+        // counter-attacker's own Primal type, not known to BattleHUDController — still resolves
+        // here, and doubles as the counter-attack's own hit VFX below.
+        if (isParry) BattleHUDController.Instance.ResolveParryDeflect(GetPrimalTypeOrDefault(target));
+
+        LogDefenseResult(results, attacker, target, typeMultiplier, defended, isParry);
+        if (defended && wasPerfect) BattleHUDController.Instance.AppendBattleLog($"{target.DisplayName} restores Aura!");
+
+        // "Taking hits" (GDD §9.3's third Evolution Burst fill source) — only when the hit
+        // actually landed (defended means 0 damage was applied, so a full Dodge/Parry
+        // shouldn't count as "taking a hit").
+        if (!defended) AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken);
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            defended ? $"{target.DisplayName} defended!" : $"{target.DisplayName} was hit!",
+            BattleConfig.AutoMessageDurationSeconds));
+
+        // Parry's reward half: a successful Parry triggers an automatic counter-attack against
+        // the now-vulnerable attacker. No timing check on the counter — it's a bonus for
+        // landing the harder input, not another QTE.
+        if (defended && isParry && attacker.IsAlive)
+        {
+            int counterDamage = DamageCalculator.ComputeDamage(target, attacker, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+            float counterTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(target, attacker, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
+            List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(counterResults);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+            // No separate projectile here — ResolveParryDeflect (above) already launched the
+            // visual return-fire this counter-attack's damage is resolving against.
+            LogResults(counterResults, counterTypeMultiplier, timedInputSuccess: false);
+
+            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                $"{target.DisplayName} counter-attacks!", BattleConfig.AutoMessageDurationSeconds));
+        }
+    }
+
+    /// <summary>
+    /// Resolves an enemy's self-targeted support move — the 3 self-support built-ins mirror
+    /// ResolveBuiltInMove's Charge/Heal/Regen cases exactly (same Aura costs/effects), minus the
+    /// player-only HUD status-icon calls (SetRegenStatus/AddBurstFill index into player-only
+    /// nameplate arrays — see BattleHUDController — and Burst is explicitly player-only scoped,
+    /// see BattleParticipant.BurstGauge). A self-targeted tree skill (BuiltInMove == None) mirrors
+    /// ResolveSkillAction's self-targeted-status branch, applied to attacker instead of target.
+    /// </summary>
+    private IEnumerator ResolveEnemySelfSupportAction(BattleParticipant attacker, SkillData skill)
+    {
+        switch (skill.BuiltInMove)
+        {
+            case BuiltInMoveType.Charge:
+                attacker.RestoreAura(BattleConfig.ChargeAuraRestore);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} charges, restoring Aura!");
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} charges!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+
+            case BuiltInMoveType.Heal:
+                attacker.SpendAura(BattleConfig.HealAuraCost);
+                attacker.Heal(BattleConfig.HealAmount);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} heals {BattleConfig.HealAmount} HP!");
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} uses H!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+
+            case BuiltInMoveType.Regen:
+                attacker.SpendAura(BattleConfig.RegenAuraCost);
+                attacker.ApplyRegen(BattleConfig.RegenHealPerTurn, BattleConfig.RegenDurationTurns);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} uses Aura Regen!");
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} uses R!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+
+            default: // BuiltInMoveType.None -> self-targeted status tree skill
+            {
+                attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
+                PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
+                StatusEffectType status = resolution.AppliedStatus.Value;
+                StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
+                int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
+                    attacker.RuntimeData.EffectiveStat(StatType.Resonance), attacker.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
+
+                attacker.ApplyStatus(status, duration);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatStatusApplied(attacker, status, duration));
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves an enemy's non-self-targeted status tree skill against target — mirrors
+    /// ResolveSkillAction's non-self-targeted status branch, no defense/timed-input flow (status
+    /// skills were never subject to Dodge/Parry on the player side either).
+    /// </summary>
+    private IEnumerator ResolveEnemyDebuffAction(BattleParticipant attacker, BattleParticipant target, SkillData skill)
+    {
+        attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
+
+        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
+        StatusEffectType status = resolution.AppliedStatus.Value;
+        StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
+        int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
+            attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
+
+        target.ApplyStatus(status, duration);
+        BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+        BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatStatusApplied(target, status, duration));
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
     }
 
     /// <summary>Appends one battle log line per resolved offensive action — normally exactly one, since only a single attack is ever queued per call site.</summary>

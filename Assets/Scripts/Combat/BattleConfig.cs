@@ -115,4 +115,53 @@ public static class BattleConfig
     /// "uses the turn regardless of outcome" move in this file. Placeholder value, not playtested.
     /// </summary>
     public const float FleeSuccessChance = 0.8f;
+
+    /// <summary>
+    /// Enemy target-selection weighting (2026-08-10 — enemy AI heuristic pass, closing out the
+    /// Combat_Directive_v0_1_0.md-flagged gap that EnemyTurn was pure Random.Range target choice).
+    /// EnemyAI.ComputeTargetWeight scores each alive candidate as
+    /// 1f + hpFactor * EnemyTargetLowHpWeight + typeFactor * EnemyTargetTypeEffectivenessWeight,
+    /// then ChooseTarget draws a weighted-random pick over those scores — every target keeps a
+    /// nonzero chance (the "+1f" floor), this only biases the odds. This is a heuristic upgrade,
+    /// not the real AI decision-making framework Combat_Directive_v0_1_0.md flags as pending
+    /// design (GDD §18.6) — see EnemyAI.cs's class doc comment. TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const float EnemyTargetLowHpWeight = 2f;
+    public const float EnemyTargetTypeEffectivenessWeight = 1f;
+
+    /// <summary>
+    /// Enemy self-support move selection (2026-08-10 — see EnemyAI.ChooseSkill). Below this
+    /// fraction of max HP, an enemy with an equipped self-support move (Charge/Heal/Regen, or a
+    /// self-targeted status skill per PlaceholderSkillResolver) has EnemySelfCareChance odds of
+    /// using it instead of attacking. Same placeholder-heuristic scope note as the weights above.
+    /// TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const float EnemySelfCareHpThreshold = 0.35f;
+    public const float EnemySelfCareChance = 0.5f;
+
+    /// <summary>
+    /// Placeholder projectile travel speed, in Stage-local pixels/second (2026-08-11 — combat
+    /// feedback timing-sync pass). Combined with the real edge-to-edge distance between attacker
+    /// and target, this derives how long a hit's timing-ring sweep needs to be
+    /// (BattleHUDController.ComputeSweepDurationForTravelTime) so the ring's "perfect" instant
+    /// always lines up with the moment the projectile visually connects — replacing the old flat
+    /// TimedInputConfig.MarkerSweepDuration at the real attack call sites. A single flat value for
+    /// every attack today, same "plumbing supports variation, values are placeholder" convention as
+    /// every other constant in this file — different skills getting their own speed is future
+    /// content (multi-hit/rhythm attacks), not built yet. TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const float ProjectileSpeed = 700f;
+
+    /// <summary>
+    /// Hard ceiling on a projectile's computed travel time, in seconds (2026-08-11 — fixes the
+    /// "stuck" feeling on defense: since the timing ring's sweepDuration is derived from travel
+    /// time, and the ring keeps running after the projectile visually arrives until the player
+    /// clicks or times out, a long travel time also means a long silent wait afterward — roughly
+    /// another ~0.93x the travel time again, since "perfect" sits at ~52% of the sweep. Capping
+    /// travel time here caps that wait proportionally too, without touching the ring-perfect
+    /// alignment math or the click-timing rules at all — a long-distance matchup's projectile
+    /// just moves faster than ProjectileSpeed would otherwise imply, same as any other placeholder
+    /// number in this file. TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const float MaxProjectileTravelDuration = 0.8f;
 }

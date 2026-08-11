@@ -56,7 +56,10 @@ Assets/
     Combat/      ← BattleManager, SkillSystem, StatusEngine, DamageCalculator ← Phase 3, not yet created
     World/       ← WorldChunkManager, EncounterTrigger, ZoneManager
     UI/          ← HUD, PartyScreen, SkillTreeUI, BondDisplay
-    Audio/       ← AudioManager ← Phase 3, not yet created
+    Audio/       ← AudioManager, AudioCueCatalog ← Done (2026-08) — pooled SFX playback,
+                   Inspector-swappable clip catalog; catalog itself still unauthored (no
+                   audio content assigned yet, all Play* calls silently no-op — see
+                   CHANGELOG.md's 2026-08-10 "Blocked" note)
     Save/        ← SaveSystem, SaveData ← Done (2026-08) — real Application.persistentDataPath
                    persistence, 3 manual slots, auto-continue by newest file write time
   Prefabs/
@@ -68,6 +71,7 @@ Assets/
     EvolutionBranches/ ← EvolutionBranchData SOs ← Phase 3, not yet created
     TypeCharts/  ← PrimalTypeChart SO (8×8 multiplier table) ← Phase 3, not yet created
     Aura/        ← AuraTypeData SOs (Common, Specific, RareVariant) ← Phase 3, not yet created
+    Audio/       ← AudioCueCatalog.asset ← Done (2026-08) — see Scripts/Audio/ above
 ```
 Directories marked `← Phase 3, not yet created` are documented as the intended structure but do not
 exist on disk yet (only stray `.meta` files, no real folder/content) — confirmed by repo audit

@@ -16,6 +16,294 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-11] Phase 3 follow-up — Projectile pass-through, [UI-003] Attack orb dead-zone
+- **Context:** Fifth same-session round. Two more playtest items: the Dodge dissolve should read
+  as the incoming attack passing through empty space where the creature used to be, not two
+  separately-timed effects; and a specific, reproducible UI bug on the middle party slot's Attack
+  orb.
+- **Projectile pass-through:** `CombatVfxController.ResolveHeldProjectileAsPassThrough` replaces
+  the old in-place fade — the held projectile now continues from its near-edge position, through
+  the defender, to the mirrored far edge, before fading and releasing. Timed to take EXACTLY
+  `DissolveVfxBridge.DissolveOutDuration` (a new public property, read by `BattleHUDController.
+  ResolveDodgedProjectile`) rather than a distance/speed-derived duration — guarantees the pass-
+  through and the dissolve-out are genuinely synced, not two independently-timed effects that
+  happen to overlap.
+- **[UI-003] fixed** — see `KNOWN_ISSUES.md` for the full root-cause writeup. Short version:
+  `[EDITOR-001]`'s 2026-08-08 fix made `StatusHeader` win pick priority over `.stage` (needed for
+  nameplate/burst-gauge clicks), but `StatusHeader`'s own bounds are broad enough that the middle
+  party slot's upward stagger pushes its Attack orb's top ~60% into that overlap, so
+  `StatusHeader` itself silently swallowed clicks meant for the orb underneath. Fixed with
+  `StatusHeader.pickingMode = PickingMode.Ignore` in `Awake()` — confirmed via live `IPanel.Pick()`
+  testing (both the orb resolving correctly now, and nameplates still resolving correctly,
+  confirming no regression of the original fix this builds on).
+- **Verified:** 275/275 EditMode tests. Live Play Mode for both: pass-through triggered without
+  exceptions; orb fix confirmed via direct `Pick()` calls using the real `Awake()`-set value in a
+  fresh session (an earlier same-call combined test gave a misleading result due to a stale-layout
+  race — redone with a real frame gap between opening the move wheel and querying bounds).
+- **Next:** Playtest the pass-through timing/feel, and confirm the orb fix holds for all 3 party
+  slots across a real (not scripted) move-wheel interaction. Attack visual pattern variety
+  (different attacks reading as visually distinct, not just color-tinted) was raised but
+  deliberately deferred, not implemented — see `DECISIONS.md` -> `[Combat] Open note — Attack
+  visual pattern variety` for the scoped-out approach and, critically, the one real design
+  question that needs answering before writing code: does "Melee" mean a different projectile
+  shape, or does the attacker's own sprite lunge instead of using a projectile at all.
+
+[2026-08-10] Phase 3 follow-up — Post-playtest tuning: dissolve speed/granularity, Dodge/Parry spread
+- **Context:** Fourth same-session round, both quick numeric retunes from live playtest feedback
+  on the previous two entries' work — no structural changes.
+- **Dissolve feel:** `DissolveVfxBridge`'s three timing fields sped up 0.3s/0.15s/0.3s ->
+  0.2s/0.1s/0.2s (out/hold/reappear). `DissolveEffect.mat`'s `_NoiseScale` raised 8 -> 18 for a
+  more granular fragmentation pattern (confirmed via pixel sampling: 12 distinct visible/invisible
+  transitions across a center scanline at 50% dissolve, vs. a couple large blobs before).
+- **Dodge/Parry spread:** user observed the Dodge window (30% total spread, i.e. the 0.15
+  half-width from the prior retune) still felt too wide live. Tightened both further:
+  `TimedInputConfig.DodgeToleranceHalfWidth` 0.15 -> 0.10 (20% total spread), `ParryToleranceHalfWidth`
+  0.05 -> 0.025 (5% total spread) — both symmetrical around the ring's 1.0 ratio by construction.
+- **Verified:** 275/275 EditMode tests after each change.
+- **Next:** Another playtest pass to confirm the tighter Dodge/Parry windows and faster/more
+  granular dissolve feel right together, not just individually.
+
+[2026-08-10] Phase 3 follow-up — Cue-timing fix, real Shader Graph-equivalent Dodge dissolve
+- **Context:** Third same-session round. Playtest found the purple Parry outline still read as
+  delayed ("flashes purple immediately after it shoots the parry attack") and the Dodge cue wasn't
+  visible at all — root cause: both fired from BattleManager's dispatch, which only runs after
+  RunDefenseTimedInput's own ~0.3s ring-flash hold PLUS all of BattleManager's subsequent damage/
+  logging work, not at the actual moment of the hit. Separately, the user asked for the Dodge cue
+  to become a real Shader Graph dissolve — but clarified twice: first that Unity MCP tooling can't
+  author an actual `.shadergraph` node asset (only raw shader code), confirmed proceeding with a
+  hand-coded URP-equivalent; then, more importantly, that the dissolve should apply to the
+  DEFENDER'S OWN creature (not the projectile, which was the original build) — the Phasix itself
+  phases out and back in, not the incoming attack.
+- **Fixed — cue timing:** Moved the Hit-flash/Dodge-resolve/Parry-outline-flash triggers from
+  BattleManager's post-coroutine dispatch into `RunDefenseTimedInput` itself, firing immediately
+  once `LastDefenseOutcome` is set, before its own 0.3s hold. Only the Parry deflect-and-counter
+  projectile (needs the counter-attacker's own Primal type, which only BattleManager knows) still
+  resolves after the coroutine returns.
+- **Built — real Shader Graph-equivalent dissolve on the defender:**
+  - `Assets/Shaders/DissolveEffect.shader` — hand-coded URP shader (noise-clip + edge glow, the
+    standard dissolve technique) with a circular mask baked into the fragment shader via
+    UV-distance-from-center, so a plain Quad primitive renders as a circle with no separate sprite
+    asset needed.
+  - Discovered mid-build that `BattleHUDPanelSettings.asset` is Screen Space Overlay, which Unity
+    always composites on top of every camera's output — a normal world-space MeshRenderer would be
+    completely invisible behind the HUD. Bridged around this with a RenderTexture pipeline: a
+    dedicated `_DissolveVfxCamera` (culled to a new `CombatDissolveVfx` layer only) renders
+    `_DissolveVfxQuad` (carrying the new `DissolveEffect.mat`) into
+    `Assets/Textures/DissolveCaptureRT.renderTexture`, which `DissolveVfxBridge.cs` then displays
+    AS the defender's own stage-creature `VisualElement`'s `background-image` for the effect's
+    duration — from the panel's perspective it's just another UI image, composited correctly.
+  - `DissolveVfxBridge` (new, singleton in `SampleScene`, same `DontDestroyOnLoad` pattern as
+    `AudioManager`) drives `_DissolveAmount` 0→1→0 via `MaterialPropertyBlock` (out/hold/reappear),
+    tinted by whatever color the defender's element already has (its own Primal type — read
+    directly, no extra data needs to be threaded in from BattleManager).
+  - Projectile's own Dodge behavior simplified to a quick, unremarkable fade — the real "you
+    dodged!" cue is now the defender dissolving, not the incoming attack.
+- **Bug found and fixed mid-build:** the RenderTexture was created with `depth=0`, which URP's
+  Render Graph API flagged: "the output Render Texture must have a depth buffer." Fixed by giving
+  it a real depth-stencil format (`D32_SFloat`, Unity's closest match to the requested 24-bit).
+- **Verified:** 275/275 EditMode tests. Live Play Mode, checked with real pixel reads (not just
+  visual inspection): confirmed the shader's dissolve clip is monotonic (799→575→253→33→0 visible
+  sample points as `_DissolveAmount` rises 0→1) and the circular mask correctly clips corners to
+  transparent. Confirmed the full trigger→dissolve-out→hold→reappear→revert cycle restores the
+  defender's element to its exact original color and clears the `background-image` override, with
+  zero console errors throughout. One debugging note for future sessions: `style.X.value` can read
+  stale/default immediately after setting an inline style in the same frame — `resolvedStyle.X` is
+  the reliable read, confirmed twice this session (border width earlier, backgroundImage here).
+- **Next:** Manual playtest of the full Dodge/Parry feel now that both cues fire at the right
+  moment and Dodge has a real dissolve. Consider whether Parry deserves a similarly "real" visual
+  treatment later (currently still the UI Toolkit border-flash + deflected projectile), and whether
+  the dissolve's `_dissolveOutDuration`/`_dissolveHoldDuration`/`_dissolveInDuration` (0.3s/0.15s/
+  0.3s placeholders) feel right at actual play speed.
+
+[2026-08-10] Phase 3 follow-up — Dodge/Parry mechanic tuning, real dissolve/outline cues
+- **Context:** Second round of same-session user feedback. `MaxProjectileTravelDuration` bumped
+  0.6s -> 0.8s per request (speed felt too fast at 0.6s). Bigger issue: the "held, waiting" state
+  still looked wrong regardless of tuning, and the Dodge/Parry visual cues built earlier were
+  never actually seen in testing — likely because the "stuck" complaints came from slow/no-click
+  testing, which only ever resolves as a Miss, never a Dodge or Parry.
+- **Decided (three changes, all user-specified with real numbers, not open questions this time):**
+  1. **Tighter tolerances** — `TimedInputConfig.DodgeToleranceHalfWidth` 0.25 -> 0.15, `ParryToleranceHalfWidth`
+     0.10 -> 0.05 (Dodge ±15%, Parry ±5% of the target ring), now that ring timing is synced to a
+     real projectile arrival instant rather than an arbitrary fixed sweep.
+  2. **Early ring termination** — `RunDefenseTimedInput` now breaks its wait loop the moment the
+     marker/target ratio drops past Dodge's lower tolerance bound, resolving as Miss immediately
+     instead of running out the rest of `sweepDuration`. This is NOT a guess or a fixed delay (the
+     user's own earlier "auto-hit after 0.25-0.5s" idea was explicitly rejected for risking a late-
+     but-valid Dodge/Parry contradicting an already-committed hit) — since MarkerRadius only
+     shrinks over time, once the ratio passes that bound no future click can ever succeed, so the
+     outcome is already mathematically certain. Fixes the "stuck" feeling at its root rather than
+     just papering over it with animation, on top of last entry's idle-pulse/travel-cap fixes.
+  3. **Real Dodge/Parry cues** — Dodge's fade became an actual dissolve (`DissolveAndRelease`:
+     shrinks via the existing `SetPulseScale` alongside the alpha fade, lengthened to 0.35s so it
+     reads as deliberate). Parry gained a new immediate cue: a bright purple outline flash
+     (`ParryOutlineFlashRoutine`, new `SetUniformBorder` helper) around the DEFENDER's own stage
+     element the instant the parry registers — separate from and prior to the existing
+     deflect-and-return-projectile beat, which still plays out afterward as the counter-attack's
+     hit feedback.
+- **Verified:** 275/275 EditMode tests throughout (no regressions from the tolerance/early-exit
+  changes). Live Play Mode: confirmed Dodge dissolve and Parry deflect+outline trigger without
+  exceptions; confirmed the outline's inline `style.borderTopWidth`/color are set correctly at the
+  moment of resolution (a `resolvedStyle` read in the same frame showed 0 width — a known one-
+  frame-stale layout-pass artifact, not a real bug, confirmed by checking the inline `style` value
+  directly instead). Could NOT empirically pin down the early-exit's exact timing via Unity MCP —
+  round-trip latency between tool calls proved too variable to reliably catch a specific few-
+  second window, the same category of limitation already flagged for click-timing-feel
+  verification. The early-exit logic is a single conditional using the same live ring values the
+  existing Miss/Dodge/Parry classification already depends on, so correctness rests on code review
+  + the unchanged EditMode suite rather than an empirical timing measurement this session.
+- **Next:** Manual playtest — this is the first pass where a real Dodge/Parry/Miss are all
+  actually reachable and visually distinct; worth confirming live that Parry's outline reads
+  clearly and that the tighter tolerances (±5%/±15%) don't feel unfairly hard now that the ring is
+  timing-synced.
+
+[2026-08-10] Phase 3 follow-up — Projectile-driven timing sync, bigger blob, Dodge/Parry resolution
+- **Context:** Same-session follow-up to the combat feedback pass below, user-directed: the
+  placeholder projectile was too small to read clearly, and its timing was fully decoupled from
+  the existing Dodge/Parry/offense timing ring (RunTimedInput/RunDefenseTimedInput) — it just
+  played as a fixed-duration effect after the ring already resolved, with no relationship between
+  "when the ring calls perfect" and "when the projectile visually lands."
+- **Decided (after two rounds of confirming the mechanic before touching code, per the user's
+  explicit ask):** Reversed the dependency the user originally proposed — rather than sizing the
+  projectile's speed off the ring's fixed timing, `BattleConfig.ProjectileSpeed` (px/sec) is now
+  the real tunable, and the ring's `sweepDuration` is DERIVED from the projectile's actual
+  edge-to-edge travel time so the ring's "perfect" instant always lines up with the moment the
+  projectile connects, regardless of matchup distance. New `BattleHUDController.
+  ComputeSweepDurationForTravelTime` exposes the ring-geometry math
+  (`(RingMarkerStartRadius-RingTargetRadius)/(RingMarkerStartRadius-RingMarkerMinRadius)`,
+  independent of stats/tolerance) needed to convert a travel time into a matching sweep duration.
+  `CombatVfxController.ComputeTravelDuration`/`LaunchProjectile` compute real edge-to-edge distance
+  (center distance minus both the projectile's and target's radii) and are called BEFORE the ring
+  starts, so both launch already agreeing on timing.
+- **Built:**
+  - `CombatProjectileVisual.Radius` bumped 8px -> 18px, plus a white outline stroke for contrast;
+    added `SetAlpha` for the new Dodge vanish-fade.
+  - Offense (`ResolveSkillAction`'s damage branch, `ResolveBuiltInMove`'s Attack case): projectile
+    now launches concurrently with `RunTimedInput`, resolves immediately on arrival (offense always
+    connects, so no hold needed).
+  - Defense (`ResolveEnemyDamageAction`): projectile launches concurrently with
+    `RunDefenseTimedInput` in a new "held" state — it can't resolve on arrival because whether the
+    hit actually lands isn't known until the ring itself finishes (Dodge's wide window means a
+    valid click can land well after the projectile's scheduled arrival). Three new
+    `BattleHUDController` methods resolve it once `LastDefenseOutcome` is known: `ResolveHitProjectile`
+    (flash), `ResolveDodgedProjectile` (fade out in place), `ResolveParryDeflect` (reuses the SAME
+    projectile instance, reverses it back toward the original attacker re-tinted as the
+    counter-attacker's own type — this visual IS the counter-attack's hit feedback now, so the
+    separate projectile call that used to fire for the counter block was removed).
+- **Bug found and fixed during Play Mode verification:** the hit-flash's revert step was restoring
+  the struck creature's stage color to the ATTACKER's Primal type (the flash tint's source) instead
+  of the struck creature's OWN type — live-verified via a screenshot showing an enemy permanently
+  repainted blue after a Water-tinted test hit. Fixed by capturing the element's real
+  `resolvedStyle.backgroundColor` at flash-start and reverting to that literal captured value
+  instead of recomputing a color from any `PrimalType` — correct regardless of caller, no more
+  "which type should this revert to" ambiguity.
+- **Verified:** 275/275 EditMode tests (3 new `BattleHUDControllerTests` covering the pure
+  sweep-duration formula in isolation, no UIDocument required). Live Play Mode: launched real
+  projectiles against actual scene geometry (confirmed sane, non-degenerate sweep durations at
+  BattleConfig.ProjectileSpeed=700px/s), exercised all three resolve paths (hit/dodge/parry-deflect)
+  including redundant no-held-projectile calls (correctly no-op), and confirmed the color-revert fix
+  with a direct before/after color-value comparison (not just visual inspection).
+- **Blocked:** the actual click-timing FEEL (does landing a real click when the projectile visually
+  connects genuinely read as "perfect"?) can't be verified via Unity MCP — this project's own
+  synthetic-pointer-event dispatch is a documented limitation (see LESSONS_LEARNED.md), so
+  RunTimedInput/RunDefenseTimedInput's live click-driven loop can't be automated. Needs a manual
+  playtest.
+- **Next:** Manual playtest of the timing feel — BattleConfig.ProjectileSpeed=700px/s currently
+  produces ~3.1s ring sweeps at this scene's actual stage-element spacing (vs. the old flat 1.2s),
+  which may read as too slow; it's a single constant to retune if so.
+
+- **Same-session follow-up (user feedback from a real playtest):** the held-projectile "stuck"
+  feeling on defense — a frozen blob sitting at the target for however long the player took to
+  click, worst case up to the full ring sweep on a timeout — was exactly the hold-until-resolved
+  design working as built, just uncomfortable in practice. Two fixes, both purely additive (no
+  click-timing rules touched):
+  - New `BattleConfig.MaxProjectileTravelDuration` (0.6s placeholder) caps how long a projectile's
+    computed travel can be; since sweepDuration derives from travel time, this proportionally caps
+    the post-arrival wait tail too — cut the worst-case sweep from ~3.1s to ~1.16s in this scene.
+  - Held projectiles now play a gentle breathing pulse (`CombatProjectileVisual.SetPulseScale`)
+    instead of freezing solid while waiting on `RunDefenseTimedInput`'s real outcome — reads as
+    "poised, about to land" rather than broken.
+  - Fixed a latent bug surfaced while building this: resolving a held projectile never stopped its
+    travel/idle coroutine, so an unusually fast click (resolving before the projectile's own
+    animation naturally finished) could leave that coroutine still running on an element the pool
+    had already released back out for a new, unrelated launch. Every `Resolve*` method now stops
+    the tracked coroutine first — live-verified via 15 rapid launch-then-immediately-resolve cycles
+    (5 each of hit/dodge/parry-deflect) with zero exceptions.
+  - Explicitly did NOT implement the originally-proposed "auto-count as a hit ~0.25-0.5s after
+    arrival" — flagged to the user that it would make a legitimately late (but still valid) Dodge/
+    Parry click visually contradict an already-committed hit-flash, which is worse than the
+    freeze it was meant to fix. `ProjectileSpeed`/`MaxProjectileTravelDuration` remain the tuning
+    levers if the feel still isn't right after a playtest.
+  - 275/275 EditMode tests unaffected (no new automatable coverage here — this is animation/timing
+    feel, verified live via Play Mode + direct field inspection instead).
+
+[2026-08-10] Phase 3 close-out — Enemy AI heuristics, combat audio/VFX feedback layer
+- **Context:** Combat (Phase 3) was functionally complete per the roadmap gate — real battle
+  loop, damage formula, status/combo/skill-tree infrastructure, 256/256 tests, zero open bugs —
+  but genuinely thin in two specific ways CLAUDE.md's original folder structure had scoped as
+  Phase 3 work and never finished: `Assets/Scripts/Audio/` was a single fully-stubbed file, and
+  `EnemyTurn` was pure `Random.Range` target choice with one hardcoded basic attack. Planning
+  originally also scoped an items-in-battle framework for this pass; research found it has zero
+  design backing anywhere (not even the Combat Directive mentions it), and even the one item named
+  in the docs (Signal Swap Item, GDD §16.3) turned out to be explicitly tagged `PENDING` at GDD
+  §22.2 — items were dropped from scope entirely, see the new `DECISIONS.md` → `[Items]` open note.
+- **Built:**
+  - `EnemyAI.cs` (new, `Assets/Scripts/Combat/`) — `ComputeTargetWeight`/`ChooseTarget` (weighted
+    toward lower-HP%/type-effective targets via the existing `PrimalTypeChart.GetMultiplier`) and
+    `ChooseSkill` (buckets an enemy's real equipped skills — seeded via
+    `WildSpawnSystem.SeedInitialSkills` — into Damage/SelfSupport/Debuff via `BuiltInMoveType` and
+    `PlaceholderSkillResolver`, hard-excluding Capture). 4 new placeholder `BattleConfig` constants.
+    Deliberately scoped as a heuristic upgrade, not the real AI decision framework
+    `Combat_Directive_v0_1_0.md` flags as pending design (GDD §18.6).
+  - `BattleManager.EnemyTurn` restructured into `ResolveEnemyDamageAction`/
+    `ResolveEnemySelfSupportAction`/`ResolveEnemyDebuffAction`, dispatched by `EnemyAI`. The
+    `skillOrNull == null` fallback path reproduces the old hardcoded-Attack behavior byte-for-byte —
+    verified via the full existing EditMode suite staying green throughout.
+  - `AudioManager.cs` + `AudioCueCatalog.cs` (new, `Assets/Scripts/Audio/`) — pooled
+    `AudioSource` playback (`UnityEngine.Pool.ObjectPool<T>`, first pooling implementation in the
+    codebase, per Technical Directive §12.4) reading clips from a real `[CreateAssetMenu]`
+    ScriptableObject asset (`Assets/Data/Audio/AudioCueCatalog.asset`) rather than this codebase's
+    other static-Dictionary "catalog" convention — the whole point is Inspector-swappable clip
+    references, zero code changes to replace a placeholder with a real asset later.
+  - `CombatProjectileVisual.cs`/`CombatVfxController.cs` (new, `Assets/Scripts/Combat/`) — a
+    pooled placeholder projectile (simple `Painter2D`-drawn diamond, patterned off the existing
+    `DragLineVisual`) that travels between stage-creature positions and flashes the target on
+    arrival, tinted by the acting creature's Primal type (`PrimalTypeColor.GetColor`/
+    `GetUnderglowColor`). Owned by `BattleHUDController` (new `PlayHitVfx` public method,
+    called by `BattleManager` at its 4 real damage-landing call sites — player skill/attack,
+    enemy attack/skill, and the Parry counter-attack), not a separate scene singleton, since it
+    needs direct UI Toolkit element access and `BattleManager` never touches those directly.
+  - `BattleAudioVfxHooks.cs` — all 9 previously-empty handler bodies filled in, fanning out to
+    `AudioManager` (all 9) and `BattleHUDController`'s whole-Stage VFX pulses (outcome/bond-
+    milestone/capture — the per-hit projectile/flash goes through the direct `PlayHitVfx` call
+    sites above instead, since `OnDamageTaken` only carries the damaged creature, not attacker+
+    target+position). Two previously-dead `EventBus` events (`Raise_SkillUsed`,
+    `Raise_TimedInputSuccess`) got their first real call sites, in `BattleManager`.
+- **Bug found and fixed during verification:** the very first EditMode run after wiring
+  `OnBondMilestoneReached` crashed unrelated `BondSystemTests` with a `MissingReferenceException`
+  on `BattleHUDController`. Root cause: `BattleHUDController.Instance` was never cleared on
+  destroy, so after `BattleScene_Main` unloads it's a Unity "fake null" — and C#'s `?.` operator
+  does NOT catch that (it bypasses `UnityEngine.Object`'s overloaded `==`), so any bond milestone
+  reached outside of battle after any battle has ever run would have thrown this in real gameplay,
+  not just in tests. Fixed with a new `BattleHUDController.OnDestroy()` clearing `Instance` (guarded
+  on `== this`). Confirms the value of running the full suite, not just new tests, after wiring a
+  previously-dead event into new subscribers.
+- **Verified:** 272/272 EditMode tests green (256 existing + 16 new — `EnemyAITests`,
+  `AudioCueCatalogTests`) throughout. Live Play Mode verification via Unity MCP against real
+  project assets (not synthetic test fixtures): enemy skill selection shows genuine variety across
+  a real creature's actual equipped skills (Attack/Utility Skill 1/Utility Skill 2 all chosen over
+  300 trials), low-HP targeting picked ~74% vs. a 50% uniform baseline, Capture never AI-selected,
+  all 9 audio hook call paths fire without error end-to-end via real `EventBus` events, and all 4
+  VFX passthroughs (including an out-of-range slot no-op) execute cleanly in a real loaded
+  `BattleScene_Main` with no leftover visual artifacts after animations complete.
+- **Blocked:** placeholder SFX generation (`mcp__unity-mcp__generate_audio`, fal.ai-backed) — no
+  API key configured in the Unity MCP Asset Generation tab. `AudioCueCatalog`'s fields are all
+  still empty; `AudioManager.PlayClip` is a designed-in null-safe no-op for this case, so nothing
+  is broken, just silent until a key is configured and clips are generated/assigned.
+- **Next:** Configure the fal.ai key (MCP for Unity → Asset Generation tab) and generate/assign
+  the 9 placeholder SFX into `Assets/Data/Audio/AudioCueCatalog.asset` to make the audio layer
+  actually audible. Items/Economy (§22) still needs a real design pass from the user before any
+  item system is built — see `DECISIONS.md` → `[Items]` open note for the specific questions.
+
 [2026-08-10] Bugfix — Orphaned components removed from UIRoot_BattleSummary in BattleScene_Main
 - **Context:** Asked "what's next" again with no specific feature in mind — zero open bugs,
   256/256 tests passing per the last session. Ran the CLAUDE.md planning checklist, and

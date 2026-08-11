@@ -13,6 +13,52 @@ _(none currently open)_
 
 ## Closed Issues
 
+### [UI-003] — Middle party slot's Attack orb has a click dead-zone — CLOSED (fixed)
+**Status:** Closed — fixed same session, verified live via `IPanel.Pick()` before/after against the real `Awake()` code path
+**Affects:** `Assets/Scripts/Combat/BattleHUDController.cs`
+**Description:** User report, playtested with a full 3-party battle: hovering the "A" (Attack)
+skill orb on the MIDDLE party slot only registered clicks near its edges, not its center — every
+other orb on every other slot, and every other orb on the same slot, worked fine. Root cause,
+confirmed live via `IPanel.Pick()` at the orb's own on-screen coordinates: `[EDITOR-001]`'s fix
+(2026-08-08, below) made `StatusHeader` paint/pick ABOVE `.stage` so nameplate/burst-gauge clicks
+would win over `.stage`'s own full-area invisible backdrop — but `StatusHeader`'s bounds are
+nearly the whole top of the screen (`(0, 28, 1920, 331)`), and the middle slot's upward stagger
+(`ApplyStageCreatureStagger`, `StageCreatureStaggerY = {0, -45, 25}` — slot 1 pushed up 45px)
+combined with the Attack orb's own upward-right ring position pushes that ONE orb's top ~60% into
+`StatusHeader`'s overlap — `Pick()` at the orb's center returned `StatusHeader` itself, not the
+orb underneath, even though the orb is what's visually on top there. No other slot's stagger/orb
+combination reaches far enough into that overlap to trigger this.
+**Fix:** `StatusHeader.pickingMode = PickingMode.Ignore`, set once in `Awake()`. `StatusHeader` is
+a pure layout container (`position: absolute`, pulled out of flex flow — see `BattleHUD.uss`'s own
+comment) with no click behavior of its own anywhere in the codebase, so making it click-transparent
+is safe — confirmed live that every nameplate bar/burst-track descendant (the reason `[EDITOR-001]`
+needed the reordering in the first place) still resolves correctly to itself, since a parent's
+`pickingMode` doesn't affect its children's own independent picking.
+**Verified:** `Pick()` at the middle slot's Attack orb center changed from resolving to
+`StatusHeader` (wrong) to `PlayerStageSlot1_SkillSlot0` (correct) after the fix, using the real
+`Awake()`-set value in a fresh Play Mode session (not just a manual runtime patch). A nameplate bar
+center still correctly picks its own descendant, not `.stage`'s backdrop, confirming no regression
+of `[EDITOR-001]`. 275/275 EditMode tests unaffected (no coverage change — UI Toolkit picking-mode
+fix, no C# logic changed).
+**Closed:** 2026-08-11, same session.
+
+### [AUDIO-001] — BattleHUDController.Instance stale reference crashes EventBus subscribers outside battle — CLOSED (fixed)
+**Status:** Closed — fixed same session, verified via the full EditMode suite
+**Affects:** `Assets/Scripts/Combat/BattleHUDController.cs`, `Assets/Scripts/Audio/BattleAudioVfxHooks.cs`
+**Description:** `BattleHUDController.Instance` was never cleared on destroy. Once
+`BattleScene_Main` unloads, the reference becomes a Unity "fake null" — destroyed but not equal to
+C# `null` — and the `?.` null-conditional operator does NOT catch that (it bypasses
+`UnityEngine.Object`'s overloaded `==`, checking raw reference nullity only). Surfaced when wiring
+`BattleAudioVfxHooks.OnBondMilestoneReached` to call `BattleHUDController.Instance?.
+PlayBondMilestoneVfx()` — any bond milestone reached outside of battle (the normal case; bonding
+happens in the overworld) after any battle had ever run would throw `MissingReferenceException` in
+real gameplay, not just in the EditMode tests that caught it (`BondSystemTests`, unrelated to
+Combat, broke immediately once this call site existed).
+**Fix:** Added `BattleHUDController.OnDestroy()` clearing `Instance` (guarded `Instance == this`).
+**Verified:** 272/272 EditMode tests pass after the fix; confirmed live in Play Mode that
+`BattleHUDController.Instance` calls from `BattleAudioVfxHooks` no-op cleanly once the battle scene
+is unloaded.
+
 ### [UI-002] — Orphaned components on UIRoot_BattleSummary in BattleScene_Main — CLOSED (fixed)
 **Status:** Closed — fixed, verified via a fresh disk-load of the corrected scene
 **Affects:** `Assets/Scenes/BattleScene_Main.unity` (`UIRoot_BattleSummary` GameObject)

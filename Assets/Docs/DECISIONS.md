@@ -3691,3 +3691,66 @@ re-derive the reasoning from scratch before deciding whether to build these.
   80% may need to become item- or stat-modified at that point, and `EncounterPromptController`
   (currently dead code, not yet deleted — see CHANGELOG's "Next" note) should be fully removed or
   repurposed in the same pass.
+
+### [Items] Open note — Items/Economy (GDD §22) needs a real design pass before any item system is built
+- **Found:** Planning for the Phase 3 close-out pass (enemy AI + combat audio/VFX) originally
+  scoped an items-in-battle framework as part of the same session. Investigation before building
+  anything found zero design backing for it anywhere: `Combat_Directive_v0_1_0.md` never mentions
+  item usage in battle at all, not even as a scaffold, and `Assets/Data/Items/` is empty with no
+  `Item`/`ItemData`/`Inventory` class anywhere in the codebase. The one item that IS named in the
+  docs — the Signal Swap Item (GDD §16.3, "a swap item allows changing the active Signal type
+  within the pool") — turned out to be explicitly tagged `PENDING` / "design work not yet started"
+  itself, at GDD §22.2, listed as one of three flagship examples of undesigned economy content
+  (alongside Force unlock items and Temper Cores). Building any version of this now — even the
+  narrow Signal-swap case — would mean inventing what an item costs, where it's acquired, and how
+  it's consumed, which is exactly what CLAUDE.md's pending-design rule exists to block. Items were
+  dropped from that session's scope entirely; this note exists so the direction question isn't
+  silently lost before a real design pass happens.
+- **Recorded for later:** Before any item system can be built, needs a real answer from the user
+  to: (1) what kinds of items exist — held/passive items vs. throwable/consumable battle items vs.
+  key/quest items; (2) what each kind mechanically does; (3) whether they're battle-actions (a new
+  move-wheel entry, alongside Attack/Charge/Heal/Regen/Capture) or overworld/prep-menu-only actions
+  (more like changing a loadout between battles); (4) how they're acquired — this depends on the
+  broader §22 economy design (drops, shops, crafting?), not just the item mechanics themselves. No
+  implementation follows from this entry — it exists purely so this thread isn't lost before the
+  design pass that resolves it.
+- **Date:** 2026-08-10
+- **Ref:** CLAUDE.md's "Economy and items (§22 pending)" scope note; GDD §22 banner ("Design work
+  not yet started") and §22.2 "Signal Swap Item" (tagged `PENDING`); GDD §16.3.
+
+### [Combat] Open note — Attack visual pattern variety, scoped but not yet built
+- **Found:** User question mid-session, deferred while the Dodge/Parry timing-sync work (see the
+  2026-08-10/11 CHANGELOG entries) took priority: right now every attack — regardless of skill,
+  tree, or built-in move — uses the identical visual (one diamond shape, one straight-line
+  trajectory, one speed formula), differing only by Primal-type tint color. No hook anywhere
+  distinguishes "kinds" of attacks visually.
+- **Recommended approach (not yet built):** derive pattern variety from data that's ALREADY locked
+  rather than inventing per-skill flavor — `DamageCategory` (Physical vs. Elemental) is a real,
+  decided distinction every damage-dealing skill already has via `PlaceholderSkillResolver`, so a
+  first split keyed off that invents nothing new. Concretely:
+  1. New enum (e.g. `AttackVisualPattern { Ranged, Melee }`), Physical -> Melee, Elemental ->
+     Ranged as a fixed, deterministic mapping — same "algorithm is the content, not invented
+     output" precedent `PlaceholderSkillResolver` itself already established.
+  2. Thread the pattern through `CombatVfxController.LaunchProjectile`/`ComputeTravelDuration` and
+     `BattleHUDController.LaunchSyncedProjectile`, so `BattleManager` can pass the right pattern per
+     attack (resolved skill's `Category` for tree skills; the 5 built-ins need their own explicit
+     mapping decided — Attack is the only one that currently launches a projectile at all).
+  3. **Genuinely open design question, not yet decided:** does "Melee" mean a different
+     PROJECTILE shape/trajectory (still a traveling visual, just faster/shorter), or does it mean
+     NO projectile at all and the ATTACKER's own stage-creature briefly lunges toward the target
+     and back instead? These are architecturally different builds — the first extends
+     `CombatProjectileVisual`, the second needs an attacker-side animation entirely separate from
+     the projectile pool. Needs a decision at the START of whichever session picks this up, not an
+     assumption baked in partway through.
+  4. Also worth folding in per the user's own earlier note: "different projectile speeds" as a
+     data-driven parameter (not just shape) — `BattleConfig.ProjectileSpeed` is already a single
+     flat placeholder; a pattern could carry its own speed multiplier. Keep the multi-hit/rhythm-
+     attack future in mind architecturally (already noted in the 2026-08-10 CHANGELOG entry) so
+     this doesn't need a rewrite once that's built.
+  - **Explicitly out of scope:** per-skill-tree unique visuals, per-specific-skill visuals, any
+    variety beyond what `DamageCategory`'s existing binary split can derive — those need real
+    skill content decided first (skill design is still pending per CLAUDE.md), same reasoning as
+    the `[Items]` note above.
+- **Date:** 2026-08-11
+- **Ref:** Session that built the timing-synced projectile/dissolve system this would extend
+  (`CombatVfxController.cs`, `BattleHUDController.cs`, `CombatProjectileVisual.cs`).

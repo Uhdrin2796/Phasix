@@ -403,6 +403,15 @@ public class BattleHUDController : MonoBehaviour
 
     private VisualElement _enemyStageCreature;
 
+    /// <summary>
+    /// Placeholder per-hit projectile/flash VFX (2026-08-10 — Phase 3 close-out pass; combat had
+    /// no visual feedback for attacks/skills landing before this). Constructed in Awake() once
+    /// _stage/_playerStageCreatures/_enemyStageCreature all exist. Owned here rather than as its
+    /// own scene singleton because it needs direct access to those UI Toolkit elements —
+    /// BattleManager never touches UI Toolkit internals itself, only calls PlayHitVfx below.
+    /// </summary>
+    private CombatVfxController _vfxController;
+
     // Sonny 2-style click-and-drag move/target selection (2026-08-05/06, user-directed — see
     // DECISIONS.md -> [Combat]). ShowMoveSelection shows the acting player's skill ring; pressing
     // a populated slot starts a drag (DragLineVisual follows the cursor) that resolves against
@@ -454,6 +463,23 @@ public class BattleHUDController : MonoBehaviour
         // Enter/Leave lambda closures elsewhere in this method which only touch _tooltip when an
         // actual hover event fires, long after Awake has finished.
         _tooltip = new HudTooltip(_root);
+
+        // [EDITOR-001]'s fix (2026-08-08, see KNOWN_ISSUES.md) reordered StatusHeader to paint/
+        // pick ABOVE .stage so nameplate/burst-gauge clicks would win over .stage's own full-area
+        // invisible backdrop. Side effect found live 2026-08-11 (user report): StatusHeader's own
+        // bounds are broad enough (nearly the whole top of the screen) that for any stage-creature
+        // whose upward stagger (ApplyStageCreatureStagger) pushes a skill-ring orb up into that
+        // overlap — confirmed live via IPanel.Pick(): the middle party slot's Attack orb, whose
+        // top ~60% falls inside StatusHeader's y-range — StatusHeader itself now wins the pick
+        // and silently swallows the click, even though the orb is what's visually on top there.
+        // StatusHeader is a pure layout container (position: absolute, pulled out of flex flow so
+        // party-size changes don't shift .stage's anchor — see BattleHUD.uss's own comment); it
+        // has no click behavior of its own anywhere in this codebase. Setting it to Ignore makes
+        // it click-transparent WITHOUT affecting its children's own independent picking mode
+        // (confirmed live: every nameplate bar/burst-track descendant still resolves correctly to
+        // itself) — the orb underneath is now correctly picked instead.
+        _root.Q<VisualElement>("StatusHeader").pickingMode = PickingMode.Ignore;
+
         _stage = _root.Q<VisualElement>("Stage");
         _playerStageArea = _root.Q<VisualElement>("PlayerStageArea");
         _stage.RegisterCallback<PointerDownEvent>(evt =>
@@ -556,6 +582,7 @@ public class BattleHUDController : MonoBehaviour
         }
 
         _enemyStageCreature = _root.Q<VisualElement>("EnemyStageSlot0");
+        _vfxController = new CombatVfxController(this, _stage, _playerStageCreatures, _enemyStageCreature);
 
         _actionAnnouncement = _root.Q<VisualElement>("ActionAnnouncement");
         _actionAnnouncementLabel = _root.Q<Label>("ActionAnnouncementLabel");
@@ -591,6 +618,21 @@ public class BattleHUDController : MonoBehaviour
 
         _actionAnnouncement.style.display = DisplayStyle.None;
         _continuePrompt.style.display = DisplayStyle.None;
+    }
+
+    /// <summary>
+    /// Clears Instance so BattleAudioVfxHooks' BattleHUDController.Instance?.PlayXVfx() calls
+    /// correctly no-op after BattleScene_Main unloads (2026-08-10 fix — live-verified via EditMode
+    /// tests: without this, Instance is a Unity "fake null" destroyed-but-not-cleared reference,
+    /// and C#'s ?. operator does NOT catch that — it bypasses UnityEngine.Object's overloaded ==,
+    /// so a stale Instance throws MissingReferenceException instead of silently no-oping the very
+    /// first time a bond milestone fires outside of battle after any battle has ever run). Guarded
+    /// on `== this` so a stale OnDestroy racing a freshly-constructed instance can't clear the new
+    /// one out from under it.
+    /// </summary>
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
     }
 
     /// <summary>
@@ -839,6 +881,67 @@ public class BattleHUDController : MonoBehaviour
 
         RefreshBars(playerSide, enemySide);
     }
+
+    /// <summary>
+    /// Computes how long a hit's projectile will take to travel (CombatVfxController.
+    /// ComputeTravelDuration), converts that into the matching ring sweepDuration
+    /// (ComputeSweepDurationForTravelTime), and launches the projectile using that SAME travel
+    /// duration — guarantees the ring and the projectile agree on timing rather than each
+    /// computing it separately (2026-08-11 timing-sync pass). Returns the sweepDuration to pass
+    /// into RunTimedInput/RunDefenseTimedInput in place of the old flat
+    /// TimedInputConfig.MarkerSweepDuration constant.
+    ///
+    /// holdForOutcome=false (offense — always connects) resolves the projectile immediately on
+    /// arrival. holdForOutcome=true (defense — outcome not known until the ring itself resolves)
+    /// pauses it instead; the caller must follow up with exactly one of ResolveHitProjectile/
+    /// ResolveDodgedProjectile/ResolveParryDeflect once LastDefenseOutcome is known. Falls back to
+    /// TimedInputConfig.MarkerSweepDuration if the VFX controller isn't ready (shouldn't happen
+    /// post-Awake — defensive only).
+    /// </summary>
+    public float LaunchSyncedProjectile(int attackerSlotIndex, bool attackerIsPlayerSide, int targetSlotIndex, bool targetIsPlayerSide, PrimalType colorType, bool holdForOutcome)
+    {
+        if (_vfxController == null) return TimedInputConfig.MarkerSweepDuration;
+
+        float travelDuration = _vfxController.ComputeTravelDuration(attackerSlotIndex, attackerIsPlayerSide, targetSlotIndex, targetIsPlayerSide);
+        _vfxController.LaunchProjectile(attackerSlotIndex, attackerIsPlayerSide, targetSlotIndex, targetIsPlayerSide, colorType, travelDuration, holdForOutcome);
+        return ComputeSweepDurationForTravelTime(travelDuration);
+    }
+
+    /// <summary>Resolves a held projectile (see LaunchSyncedProjectile) as a landed hit.</summary>
+    public void ResolveHitProjectile() => _vfxController?.ResolveHeldProjectileAsHit();
+
+    /// <summary>
+    /// Resolves a held projectile (see LaunchSyncedProjectile) as a successful Dodge — the
+    /// projectile continues THROUGH and past the defender (CombatVfxController.
+    /// ResolveHeldProjectileAsPassThrough) exactly as the defender's own Phasix dissolves out of
+    /// the way (DissolveVfxBridge's Shader Graph-equivalent material), both timed off
+    /// DissolveVfxBridge.DissolveOutDuration so the two effects are genuinely synced, not just
+    /// independently-timed effects that happen to overlap (2026-08-11, user-directed — defense
+    /// always targets the player, so defenderSlotIndex is always a _playerStageCreatures index).
+    /// </summary>
+    public void ResolveDodgedProjectile(int defenderSlotIndex)
+    {
+        float dissolveOutDuration = DissolveVfxBridge.Instance != null ? DissolveVfxBridge.Instance.DissolveOutDuration : 0.2f;
+        _vfxController?.ResolveHeldProjectileAsPassThrough(dissolveOutDuration);
+
+        if (defenderSlotIndex >= 0 && defenderSlotIndex < _playerStageCreatures.Length)
+            DissolveVfxBridge.Instance?.PlayDefenderDissolve(_playerStageCreatures[defenderSlotIndex]);
+    }
+
+    /// <summary>Resolves a held projectile (see LaunchSyncedProjectile) as a successful Parry — reverses it back toward the original attacker, re-tinted as counterColorType, doubling as the counter-attack's own hit VFX.</summary>
+    public void ResolveParryDeflect(PrimalType counterColorType) => _vfxController?.ResolveHeldProjectileAsParryDeflect(counterColorType);
+
+    /// <summary>Flashes the purple "you parried!" outline on the held projectile's defender WITHOUT resolving the projectile itself — called by RunDefenseTimedInput the instant Parry is detected, well before ResolveParryDeflect (which needs the counter-attacker's own type, not known at that point).</summary>
+    public void FlashParryOutline() => _vfxController?.FlashHeldProjectileParryOutline();
+
+    /// <summary>Passthrough to CombatVfxController's whole-Stage outcome pulse — called by BattleAudioVfxHooks on BattleWon/BattleLost (not Fled — see CombatVfxController.PlayOutcomeFlash's own doc comment).</summary>
+    public void PlayBattleOutcomeVfx(bool won) => _vfxController?.PlayOutcomeFlash(won);
+
+    /// <summary>Passthrough to CombatVfxController's whole-Stage bond-milestone pulse.</summary>
+    public void PlayBondMilestoneVfx() => _vfxController?.PlayNameplateGlow();
+
+    /// <summary>Passthrough to CombatVfxController's whole-Stage capture pulse.</summary>
+    public void PlayCaptureVfx() => _vfxController?.PlayCaptureFlash();
 
     /// <summary>Refreshes every nameplate's gauge/stat readout and fades the stage creature circle once a participant is down. Renamed from RefreshHP 2026-08-05 once Aura started changing during battle too (attack costs, perfect-defense restores).</summary>
     public void RefreshBars(List<BattleParticipant> playerSide, List<BattleParticipant> enemySide)
@@ -1474,6 +1577,23 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
+    /// Given how long a projectile will take to visually travel (seconds), returns the
+    /// timing-ring sweepDuration that makes the ring's "perfect" instant — MarkerRadius exactly
+    /// equal to RingTargetRadius — land at that same moment (2026-08-11, combat feedback
+    /// timing-sync pass: BattleManager launches a projectile and a ring concurrently, using this
+    /// to pick the ring's speed so they always agree on when "perfect" happens). Pure ring-
+    /// geometry math: RingMarkerStartRadius/RingTargetRadius/RingMarkerMinRadius are fixed
+    /// constants, independent of stats/tolerance — Instinct/bond only widen the SUCCESS WINDOW
+    /// around this instant (TimedInputConfig.ComputeToleranceHalfWidth), they never move the
+    /// instant itself — so this is a simple derived ratio, not a live simulation.
+    /// </summary>
+    public float ComputeSweepDurationForTravelTime(float travelDurationSeconds)
+    {
+        float perfectFraction = (RingMarkerStartRadius - RingTargetRadius) / (RingMarkerStartRadius - RingMarkerMinRadius);
+        return travelDurationSeconds / perfectFraction;
+    }
+
+    /// <summary>
     /// Offensive action-command check (Combat_Directive_v0_1_0.md Part 4), reworked 2026-08-05
     /// (user-directed, Sonny 2-referenced — see DECISIONS.md -> [Combat]) to mirror
     /// RunDefenseTimedInput's converging-ring visual, positioned above the TARGETED ENEMY (not
@@ -1551,6 +1671,13 @@ public class BattleHUDController : MonoBehaviour
     /// tolerance, wrong button, or a timeout with no click at all — full damage either way, same
     /// "reward, don't punish" rule as before). Sets LastDefenseOutcome/LastDefenseWasPerfect —
     /// read them right after this coroutine completes.
+    ///
+    /// 2026-08-11 (user-directed): resolves as a Miss EARLY, before sweepDuration fully elapses,
+    /// the moment the marker/target ratio drops past Dodge's lower tolerance bound — from that
+    /// point on no click could ever succeed, so there's nothing left to wait for. This is what
+    /// keeps a defense-side held projectile (BattleHUDController.LaunchSyncedProjectile/
+    /// CombatVfxController) from sitting frozen for the ring's full remaining sweep on a slow or
+    /// missing click.
     /// </summary>
     public IEnumerator RunDefenseTimedInput(int targetSlotIndex, string label, float dodgeToleranceHalfWidth, float parryToleranceHalfWidth, float sweepDuration)
     {
@@ -1584,6 +1711,15 @@ public class BattleHUDController : MonoBehaviour
             float progress = Mathf.Clamp01(elapsed / sweepDuration);
             _timingRing.MarkerRadius = Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress);
             _timingRing.Refresh();
+
+            // Once the marker has shrunk past Dodge's lower tolerance bound, no future click can
+            // ever succeed — MarkerRadius only decreases from here, so the ratio can only get
+            // worse. Ending the wait right here (2026-08-11, user-directed "stuck" feeling fix)
+            // instead of running out the rest of sweepDuration is safe precisely because the
+            // outcome is already mathematically certain, unlike a flat-delay auto-resolve, which
+            // would risk contradicting a still-possible late success.
+            if (_timingRing.MarkerRadius / RingTargetRadius < 1f - dodgeToleranceHalfWidth) break;
+
             yield return null;
         }
 
@@ -1607,6 +1743,23 @@ public class BattleHUDController : MonoBehaviour
             bool success = deviation <= parryToleranceHalfWidth;
             LastDefenseOutcome = success ? DefenseOutcome.Parry : DefenseOutcome.Miss;
             LastDefenseWasPerfect = success && deviation <= parryToleranceHalfWidth * PerfectToleranceFraction;
+        }
+
+        // Fires the projectile's real outcome cue HERE, immediately — not after this method's own
+        // 0.3s ring-flash hold below, and not after whatever BattleManager does once this
+        // coroutine returns (damage resolution, RefreshBars, battle-log lines). Both used to wait
+        // that long, and live playtesting confirmed it: Parry's outline read as happening "after
+        // it shoots the parry attack" instead of at the actual hit, and Dodge's dissolve was easy
+        // to miss entirely, buried behind everything that ran before it (2026-08-11 fix). Miss and
+        // Dodge resolve fully here (they need no data BattleHUDController doesn't already have).
+        // Parry only gets its outline flash here — the deflect-and-counter projectile itself still
+        // needs the counter-attacker's own Primal type, which only BattleManager knows, so
+        // ResolveParryDeflect stays a separate, later call.
+        switch (LastDefenseOutcome)
+        {
+            case DefenseOutcome.Miss: ResolveHitProjectile(); break;
+            case DefenseOutcome.Dodge: ResolveDodgedProjectile(targetSlotIndex); break;
+            case DefenseOutcome.Parry: FlashParryOutline(); break;
         }
 
         _timingRing.MarkerColor = LastDefenseOutcome == DefenseOutcome.Miss ? MissFlashColor

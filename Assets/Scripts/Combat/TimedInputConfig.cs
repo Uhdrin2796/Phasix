@@ -26,16 +26,19 @@ public static class TimedInputConfig
     public const float ParryBaseWindowPercent = 6f;
 
     /// <summary>
-    /// Ring-ratio tolerance half-width (2026-08-05, user-directed — see DECISIONS.md -> [Combat]):
-    /// the converging marker ring's radius, divided by the fixed target ring's radius, must land
-    /// within [1 - halfWidth, 1 + halfWidth] at click time to succeed. Concrete example values the
-    /// user gave: Dodge "within 1.25 to 0.75" (halfWidth 0.25), Parry "within 0.9 to 1.1"
-    /// (halfWidth 0.10). Offense has no Parry-equivalent precision mode, so it reuses Dodge's
-    /// tolerance. All three are placeholders, not tuned balance numbers.
+    /// Ring-ratio tolerance half-width: the converging marker ring's radius, divided by the fixed
+    /// target ring's radius, must land within [1 - halfWidth, 1 + halfWidth] at click time to
+    /// succeed — i.e. the TOTAL success spread is 2x halfWidth. Retuned twice on 2026-08-11
+    /// (user-directed, tied to the projectile-timing-sync pass — see DECISIONS.md -> [Combat]):
+    /// first pass Dodge/Parry 0.25/0.10 -> 0.15/0.05 (30%/10% total spread); second pass, after
+    /// live playtesting the first still felt wide, Dodge/Parry -> 0.10/0.025 (20%/5% total spread,
+    /// both symmetrical around 1.0 by construction). Offense has no Parry-equivalent precision
+    /// mode, so it still reuses Dodge's ORIGINAL pre-retune tolerance (unrelated ring, not part of
+    /// either pass). All three remain placeholders, not tuned balance numbers.
     /// </summary>
     public const float OffenseToleranceHalfWidth = 0.25f;
-    public const float DodgeToleranceHalfWidth = 0.25f;
-    public const float ParryToleranceHalfWidth = 0.10f;
+    public const float DodgeToleranceHalfWidth = 0.10f;
+    public const float ParryToleranceHalfWidth = 0.025f;
 
     /// <summary>Window growth per point of Instinct — "higher Instinct = larger window" (CLAUDE.md).</summary>
     private const float PerInstinctWindowBonusPercent = 0.6f;

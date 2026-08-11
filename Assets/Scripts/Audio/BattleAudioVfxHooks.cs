@@ -1,18 +1,25 @@
 using UnityEngine;
 
 /// <summary>
-/// Empty EventBus subscriber hook points for battle audio/VFX. GDD §27 "Audio Design" is tagged
-/// Pending in its entirety ("Design work not yet started") — no sound/VFX content exists anywhere
-/// in the docs to build against, and "VFX"/"particle"/"screen shake" don't appear in the GDD or
-/// any Directive at all. This class is pure scaffolding: it subscribes to the battle events real
-/// audio/VFX would eventually hang off of, with empty bodies (not even placeholder Debug.Log
-/// calls, which would just be console noise during real play) and a TODO per hook.
+/// Sole EventBus subscriber for battle audio/VFX (2026-08-10 — Phase 3 close-out pass). Fans out
+/// to AudioManager (all 9 events) and, for the single-participant-or-none events only,
+/// BattleHUDController's whole-Stage VFX passthroughs (per-hit projectile/flash VFX instead goes
+/// through BattleHUDController.PlayHitVfx, called directly by BattleManager — see
+/// CombatVfxController.cs's class doc comment for why). Kept as the sole subscriber here rather
+/// than a battle-scene-local component because some of these events (OnBondMilestoneReached) can
+/// fire from OUTSIDE battle entirely — every BattleHUDController.Instance call below is
+/// null-conditional for exactly that reason (BattleHUDController only exists while
+/// BattleScene_Main is loaded).
 ///
-/// One piece of design intent worth preserving for whoever fills these in: GDD §27's banner notes
-/// Signal type identity is meant to be expressed through sound/visual cues BEFORE it's understood
-/// intellectually (Region 2 has no text feedback for Signal) — "not cosmetic, a core game
-/// mechanic." Worth keeping in mind for whichever hook ends up carrying Signal-reveal audio/VFX,
-/// once that content exists.
+/// GDD §27 "Audio Design" is still tagged Pending in its entirety ("Design work not yet started")
+/// — every clip played here is placeholder-quality generated audio (AudioCueCatalog), not real
+/// designed content; swapping placeholders for real assets later needs zero code changes here.
+///
+/// One piece of design intent worth preserving for whoever eventually authors real content: GDD
+/// §27's banner notes Signal type identity is meant to be expressed through sound/visual cues
+/// BEFORE it's understood intellectually (Region 2 has no text feedback for Signal) — "not
+/// cosmetic, a core game mechanic." Worth keeping in mind for whichever hook ends up carrying
+/// Signal-reveal audio/VFX, once that content exists.
 /// </summary>
 public static class BattleAudioVfxHooks
 {
@@ -30,30 +37,43 @@ public static class BattleAudioVfxHooks
         EventBus.OnPhasixCaptured += OnPhasixCaptured;
     }
 
-    // TODO: pending design — victory fanfare/stinger (GDD §27, no content designed yet)
-    private static void OnBattleWon(BattleResult result) { }
+    private static void OnBattleWon(BattleResult result)
+    {
+        AudioManager.Instance?.PlayBattleWon();
+        BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: true);
+    }
 
-    // TODO: pending design — defeat sting (GDD §27, no content designed yet)
-    private static void OnBattleLost(BattleResult result) { }
+    private static void OnBattleLost(BattleResult result)
+    {
+        AudioManager.Instance?.PlayBattleLost();
+        BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: false);
+    }
 
-    // TODO: pending design — "got away safely" sting for a successful Flee (GDD §27, no content designed yet)
-    private static void OnBattleFled(BattleResult result) { }
+    private static void OnBattleFled(BattleResult result) => AudioManager.Instance?.PlayBattleFled();
 
-    // TODO: pending design — per-skill-tree cast SFX/VFX (GDD §27, no content designed yet)
-    private static void OnSkillUsed(PhasixRuntimeData phasix, SkillData skill) { }
+    private static void OnSkillUsed(PhasixRuntimeData phasix, SkillData skill) => AudioManager.Instance?.PlaySkillUsed();
 
-    // TODO: pending design — "perfect timing" hit-confirm SFX/VFX (GDD §27, no content designed yet)
-    private static void OnTimedInputSuccess(PhasixRuntimeData phasix) { }
+    private static void OnTimedInputSuccess(PhasixRuntimeData phasix) => AudioManager.Instance?.PlayTimedInputSuccess();
 
-    // TODO: pending design — hit impact SFX/VFX, Primal-type-flavored (GDD §27.3, no content designed yet)
-    private static void OnDamageTaken(PhasixRuntimeData phasix, int damage) { }
+    // Fires on every resolved hit including fully-avoided Dodge/Parry (damage == 0 in that case,
+    // per BattleEngine.ResolveQueuedActions) — guarded so avoided hits stay silent.
+    private static void OnDamageTaken(PhasixRuntimeData phasix, int damage)
+    {
+        if (damage <= 0) return;
+        AudioManager.Instance?.PlayHitImpact(phasix.speciesData != null ? phasix.speciesData.PrimalType : PrimalType.Fire);
+    }
 
-    // TODO: pending design — bond milestone chime, Bond-100 needs "a distinctive audio moment" per GDD §27.5
-    private static void OnBondMilestoneReached(PhasixRuntimeData phasix, BondZone zone) { }
+    private static void OnBondMilestoneReached(PhasixRuntimeData phasix, BondZone zone)
+    {
+        AudioManager.Instance?.PlayBondMilestone();
+        BattleHUDController.Instance?.PlayBondMilestoneVfx();
+    }
 
-    // TODO: pending design — evolution transformation SFX/VFX, "a creature game signature" per GDD §27.5
-    private static void OnEvolved(PhasixRuntimeData phasix, PhasixData newForm) { }
+    private static void OnEvolved(PhasixRuntimeData phasix, PhasixData newForm) => AudioManager.Instance?.PlayEvolved();
 
-    // TODO: pending design — capture success SFX/VFX (GDD §27, no content designed yet)
-    private static void OnPhasixCaptured(PhasixRuntimeData phasix) { }
+    private static void OnPhasixCaptured(PhasixRuntimeData phasix)
+    {
+        AudioManager.Instance?.PlayCaptured();
+        BattleHUDController.Instance?.PlayCaptureVfx();
+    }
 }
