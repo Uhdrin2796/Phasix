@@ -16,6 +16,56 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-10] Bugfix — Orphaned components removed from UIRoot_BattleSummary in BattleScene_Main
+- **Context:** Asked "what's next" again with no specific feature in mind — zero open bugs,
+  256/256 tests passing per the last session. Ran the CLAUDE.md planning checklist, and
+  `read_console` surfaced a live, previously-untracked error: `"The referenced script (Unknown) on
+  this Behaviour is missing!"`. User picked diagnosing it over the other backlog candidate (the
+  blocked Phase 4 Evolution design gaps).
+- **Root-caused:** cross-referenced every `m_Script` guid in `SampleScene.unity` (all 18 resolved
+  cleanly — a red herring from an earlier `Library/PackageCache` grep timeout, not a real
+  problem) against `.meta` files in `Assets/` and `Library/PackageCache/`, then did the same for
+  `BattleScene_Main.unity` and both project prefabs. Found the real culprit on
+  `UIRoot_BattleSummary` in `BattleScene_Main.unity`: a dead `MonoBehaviour` whose script guid no
+  longer resolves anywhere, with a stale `m_EditorClassIdentifier` reading
+  `Phasix.Runtime::AuraAllocationController` — a leftover from that class's documented deletion
+  when superseded by `BattleSummaryController`. The GameObject was never cleaned up when the
+  script was removed.
+- **Second bug found in the same investigation:** the same GameObject also carried **two**
+  `BattleSummaryController` components (same script, duplicated). `BattleSummaryController` is a
+  static singleton set in `Awake()`; both instances queried the same shared `UIDocument` and
+  subscribed the same Continue button's click. This happened not to visibly break anything (only
+  whichever instance's `Awake()` ran last ever got a real `_onDone` callback via `Show()`), but was
+  fragile scene cruft from the same earlier refactor, not scope creep to fix alongside the missing
+  script.
+- **Fixed:** Removed both — the dead component via Unity's own
+  `GameObjectUtility.RemoveMonoBehavioursWithMissingScript` API (via `execute_code`, the correct
+  tool for a component with no resolvable type, since `manage_components` can't target a component
+  it can't identify by type name), the duplicate via `manage_components(action="remove")`. The
+  `manage_scene(action="save")` MCP tool turned out to have a path bug — it always writes to
+  `Assets/<SceneName>.unity` regardless of the scene's real folder or an explicit `path` argument,
+  which created (and I deleted) a stray duplicate `Assets/BattleScene_Main.unity` twice before I
+  gave up on it and hand-edited the real `Assets/Scenes/BattleScene_Main.unity` YAML directly
+  instead (verified first that neither removed fileID was referenced anywhere else in the file).
+- **Verified:** a completely fresh disk-load of the corrected scene showed a clean console (only
+  the unrelated, pre-existing A* Pathfinding Project editor update-checker HTTP warnings remain)
+  and exactly 3 components on `UIRoot_BattleSummary` (`Transform`, `UIDocument`, one
+  `BattleSummaryController`). 256/256 EditMode tests still pass (scene-only change, no C# touched).
+- **Blocked:** the planned live Play Mode test (win a battle, click Continue on the real summary
+  screen) hit a snag mid-session — driving it via `execute_code` triggered a genuine Unity Editor
+  hang (see `LESSONS_LEARNED.md` → `[Tooling] Spin-waiting on AsyncOperation.isDone...`), and the
+  user opted to restart the Editor themselves rather than have it force-killed.
+- **Follow-up (same day, after Editor restart):** Re-ran the Play Mode check using synchronous
+  `SceneManager.LoadScene` instead of the async+spin-wait pattern that caused the hang — no repeat
+  incident. `Show()` correctly displayed the summary panel with real dynamic label text. Synthetic
+  `ClickEvent`/`PointerDown`+`PointerUp` dispatch via `SendEvent` did not trigger `Button.clicked`
+  at all — a known UI Toolkit `SendEvent` limitation already documented in `LESSONS_LEARNED.md`,
+  not a defect in the fix. Confirmed the actual thing this fix targets — double-firing from two
+  subscribed component instances — by reflecting into the Continue button's `Clickable.clicked`
+  delegate directly instead: exactly one subscriber, bound to the single remaining controller
+  instance. See `KNOWN_ISSUES.md` → `[UI-002]` for the full write-up; that entry is now fully
+  closed, no outstanding follow-up.
+
 [2026-08-10] Cleanup + Docs — Dead EncounterPromptController deleted, Evolution Directive inconsistencies fixed
 - **Context:** Asked "what's next" with no specific feature in mind. Ran the CLAUDE.md
   planning-session checklist (PhasixGuide.md, Unity editor state, console) plus a scan of

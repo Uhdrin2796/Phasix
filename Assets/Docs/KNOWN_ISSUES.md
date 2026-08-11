@@ -13,6 +13,47 @@ _(none currently open)_
 
 ## Closed Issues
 
+### [UI-002] — Orphaned components on UIRoot_BattleSummary in BattleScene_Main — CLOSED (fixed)
+**Status:** Closed — fixed, verified via a fresh disk-load of the corrected scene
+**Affects:** `Assets/Scenes/BattleScene_Main.unity` (`UIRoot_BattleSummary` GameObject)
+**Description:** Live console (`read_console`) showed `"The referenced script (Unknown) on this
+Behaviour is missing!"`, not previously tracked anywhere. Cross-referencing every `m_Script` guid
+in the loaded/relevant scenes and prefabs against `.meta` files (in both `Assets/` and
+`Library/PackageCache/`) found the real culprit on `UIRoot_BattleSummary`: a dead `MonoBehaviour`
+whose script guid resolves to nothing, with `m_EditorClassIdentifier: Phasix.Runtime::
+AuraAllocationController` still visible — a leftover from that class's earlier, already-documented
+deletion in favor of `BattleSummaryController` (see `PhasixGuide.md`'s "Old PartyMenuController...
+and AuraAllocationController... both deleted, fully superseded"). Same investigation also found a
+second, separate bug on the same GameObject: **two** `BattleSummaryController` components (same
+script, duplicated). `BattleSummaryController` is a static singleton set in `Awake()`; both
+instances queried the same shared `UIDocument` and subscribed the same Continue button's click
+event. Currently harmless by luck of component-list order (only whichever instance's `Awake()` ran
+last ever received a real `_onDone` callback via `Show()`), but fragile and would silently
+double-fire real logic if `Awake`/`OnEnable` ever grew additional behavior.
+**Fix:** Removed the dead component via Unity's `GameObjectUtility.
+RemoveMonoBehavioursWithMissingScript` API (the only way to target a component with no resolvable
+type — `manage_components` can't select it by type name), and the duplicate `BattleSummaryController`
+via `manage_components(action="remove")`. `manage_scene(action="save")` turned out to have its own
+bug — it always writes to `Assets/<SceneName>.unity`, ignoring the scene's actual folder and any
+explicit `path` argument — so the real fix was applied by hand-editing
+`Assets/Scenes/BattleScene_Main.unity`'s YAML directly (after confirming via grep that neither
+removed fileID was referenced anywhere else in the file), not through that tool.
+**Verified:** A completely fresh disk-load of the corrected scene showed a clean console (only the
+unrelated, pre-existing A* Pathfinding Project editor update-checker HTTP warnings remain) and
+exactly 3 components on `UIRoot_BattleSummary` (`Transform`, `UIDocument`, one
+`BattleSummaryController`). 256/256 EditMode tests still pass. A first attempt at a live "win a
+battle, click Continue" Play Mode check triggered a genuine Unity Editor hang (see
+`LESSONS_LEARNED.md` → `[Tooling] Spin-waiting on AsyncOperation.isDone...`) — user restarted the
+Editor themselves. Re-verified live in a follow-up session (synchronous `SceneManager.LoadScene`
+this time, no spin-wait): `BattleSummaryController.Show()` correctly displays the panel with real
+dynamic label text; synthetic `ClickEvent`/`PointerDown`+`PointerUp` dispatch via `SendEvent`
+didn't trigger `Button.clicked` at all (a UI Toolkit `SendEvent` limitation already documented
+elsewhere in `LESSONS_LEARNED.md`, not a defect in the fix), so the exact regression this fix
+targets — double-firing from two subscribed component instances — was instead confirmed directly
+by reflecting into the Continue button's `Clickable.clicked` delegate: exactly one subscriber,
+`BattleSummaryController.HandleContinueClicked`, bound to the single remaining controller instance.
+**Closed:** 2026-08-10, same session (playtest follow-up in a later session the same day).
+
 ### [UI-001] — Skill tree carousel needs a visual pass — CLOSED (replaced)
 **Status:** Closed — the paged carousel this issue was about no longer exists
 **Affects:** `Assets/Scripts/UI/OverworldMenuController.cs`, `Assets/UI/OverworldMenu.uss`,

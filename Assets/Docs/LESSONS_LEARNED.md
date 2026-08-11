@@ -395,6 +395,38 @@ Issues that required significant investigation to resolve. Read before debugging
   path is correct — it says nothing about whether the real `PointerEnterEvent` registration
   actually reaches that element. Don't report a hover feature as confirmed working from that alone.
 
+### [UI Toolkit] Neither a bare `ClickEvent` nor a `PointerDownEvent`+`PointerUpEvent` pair dispatched via `SendEvent` triggers `Button.clicked`
+- **Symptom:** Verifying the `[UI-002]` component-cleanup fix (see `KNOWN_ISSUES.md`), tried to
+  confirm a `Button`'s `clicked` handler still fires by manually constructing and `SendEvent`-ing a
+  `ClickEvent` with `target` set to the button. `clicked` never fired (a counter incremented inside
+  the handler stayed `0`). Tried `PointerDownEvent` immediately followed by `PointerUpEvent`, same
+  `target`-only setup, on the theory that `Button`'s underlying `Clickable` manipulator listens for
+  the lower-level pointer pair rather than `ClickEvent` directly — also `0`.
+- **Root cause (not fully isolated, but consistent with the entries above):** `Clickable`'s
+  internal click-detection almost certainly checks more than just "did a down and an up event
+  arrive at this target" — real pointer position, capture state (`this.CapturePointer(pointerId)`
+  on down), and a bounds-containment check at pointer-up time are all part of the real interaction
+  Unity's own OS-driven input produces, none of which a bare `SendEvent(evt)` with only `target` set
+  reproduces. This is the same underlying class of gap the entries above already document for
+  `PointerEnterEvent`/hover and `IPanel.Pick()` — `SendEvent` delivers an event object to a target,
+  it does not replay the real input pipeline that a genuine pointer interaction goes through.
+- **Fix — don't fight it, verify the actual concern a different way:** the regression this was
+  checking for was "does exactly one handler fire" (a duplicate-component bug had briefly caused
+  two subscribers on the same button). That's answerable directly and more precisely by reflecting
+  into the private backing delegate of the `event Action` (`Clickable`'s `clicked` field,
+  `BindingFlags.NonPublic | Instance`) and reading `.GetInvocationList().Length` plus each
+  delegate's `Method`/`Target` — this confirms the exact subscriber count and identity without
+  needing to simulate a real click at all, and is unaffected by whatever `SendEvent` does or
+  doesn't reproduce.
+- **Date:** August 2026
+- **Key rule:** Don't trust a `Button`/`Clickable` "did it fire" result from a synthetic
+  `ClickEvent` or `PointerDown`/`PointerUp` pair sent via `SendEvent` in this automation
+  environment — a `0`-count result does not mean the handler is broken, it means the synthetic
+  event didn't reproduce enough of the real input pipeline to satisfy `Clickable`'s internal state
+  machine. When the actual question is "how many things are listening" (duplicate-subscription
+  bugs) rather than "does the visible behavior work end-to-end," reflect into the event's backing
+  delegate field directly instead of trying to simulate the click.
+
 ---
 
 ## Combat & Encounter Flow
@@ -754,6 +786,61 @@ Issues that required significant investigation to resolve. Read before debugging
   more with real time between calls) — don't manually force-run `Awake()`/initialization via
   reflection as a workaround, and don't conclude "never ticks" from a check made in the first
   few seconds after `play`.
+
+### [Tooling] Spin-waiting on `AsyncOperation.isDone` inside a synchronous `execute_code` call permanently deadlocks the Editor's main thread — not a "slow tick," a real hang requiring a process kill
+- **Symptom:** While live-verifying the `UIRoot_BattleSummary` component-cleanup fix (see
+  `KNOWN_ISSUES.md` → `[UI-002]`), called `SceneManager.LoadSceneAsync("BattleScene_Main",
+  LoadSceneMode.Additive)` from `execute_code`, then spun on `while (!loadOp.isDone) {
+  Thread.Sleep(10); }` waiting for it to finish. The tool call itself returned `"Timeout receiving
+  Unity response"` — expected for a long-running call — but every subsequent tool call, including
+  trivially cheap read-only ones (`read_console`, `manage_scene get_loaded_scenes`,
+  `mcpforunity://editor/state`), timed out identically from then on, with no recovery even after
+  waiting ~60 real seconds. A parallel OS-level check (`Get-Process -Name Unity`) confirmed this
+  wasn't an MCP transport hiccup: the actual Editor process showed `Responding: False`. Even an
+  unrelated `Get-Content` on `Editor.log` from a separate PowerShell call hung for 120s+ — the
+  whole machine was sluggish, consistent with the Editor's main thread (and its window message
+  pump) being genuinely stuck, not just slow.
+- **Root cause:** `execute_code` runs the submitted code as a method body synchronously **on
+  Unity's own main thread** (this is already established by the `[Tooling] Play Mode doesn't tick
+  frames...` entry above, re: `QueuePlayerLoopUpdate` "only schedules a tick for whenever the main
+  thread goes idle, but that same call is what's currently occupying the main thread"). An
+  `AsyncOperation` like a scene load only advances `isDone` to `true` as part of Unity's own
+  per-frame engine processing — which itself runs on that exact main thread. Spin-waiting on
+  `isDone` from inside `execute_code` is therefore a textbook single-thread deadlock: the condition
+  being waited on can only become true via the same thread that's currently blocked waiting for it.
+  Unlike the unfocused-window "ticks are just slow" issues documented elsewhere in this file, this
+  is not something that resolves given more real time — the thread is stuck in that `Thread.Sleep`
+  loop forever (or until something external, like the user killing the process, breaks it), which
+  is exactly why the *entire* Editor process — not just this one tool call — went permanently
+  unresponsive, and why simply waiting longer between retries did not help.
+- **Fix:** Never spin-wait (a `while(!x.isDone) Thread.Sleep(...)` loop, or equivalent) on any
+  `AsyncOperation`/coroutine-style "is it done yet" flag from inside `execute_code` — there is no
+  safe way to block-and-poll for engine-driven async completion from the same thread that drives
+  the engine. For a scene load specifically, use the synchronous `SceneManager.LoadScene(name,
+  mode)` instead (blocks and returns only once genuinely complete, no polling needed — this is
+  exactly what `[UI-002]`'s second, successful verification attempt switched to). More generally:
+  if a Unity API has both an async/`AsyncOperation`-returning form and a synchronous blocking form,
+  always prefer the synchronous form when calling from `execute_code`, specifically because a
+  synchronous call cannot deadlock this way — it either completes or throws, it never sits waiting
+  on the same thread it needs to make progress. If a genuinely async-only operation must be
+  awaited, don't poll `isDone` in a loop — this project's A* Pathfinding Project workaround
+  (`path.BlockUntilCalculated()`, see the `Play Mode doesn't tick frames` entry above) is the
+  pattern to follow: use the API's own dedicated *blocking* wait method if one exists, never a
+  hand-rolled spin-wait.
+- **Recovery:** Once the Editor process is in this state, no MCP tool call will succeed —
+  including `manage_editor(action="stop")`. The Editor process has to be closed and reopened by
+  the user; nothing in this automation path can recover it remotely. Confirm the hang via an
+  OS-level process check first (`Get-Process -Name Unity | Select Responding`) before concluding
+  this is what happened, since a merely-slow (not deadlocked) unfocused Editor can look similar for
+  the first several seconds — see the "Correction" note on the `Play Mode doesn't tick frames`
+  entry above for that distinction.
+- **Date:** August 2026
+- **Key rule:** `execute_code` runs on Unity's main thread — any code that polls an
+  `AsyncOperation.isDone`-style flag in a loop from there will deadlock the entire Editor process,
+  not just time out. Always reach for the synchronous/blocking form of a Unity API
+  (`SceneManager.LoadScene`, `path.BlockUntilCalculated()`, etc.) instead of polling an async
+  handle, and treat a run of consecutive timeouts across *unrelated* tool calls (not just one slow
+  call) as a signal to check OS-level process responsiveness before retrying further.
 
 ### [Tooling] Unity MCP stdio connection doesn't survive Unity being closed/reopened mid-session
 - **Symptom:** After closing and reopening the Unity Editor while a Claude Code session kept running, `unity-mcp` tools either disappeared from the tool list entirely, or Unity's own "MCP for Unity" window showed a stale "No Session" (red) indicator even when the connection was actually working fine.

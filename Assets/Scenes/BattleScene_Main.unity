@@ -256,8 +256,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2123304859}
   - component: {fileID: 2123304858}
-  - component: {fileID: 2123304857}
-  - component: {fileID: 2123304861}
   - component: {fileID: 2123304860}
   m_Layer: 0
   m_Name: UIRoot_BattleSummary
@@ -266,18 +264,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &2123304857
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2123304856}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e2460a23d72ae7645bbaebac2225bd17, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Phasix.Runtime::AuraAllocationController
 --- !u!114 &2123304858
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -317,18 +303,6 @@ Transform:
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2123304860
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2123304856}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: af5e1b589970e614a9e1fb48a5d642d1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Phasix.Runtime::BattleSummaryController
---- !u!114 &2123304861
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
