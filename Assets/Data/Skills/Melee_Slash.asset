@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Melee_Slash
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Slash
+  _description: Attack Pattern Directive Beat Sequence proof-of-concept (Approach,
+    Windup-Real, Attack, then automatic Return-to-origin). Physical damage, melee
+    range.
+  _treeType: 0
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence: 000000000100000003000000

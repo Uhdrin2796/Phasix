@@ -326,6 +326,10 @@
    height changed. */
 .stage-side {
     position: absolute;
+    /* 480px -> 500px -> 480px (2026-08-12, user: "move the lanes down more" then, after
+       LaneRowHeightPx was reduced ~15% freed up room again, "move the L1 up by about 20px" —
+       see DECISIONS.md -> [Combat]). Net result lands back on the original anchor value, but for
+       a different reason each time — not a no-op revert, the row size changed in between. */
     top: 480px;
     flex-direction: row;
     align-items: center;

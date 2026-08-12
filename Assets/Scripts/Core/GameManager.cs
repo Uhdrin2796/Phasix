@@ -126,6 +126,13 @@ public class GameManager : MonoBehaviour
     /// once playtesting is done — this is not a real starter-loadout design, see
     /// WildSpawnSystem.SeedInitialSkills' own doc comment for the actual (placeholder)
     /// round-robin default this overrides.
+    ///
+    /// 2026-08-12 follow-up (user: "add [the new melee Beat Sequence skill] on the action bar...
+    /// just need a way to be able to live play test it") — Melee_Slash added to the same forced
+    /// loadout, same reasoning: the just-built Beat Sequence framework (Approach/Windup/Attack/
+    /// Return, real 7-lane movement) had no in-game way to trigger it without manually equipping
+    /// it through the Party menu's skill web first. Looked up by SkillName ("Slash"), same pattern
+    /// as C1 below, since it's not a BuiltInMoveType.
     /// </summary>
     private void ApplyDebugPlaytestLoadout(PhasixRuntimeData runtime)
     {
@@ -151,6 +158,11 @@ public class GameManager : MonoBehaviour
         foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
         {
             if (skill.SkillName == "C1") { desiredGuids.Add(guid); break; }
+        }
+
+        foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+        {
+            if (skill.SkillName == "Slash") { desiredGuids.Add(guid); break; }
         }
 
         if (desiredGuids.Count > maxSlots)

@@ -1,0 +1,43 @@
+stateDiagram-v2
+    [*] --> TurnStart
+
+    TurnStart --> Approach: gap needs closing
+    TurnStart --> Windup: already adjacent lane
+
+    state Approach {
+        [*] --> Closing
+        Closing --> Closing: multi-lane close (per skill range)
+    }
+
+    Approach --> Windup: reaches target lane
+
+    state Windup {
+        [*] --> Real
+        [*] --> Fake
+    }
+
+    Windup --> Attack: Real windup resolves
+    Windup --> Approach: Fake resolves — reposition beat follows
+
+    Attack --> ReturnToOrigin: timed input resolves (hit or guarded)
+    ReturnToOrigin --> Complete: hop-arc animation completes
+
+    Complete --> [*]
+
+    note right of Approach
+        Sequences are fully committed once started.
+        No voluntary bail-out, no external interrupt —
+        Root/Stun/Reaction skills do NOT cut a
+        sequence short (decided this pass — no prior
+        directive locked Approach as an interrupt point).
+        Beat list authored per skill, e.g.
+        [Approach, Windup-Fake, Approach,
+        Windup-Real, Attack]
+    end note
+
+    note right of ReturnToOrigin
+        Origin lane recorded once, at sequence start.
+        Return always targets that single value,
+        regardless of how many Approach/Teleport
+        hops occurred mid-sequence.
+    end note

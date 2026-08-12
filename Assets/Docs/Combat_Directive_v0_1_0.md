@@ -4,6 +4,14 @@
 **Status:** New — supplements GDD combat sections  
 **Errata (2026-08-04):** Part 3 corrected "5-lane logic" → "7-lane logic" to match the canonical
 7-lane system defined in Part 2 (see `AUDIT_202608.md` AUD-008). Wording fix only — no version bump.
+**Errata (2026-08-11):** Part 3 gained the Lane occupancy and Movement cost model paragraphs below,
+locked alongside `Attack_Pattern_Directive_v0_1_0.md` (see `DECISIONS.md` -> `[Combat]`). Addition
+only — no version bump.
+**Errata (2026-08-11, later same session):** The "Pending Design" list's "Whether the 7-lane system
+applies symmetrically to both sides" line is resolved — lane *mechanics* are symmetric for both
+sides; non-exclusive-occupancy *visual spacing* is player-side only until multi-enemy battles exist
+(see `DECISIONS.md` -> `[Combat]` "Enemy-side lane symmetry"). Line removed from the pending list
+below. Addition only — no version bump.
 **GDD Refs:** §18 (Battle System), §18.5 (Wild Creature Behavior), §18.6 (Enemy AI Design)
 
 ---
@@ -82,7 +90,9 @@ Players and enemies can move **up and down between lanes** as a combat action or
 - **Protect vulnerable Phasix** — move a defensive Phasix into the lane of an incoming attack
 - **Exploit positional abilities** — some Phasix skills may have lane-specific effects or range requirements
 
-Whether lane movement costs an action turn or is a free reaction is **pending combat system design**.
+**Lane occupancy [DECISION LOCKED]:** Occupancy is **not exclusive** — multiple combatants may share the same lane. When they do, occupants are **visually spaced apart along the lane** so they read as distinct, appearing in a line rather than overlapping. This is a rendering/layout concern only — combat mechanics (targeting, movement, collision) continue to resolve against the lane index alone, per the center-anchor model above. Exact spacing values are pending numerical calibration.
+
+**Movement cost model [DECISION LOCKED]:** Whether a given movement request costs an action turn or is free is decided by the context that triggers it (player-initiated reposition, a skill's Approach beat, a reactive dodge, etc.) rather than one fixed rule for all lane movement — the traversal system itself is cost-agnostic. See `Attack_Pattern_Directive_v0_1_0.md` Part 8 for how skill-triggered movement (Approach, automatic return-to-origin) uses this. Exact cost values per movement type remain pending combat system design/calibration.
 
 ### Lane Avoidance — Overworld Carry-Over
 On the overworld, players can avoid visible enemy Phasix by choosing a lane far from the creature's patrol path. This stealth/avoidance mechanic carries the 7-lane logic into exploration — players who understand lane depth can skip encounters they don't want.
@@ -159,11 +169,9 @@ The following are explicitly undecided and must not be filled speculatively:
 - Full turn order model and speed priority system
 - Exact party size within the 3–5 range
 - Action generation specifics — what exactly produces additional actions (type synergy rules, buff types, trait triggers)
-- Whether lane movement is a free action or costs an action
 - Action command timing windows and damage modifiers (NumericalCalibration.md)
 - Depth scale values per lane (NumericalCalibration.md)
 - Transition visual identity (art direction pending)
 - Status effects and how they interact with lane positioning
 - Enemy AI decision-making framework (GDD §18.6 pending)
-- Whether the 7-lane system applies symmetrically to both sides
 - Phasix size tiers and visual footprint widths (per species, Phase 5)

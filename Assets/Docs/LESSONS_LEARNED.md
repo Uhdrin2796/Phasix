@@ -461,6 +461,43 @@ Issues that required significant investigation to resolve. Read before debugging
   here, so specifically test the "can this be triggered twice in an overlapping window" case
   after removing any guard like this, not just the single-trigger happy path.
 
+### [Combat] Real 7-lane positioning shipped with the enemy off-screen and party members stacked — only caught by an actual Play Mode screenshot
+- **Symptom:** Live-verified (user-requested screenshot check) after building `LaneMovementSystem`/
+  `BattleHUDController`'s lane-driven stage layout (2026-08-11, replacing the old fixed party-slot-
+  column positioning): the single enemy rendered entirely off-screen, and all 3 player party members
+  — who all default to the same starting lane (`LaneMovementSystem.DefaultStartingLane`) — rendered
+  as one indistinguishable blob instead of "spaced apart... appearing in a line" per Combat_Directive.
+  280+ EditMode tests and a clean compile both passed; neither caught this, because both bugs are
+  purely about live layout math against real `VisualElement`s and real UXML container sizes, which
+  EditMode tests never touch (no `UIDocument`/panel exists in that context).
+- **Root cause (two independent bugs):**
+  1. **Enemy off-screen:** `ApplyEnemyLaneDepthScale` set `_enemyStageCreature.style.left` to a real
+     lane-based pixel offset (e.g. 412px for the default Lane 4) for the first time ever — previously
+     this element had no explicit `left` at all, relying on `.stage-side-enemy`'s own flex/translate
+     centering. Its parent container (`EnemyStageArea` in `BattleHUD.uxml`) was never resized to
+     match, unlike `PlayerStageArea` (which the pre-existing `LayoutPlayerStageCreatures` already
+     explicitly sized) — so the child's new `left` offset pushed it outside a container still sized
+     for a single un-positioned child, visually landing off the right edge of the screen.
+  2. **Party members stacked:** All 3 party members share Lane 4 by default (pre-battle placement is
+     explicitly out of scope — Attack_Pattern_Directive Part 8), so `ApplyLaneLayout` gives them the
+     identical `left`, differentiated only by `LaneMovementSystem.GetInLaneSpacingOffsetPx`'s
+     `translate.y` offset. The initial placeholder value (20px) left barely 1px of visible separation
+     between 72px-diameter (0.85-scaled to ~61px at Lane 4's depth) stage creatures — nowhere near
+     the old fixed-column layout's generous spacing it replaced.
+- **Fix:** Added `_enemyStageArea` (query `"EnemyStageArea"`) and gave it the same
+  `BattleLaneLayout.LaneCount * LaneMovementSystem.LaneColumnWidthPx` width treatment
+  `LayoutPlayerStageCreaturesByLane` already applies to `PlayerStageArea`, in
+  `ApplyEnemyLaneDepthScale`. Raised `LaneMovementSystem.InLaneSpacingPx` from 20f to 90f (via two
+  iterative screenshot checks) so same-lane occupants show a real gap, not just non-overlap.
+- **Date:** 2026-08-11
+- **Key rule:** A lane/positioning rework that touches real `VisualElement` layout (`left`,
+  `translate`, container sizing) needs an actual Play Mode screenshot before calling it done — EditMode
+  tests and a clean compile both stayed green through this entire bug, because neither exercises real
+  UXML container sizes or resolved style values. When a "position element X relative to container Y"
+  change ships, check whether every container whose child now gets an explicit position was ALSO
+  resized to match — an unsized container is invisible in code review and in tests, only visible on
+  screen.
+
 ---
 
 ## A* Pathfinding Project

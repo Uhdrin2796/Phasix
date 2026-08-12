@@ -72,6 +72,10 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private SkillDatabase _skillDatabase;
 
     private BattleState _state;
+
+    /// <summary>Read-only accessor for debug/test tooling (e.g. DebugLaneCycler) that needs the live player side without a real gameplay reason to touch it. Null before Start() runs.</summary>
+    public List<BattleParticipant> PlayerSide => _state?.PlayerSide;
+
     private bool _playerActionChosen;
     private BattleParticipant _pendingTarget;
     private SkillData _pendingSkill; // always non-null once a move is confirmed — every orb (built-in move or tree skill) is real SkillData now, see BuiltInMoveType
@@ -534,85 +538,100 @@ public class BattleManager : MonoBehaviour
             yield break;
         }
 
-        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
         attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
-
         bool timedInputHappened = false;
 
-        if (resolution.DealsDamage)
+        // Melee Beat Sequence branch (Attack_Pattern_Directive Part 7, 2026-08-11) — a skill with a
+        // non-empty BeatSequence skips PlaceholderSkillResolver entirely; its damage resolution
+        // happens inside the Attack beat itself (ResolveMeleeAttackBeatOffense), not here. Still
+        // falls through to the same combo/chain/mastery/announcement tail below every other named-
+        // skill path runs, so a Beat Sequence skill behaves identically to a normal skill for
+        // everything except how its own damage/status gets applied.
+        if (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
         {
-            // Good/Perfect bands mirror Defend's own Dodge/Parry tolerances exactly (2026-08-11,
-            // user-directed — see DECISIONS.md -> [Combat]), scaled by the ATTACKER's own
-            // Instinct/bond (offense has always used the attacker's stats here; defense uses the
-            // defender's).
-            float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
-                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
-            float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
-                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
-
-            // Launches the projectile now, concurrently with the ring below — sweepDuration is
-            // sized off the projectile's own real travel time so the ring's "perfect" instant
-            // lines up with when it visually connects (2026-08-11 timing-sync pass).
-            int targetSlotIndex = _state.EnemySide.IndexOf(target);
-            float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
-                attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
-            yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                $"{skill.SkillName} — {attacker.DisplayName}", goodToleranceHalfWidth, perfectToleranceHalfWidth, sweepDuration));
-
-            BattleHUDController.OffenseOutcome timedOutcome = BattleHUDController.Instance.LastOffenseOutcome;
-            bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
-            bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
-            // TimedInputStreak (C2) specifically tracks PERFECT hits, not merely successful ones
-            // — user-directed: "works with any... skill that gets perfect, after a miss it
-            // rests." See BattleParticipant.RecentTimedInputPerfects.
-            attacker.RecordTimedInputPerfect(timedPerfect);
+            int meleeTargetSlotIndex = _state.EnemySide.IndexOf(target);
+            yield return StartCoroutine(ResolveMeleeBeatSequence(attacker, attackerSlotIndex, true, target, meleeTargetSlotIndex, false, skill));
             timedInputHappened = true;
-            if (timedSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
-
-            // TODO: pending design — Perfect currently only grants bonus damage. Damage-dealing
-            // skills have no inherent status payload today (PlaceholderSkillResolver's damage/
-            // status tree split), so a "Perfect also applies a bonus status" reward is deferred
-            // until real skill content exists (2026-08-11, user-directed — see DECISIONS.md ->
-            // [Combat]).
-            float attackMultiplier = timedOutcome switch
-            {
-                BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
-                BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
-                _ => TimedInputConfig.MissDamageMultiplier
-            };
-            int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, resolution.Category, BattleConfig.PlaceholderSkillPower);
-            int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, resolution.Category, BattleConfig.PlaceholderSkillPower);
-            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
-
-            BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
-            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
-            AccumulateDamageDealt(results);
-            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-
-            foreach (BattleActionResult result in results)
-            {
-                string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier, timedOutcome);
-                BattleHUDController.Instance.AppendBattleLog(line);
-            }
-
-            float attackBurstFill = BattleConfig.BurstFillPerSkillUse
-                + (timedSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
-            AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
         }
         else
         {
-            StatusEffectType status = resolution.AppliedStatus.Value;
-            StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
-            int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
-                attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
+            PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
 
-            target.ApplyStatus(status, duration);
-            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-            BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatStatusApplied(target, status, duration));
+            if (resolution.DealsDamage)
+            {
+                // Good/Perfect bands mirror Defend's own Dodge/Parry tolerances exactly (2026-08-11,
+                // user-directed — see DECISIONS.md -> [Combat]), scaled by the ATTACKER's own
+                // Instinct/bond (offense has always used the attacker's stats here; defense uses the
+                // defender's).
+                float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                    TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+                    attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+                float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                    TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
+                    attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
 
-            AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+                // Launches the projectile now, concurrently with the ring below — sweepDuration is
+                // sized off the projectile's own real travel time so the ring's "perfect" instant
+                // lines up with when it visually connects (2026-08-11 timing-sync pass).
+                int targetSlotIndex = _state.EnemySide.IndexOf(target);
+                float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
+                    attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
+                yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
+                    $"{skill.SkillName} — {attacker.DisplayName}", goodToleranceHalfWidth, perfectToleranceHalfWidth, sweepDuration));
+
+                BattleHUDController.OffenseOutcome timedOutcome = BattleHUDController.Instance.LastOffenseOutcome;
+                bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
+                bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
+                // TimedInputStreak (C2) specifically tracks PERFECT hits, not merely successful ones
+                // — user-directed: "works with any... skill that gets perfect, after a miss it
+                // rests." See BattleParticipant.RecentTimedInputPerfects.
+                attacker.RecordTimedInputPerfect(timedPerfect);
+                timedInputHappened = true;
+                if (timedSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
+
+                // TODO: pending design — Perfect currently only grants bonus damage. Damage-dealing
+                // skills have no inherent status payload today (PlaceholderSkillResolver's damage/
+                // status tree split), so a "Perfect also applies a bonus status" reward is deferred
+                // until real skill content exists (2026-08-11, user-directed — see DECISIONS.md ->
+                // [Combat]).
+                float attackMultiplier = timedOutcome switch
+                {
+                    BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
+                    BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
+                    _ => TimedInputConfig.MissDamageMultiplier
+                };
+                int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, resolution.Category, BattleConfig.PlaceholderSkillPower);
+                int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, resolution.Category, BattleConfig.PlaceholderSkillPower);
+                float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+                BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+                List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+                AccumulateDamageDealt(results);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+                foreach (BattleActionResult result in results)
+                {
+                    string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier, timedOutcome);
+                    BattleHUDController.Instance.AppendBattleLog(line);
+                }
+
+                float attackBurstFill = BattleConfig.BurstFillPerSkillUse
+                    + (timedSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
+                AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
+            }
+            else
+            {
+                StatusEffectType status = resolution.AppliedStatus.Value;
+                StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
+                int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
+                    attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
+
+                target.ApplyStatus(status, duration);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatStatusApplied(target, status, duration));
+
+                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+            }
         }
 
         // Combo detection across every rule active for this attacker — log only, no numeric bonus
@@ -627,6 +646,233 @@ public class BattleManager : MonoBehaviour
 
         yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
             $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
+    }
+
+    /// <summary>
+    /// Runs a melee skill's full authored beat list (Attack_Pattern_Directive Part 7) — Approach/
+    /// WindupReal/WindupFake beats via BeatSequenceRunner, the Attack beat via
+    /// ResolveMeleeAttackBeatOffense/Defense below (whichever side is attacking), then an
+    /// unconditional automatic Return-to-origin. No interrupt branch exists — confirmed via grep, no
+    /// Stun/turn-loss logic exists anywhere in this file today, so "the sequence always completes"
+    /// requires no defensive code here.
+    ///
+    /// 2026-08-12 rework (see LaneMovementSystem/BeatSequenceRunner's own class doc comments):
+    /// Approach/Return never change attacker.LaneIndex itself (lanes are vertical rows now, and
+    /// melee doesn't actually cross rows) — restingLeft/restingTop (captured once, before any beat
+    /// runs) are the position to close the gap FROM and automatically Return TO, replacing the old
+    /// lane-index-based origin tracking entirely.
+    ///
+    /// 2026-08-12 follow-up (user: "I was expecting it to move diagonally to get in front of the
+    /// target then the melee comes out"): Approach's closing lunge now ALSO tweens `top` to the
+    /// TARGET's row alongside the horizontal gap-close, so attacker and target visually line up
+    /// (diagonal movement when rows differ) before the Attack beat fires — restingTop lets Return
+    /// undo that same detour afterward, same as restingLeft always has for the horizontal axis.
+    /// </summary>
+    private IEnumerator ResolveMeleeBeatSequence(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, SkillData skill)
+    {
+        UnityEngine.UIElements.VisualElement attackerElement = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        float restingLeft = attackerElement.resolvedStyle.left;
+        float restingTop = attackerElement.resolvedStyle.top;
+        UnityEngine.UIElements.VisualElement targetElement = BattleHUDController.Instance.GetStageCreatureElement(targetSlotIndex, targetIsPlayerSide);
+
+        foreach (BeatType beat in skill.BeatSequence)
+        {
+            switch (beat)
+            {
+                case BeatType.Approach:
+                    yield return StartCoroutine(BeatSequenceRunner.RunApproach(attacker, attackerSlotIndex, attackerIsPlayerSide, target, targetElement));
+                    break;
+
+                case BeatType.WindupReal:
+                    yield return StartCoroutine(BeatSequenceRunner.RunWindup(attacker, attackerSlotIndex, attackerIsPlayerSide, isFake: false));
+                    break;
+
+                case BeatType.WindupFake:
+                    yield return StartCoroutine(BeatSequenceRunner.RunWindup(attacker, attackerSlotIndex, attackerIsPlayerSide, isFake: true));
+                    break;
+
+                case BeatType.Attack:
+                    // TODO: if target died mid-sequence (e.g. a status tick between Approach and
+                    // Attack), damage is skipped but the sequence still completes its Return below —
+                    // Beat Sequences aren't specified to abort on target death.
+                    if (target.IsAlive)
+                    {
+                        if (attackerIsPlayerSide)
+                            yield return StartCoroutine(ResolveMeleeAttackBeatOffense(attacker, attackerSlotIndex, target, targetSlotIndex, skill));
+                        else
+                            yield return StartCoroutine(ResolveMeleeAttackBeatDefense(attacker, target, targetSlotIndex, skill));
+                    }
+                    break;
+            }
+        }
+
+        yield return StartCoroutine(BeatSequenceRunner.RunReturn(attacker, attackerSlotIndex, attackerIsPlayerSide, restingLeft, restingTop));
+    }
+
+    /// <summary>
+    /// The Attack beat's shared visual flourish — a quick lunge toward the opponent (player lunges
+    /// further right, enemy further left — both "toward center," matching the direction their own
+    /// closing lunge already traveled, see BeatSequenceRunner.RunApproach), a hit-flash on the
+    /// target once the lunge connects, then a snap back to the attacker's current position. Shared
+    /// by ResolveMeleeAttackBeatOffense/Defense since the visual itself is identical regardless of
+    /// which side is attacking.
+    /// </summary>
+    private IEnumerator RunMeleeLungeAndFlash(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        int targetSlotIndex, bool targetIsPlayerSide)
+    {
+        UnityEngine.UIElements.VisualElement attackerElement = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        // Read the attacker's actual current position (post-closing-lunge, right next to the
+        // target) rather than recomputing it from any lane formula — lanes are vertical rows now
+        // (LaneMovementSystem's class doc comment) and no longer determine horizontal position at
+        // all, so the attacker's real current `left` is the only source of truth here.
+        float currentLeft = attackerElement.resolvedStyle.left;
+        float lungeLeft = attackerIsPlayerSide
+            ? currentLeft + BeatSequenceConfig.AttackLungeOffsetPx
+            : currentLeft - BeatSequenceConfig.AttackLungeOffsetPx;
+
+        VisualElementTweening.TweenLeft(attackerElement, lungeLeft, BeatSequenceConfig.AttackLungeDurationSeconds);
+        yield return new WaitForSeconds(BeatSequenceConfig.AttackLungeDurationSeconds);
+
+        BattleHUDController.Instance.FlashStageCreatureHit(targetSlotIndex, targetIsPlayerSide, GetPrimalTypeOrDefault(attacker));
+
+        VisualElementTweening.TweenLeft(attackerElement, currentLeft, BeatSequenceConfig.AttackLungeDurationSeconds);
+        yield return new WaitForSeconds(BeatSequenceConfig.AttackLungeDurationSeconds);
+    }
+
+    /// <summary>
+    /// The Attack beat's own resolution when a PLAYER-side participant is the attacker — mirrors
+    /// ResolveSkillAction's damage block (Good/Perfect timed input -> DamageCalculator ->
+    /// BattleEngine -> logging -> burst fill) with the projectile removed (melee doesn't travel) and
+    /// RunMeleeLungeAndFlash's lunge+hit-flash in its place. sweepDuration falls back to the fixed
+    /// TimedInputConfig.MarkerSweepDuration since there's no real "travel time" to size the ring off
+    /// for an already-adjacent attacker — the same fallback LaunchSyncedProjectile itself already
+    /// uses when there's no VFX controller to compute a real one from.
+    ///
+    /// DamageCategory is hardcoded to Physical rather than read from PlaceholderSkillResolver (which
+    /// this path never calls) — Attack_Pattern_Directive Part 3 frames Physical as melee's default/
+    /// expected case; TODO: pending design — an Elemental melee archetype would need this to become
+    /// a real per-skill choice.
+    /// </summary>
+    private IEnumerator ResolveMeleeAttackBeatOffense(BattleParticipant attacker, int attackerSlotIndex, BattleParticipant target, int targetSlotIndex, SkillData skill)
+    {
+        float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+            attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+        float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
+            attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+
+        yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
+            $"{skill.SkillName} — {attacker.DisplayName}", goodToleranceHalfWidth, perfectToleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+
+        BattleHUDController.OffenseOutcome timedOutcome = BattleHUDController.Instance.LastOffenseOutcome;
+        bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
+        bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
+        attacker.RecordTimedInputPerfect(timedPerfect);
+        if (timedSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
+
+        float attackMultiplier = timedOutcome switch
+        {
+            BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
+            BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
+            _ => TimedInputConfig.MissDamageMultiplier
+        };
+
+        int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+        int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+        float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+        yield return StartCoroutine(RunMeleeLungeAndFlash(attacker, attackerSlotIndex, true, targetSlotIndex, false));
+
+        BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+        List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+        AccumulateDamageDealt(results);
+        BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+        foreach (BattleActionResult result in results)
+        {
+            string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier, timedOutcome);
+            BattleHUDController.Instance.AppendBattleLog(line);
+        }
+
+        float attackBurstFill = BattleConfig.BurstFillPerSkillUse + (timedSuccess ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
+        AddBurstFill(attacker, attackerSlotIndex, attackBurstFill);
+    }
+
+    /// <summary>
+    /// The Attack beat's own resolution when an ENEMY-side participant is the attacker (a melee
+    /// skill used against the player) — mirrors ResolveEnemyDamageAction's Dodge/Parry defense block
+    /// (RunDefenseTimedInput -> DamageCalculator -> BattleEngine -> logging -> burst fill -> Parry
+    /// counter-attack) with the projectile/deflect-projectile visuals removed in favor of
+    /// RunMeleeLungeAndFlash — a Parry counter has nothing to "bounce back" when attacker and
+    /// defender are already adjacent (melee), so the counter's damage applies immediately instead of
+    /// awaiting a deflect travel time.
+    /// </summary>
+    private IEnumerator ResolveMeleeAttackBeatDefense(BattleParticipant attacker, BattleParticipant target, int targetSlotIndex, SkillData skill)
+    {
+        int attackerSlotIndex = _state.EnemySide.IndexOf(attacker);
+
+        float dodgeToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+            target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
+        float parryToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+            TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
+            target.RuntimeData.EffectiveStat(StatType.Instinct), target.RuntimeData.bondPercent);
+
+        yield return StartCoroutine(BattleHUDController.Instance.RunDefenseTimedInput(
+            targetSlotIndex, $"DEFEND — {attacker.DisplayName}! Left-Click Dodge · Right-Click Parry",
+            dodgeToleranceHalfWidth, parryToleranceHalfWidth, TimedInputConfig.MarkerSweepDuration));
+
+        BattleHUDController.DefenseOutcome outcome = BattleHUDController.Instance.LastDefenseOutcome;
+        bool defended = outcome != BattleHUDController.DefenseOutcome.Miss;
+        bool isParry = outcome == BattleHUDController.DefenseOutcome.Parry;
+        bool wasPerfect = BattleHUDController.Instance.LastDefenseWasPerfect;
+        float defenseMultiplier = defended ? 0f : 1f;
+        if (defended) EventBus.Raise_TimedInputSuccess(target.RuntimeData);
+
+        int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+        int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+        float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+        yield return StartCoroutine(RunMeleeLungeAndFlash(attacker, attackerSlotIndex, false, targetSlotIndex, true));
+
+        BattleEngine.QueueBasicAttack(_state, attacker, target, defenseMultiplier, baseDamage);
+        List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+
+        // Perfect Dodge/Parry reward, same as ResolveEnemyDamageAction (2026-08-05, user-directed —
+        // see DECISIONS.md -> [Combat]).
+        if (defended && wasPerfect) target.RestoreAura(BattleConfig.PerfectDefenseAuraRestore);
+
+        BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+        LogDefenseResult(results, attacker, target, pureBaseDamage, baseDamage, typeMultiplier, defended, isParry);
+        if (defended && wasPerfect) BattleHUDController.Instance.AppendBattleLog($"{target.DisplayName} restores Aura!");
+
+        if (!defended) AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken);
+
+        if (isParry && attacker.IsAlive)
+        {
+            int counterPureBaseDamage = DamageCalculator.ComputeBaseDamage(target, attacker, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+            int counterDamage = DamageCalculator.ComputeDamage(target, attacker, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+            float counterTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(target, attacker, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
+            List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(counterResults);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+            LogResults(counterResults, counterPureBaseDamage, counterDamage, counterTypeMultiplier, offenseOutcome: null);
+        }
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            defended ? $"{target.DisplayName} defended!" : $"{target.DisplayName} was hit!",
+            BattleConfig.AutoMessageDurationSeconds));
+
+        if (isParry && attacker.IsAlive)
+        {
+            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                $"{target.DisplayName} counter-attacks!", BattleConfig.AutoMessageDurationSeconds));
+        }
     }
 
     /// <summary>
@@ -983,6 +1229,18 @@ public class BattleManager : MonoBehaviour
         yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
             isNamedTreeSkill ? $"{attacker.DisplayName} uses {skillOrNull.SkillName}!" : $"{attacker.DisplayName} is attacking!",
             BattleConfig.AutoMessageDurationSeconds));
+
+        // Melee Beat Sequence branch (Attack_Pattern_Directive Part 7, 2026-08-11) — an enemy skill
+        // with a non-empty BeatSequence runs the full authored beat list (Approach/Windup/Attack/
+        // Return, via ResolveMeleeAttackBeatDefense for its Attack beat — includes the same Dodge/
+        // Parry defense and Parry counter-attack this method's own block below runs) instead of the
+        // single-beat Dodge/Parry+projectile flow below.
+        if (skillOrNull != null && skillOrNull.BeatSequence != null && skillOrNull.BeatSequence.Count > 0)
+        {
+            int meleeAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
+            yield return StartCoroutine(ResolveMeleeBeatSequence(attacker, meleeAttackerSlotIndex, false, target, targetSlotIndex, true, skillOrNull));
+            yield break;
+        }
 
         // Both tolerances scale off the DEFENDER's own Instinct + bond, from their respective
         // bases (Dodge wide/easy, Parry narrow/hard).

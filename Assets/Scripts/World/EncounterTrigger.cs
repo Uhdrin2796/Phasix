@@ -26,6 +26,9 @@ public class EncounterTrigger : MonoBehaviour
     [SerializeField] private bool _overrideTintColor;
     [SerializeField] private Color _tintColorOverride = Color.white;
 
+    [Tooltip("DEBUG (2026-08-12): if checked, the spawned wild creature's entire loadout is replaced with just the 'Slash' skill, guaranteeing every enemy turn triggers the Melee Beat Sequence framework so it can be reliably playtested (including Dodge/Parry against it). See WildSpawnSystem.ApplyDebugSingleSkillOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
+    [SerializeField] private bool _debugForceSlashOnly = true;
+
     private GameObject _activeInstance;
 
     private void OnEnable()

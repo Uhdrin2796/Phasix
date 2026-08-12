@@ -16,6 +16,363 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-12] Phase 3 follow-up — Playtest hooks: enemy Slash + live lane/row cycler
+- **Context:** User, after confirming the corrected vertical-row Approach looked right: "Can we give
+  the enemy a slash to try out so i can see if it works the same way and i can block. Also is there a
+  way that i can test the lane movement." Two gaps: `ResolveMeleeAttackBeatDefense` (the enemy-
+  attacking path, reusing the existing Dodge/Parry system) had been built but never live-tested — no
+  wild enemy had ever been equipped with a Beat Sequence skill; and there was no way to preview a
+  creature at a different row without a real Approach/Return actually moving it there.
+- **Built:**
+  - `WildSpawnSystem.ApplyDebugSingleSkillOverride(runtime, skillDatabase, skillName)` — clears a wild
+    instance's learned/equipped skills down to just the named skill, so `EnemyAI.ChooseSkill` has
+    nothing else to randomly pick instead. Mirrors `GameManager.ApplyDebugPlaytestLoadout`'s existing
+    pattern for the player side, but on the enemy-spawn path instead
+    (`EncounterTrigger.OnEnable` -> `WildSpawnSystem.CreateWildInstance`), since enemies never pass
+    through the player's debug hook at all — confirmed by reading both spawn paths this session.
+  - `EncounterTrigger` gained a new Debug Override Inspector toggle, `_debugForceSlashOnly` (default
+    ON), calling the above with `"Slash"` right after the normal seeded loadout. Every wild encounter
+    the user walks into now attacks with Slash only, until this is unchecked.
+  - `DebugLaneCycler.cs` (new, `Assets/Scripts/Combat/`) — TEMPORARY manual-test tool, same convention
+    as `DebugMovementPresetCycler`: `[ / ]` in Play Mode moves the slot-0 player creature's
+    `BattleParticipant.LaneIndex` one row at a time and re-applies the real layout math via a new
+    public `BattleHUDController.RefreshPlayerLaneLayout(playerSide)` (thin wrapper around the existing
+    private `LayoutPlayerStageCreaturesByLane` + `ApplyLaneLayout`), so `GetLaneScreenTop`/
+    `GetDepthScale`'s row position and depth scale can be previewed live without needing a real Beat
+    Sequence to trigger movement — no formation/positioning mechanic exists yet to drive `LaneIndex`
+    any other way. Attached to the same GameObject as `BattleManager` in `BattleScene_Main`
+    (`[RequireComponent(typeof(BattleManager))]`, resolved via `GetComponent`, not
+    `FindFirstObjectByType`). New `BattleManager.PlayerSide` read-only accessor added for this and any
+    future debug tooling that needs the live player side.
+- **Verified:** 317/317 EditMode tests pass (no new tests — both additions are debug-only scaffolding
+  with no pure-math surface to unit test), clean compile via `read_console`. Live `execute_code`
+  checks against a real battle (`BattleTransition.StartWildBattle`, `WildEncounterCreature` auto-
+  engage disabled first to avoid the known duplicate-battle-scene race — see `LESSONS_LEARNED.md`):
+  confirmed the override left the enemy with exactly one equipped skill resolving to "Slash", and
+  `EnemyAI.ChooseSkill` returned Slash on 10/10 calls (Damage intent) with nothing else to compete
+  against it; confirmed `BattleManager.PlayerSide` resolves correctly and `RefreshPlayerLaneLayout`
+  applied to a manually-changed `LaneIndex` produced `style.top`/`style.scale` exactly matching
+  `LaneMovementSystem.GetLaneScreenTop`/`GetDepthScale` for that row (150/1.05 for row 2), and that
+  `DebugLaneCycler` is present and enabled on the live `BattleManager` instance. Did **not** live-fire
+  a full enemy Approach/Windup/Attack/Return sequence end-to-end this session (the `[`/`]` keypress
+  itself and `ResolveMeleeAttackBeatDefense`'s Dodge/Parry resolution were not exercised through a real
+  frame-by-frame Play Mode pass) — same reasoning as prior sessions' honest caveats about coroutine-
+  timing verification being unreliable via scripted round-trips; left for the user's own live test,
+  which is the explicit point of both hooks.
+- **Next:** User to live-test: walk into a wild encounter, let it attack, confirm Dodge/Parry works
+  against a melee Slash the same way it does against a ranged attack; press `[`/`]` mid-battle to
+  preview row depth. A normal interactive Play Mode pass (Editor focused, real clicks) remains the one
+  verification style this session still can't do itself.
+- **Follow-up (same session, user-directed):** Live-tested the `[`/`]` row preview and reported "the
+  size seems a little small for the lanes... make the lanes wider by about double," "make the first
+  lane above the top of the flee/end turn buttons," and asked for a `\`-key toggle to show/hide the
+  lane boundaries as white dotted lines so the spacing could actually be checked visually. Built:
+  `LaneMovementSystem.LaneRowHeightPx` doubled 30f -> 60f (also doubles `RowRangeHeightPx`, 180 ->
+  360, since it derives from `LaneRowHeightPx`). New `LaneGuideOverlay.cs` (`VisualElement` subclass,
+  custom-drawn via `Painter2D.SetDashPattern` + a round line cap — UI Toolkit has no native dashed-
+  border USS property) — a single instance parented directly under `Stage` (sibling of
+  `PlayerStageArea`/`EnemyStageArea`, not inside either) so one set of 8 boundary lines covers both
+  sides at once, since both sides share the same anchor/box-sizing formula. New
+  `BattleHUDController.SetLaneGuideLinesVisible(bool)` computes the 8 row-boundary Y values (Stage-
+  local space, converted from `LaneMovementSystem`'s box-local `GetLaneScreenTop` values via
+  `PlayerStageArea`'s own resolved anchor/height) and toggles the overlay. `DebugLaneCycler` now also
+  handles the `\` keypress (checked before the player-side early-return, since the guide lines don't
+  need a player side to exist).
+- **Did the anchor need to move too?** No — measured live before changing anything: doubling
+  `LaneRowHeightPx` alone still leaves the frontmost row (Lane 1, forced via `execute_code` as the
+  worst case) ~130px of clearance above the End Turn button's top edge (`worldBound` measured at
+  y=618.6..701.4 for the creature vs. y=832 for the button, on the 1920x1080 canvas) — comfortably
+  "above" already, so `.stage-side`'s `top: 480px` anchor in `BattleHUD.uss` was left unchanged rather
+  than moved for a problem that measurement showed wasn't actually going to happen.
+- **Verified:** 317/317 EditMode tests pass, clean compile. Live-verified the worldBound/resolvedStyle
+  staleness gotcha again mid-check (a `RefreshPlayerLaneLayout` call and an immediate `worldBound` read
+  in the SAME `execute_code` call showed a stale position with only the new scale applied — position
+  needs a frame to resolve, same as earlier sessions' findings) — resolved by splitting into a second
+  round-trip, which then matched the hand-computed value exactly. Screenshotted the result (guide
+  lines on, default row 4, both sides symmetric, front row clear of the buttons) and sent it to the
+  user directly per their "let me see that" ask, rather than only describing it.
+- **Follow-up #2 (same session, user-directed):** "move the lanes down more and make the lanes even
+  bigger," then mid-turn, "make sure the lane lines are also the furthest back i want everything else
+  on the layer in front." Built: `LaneMovementSystem.LaneRowHeightPx` raised again 60f -> 90f (1.5x).
+  `.stage-side`'s `top` anchor in `BattleHUD.uss` moved 480px -> 500px (a modest +20px, NOT the +60px
+  first tried — see the clearance conflict below). `BattleHUDController.SetLaneGuideLinesVisible` now
+  calls `_laneGuideOverlay.SendToBack()` on every call (not just at creation), guaranteeing it stays
+  the backmost `Stage` child regardless of future sibling changes — live-confirmed via `execute_code`
+  reading `Stage`'s child order: `LaneGuideOverlay` at index 0, ahead of `PlayerStageArea`,
+  `EnemyStageArea`, `EndTurnButton`, `FleeButton`, and the drag-line visual.
+- **Clearance conflict, measured not assumed:** "bigger" and "further down" pull against the same
+  budget — growing `LaneRowHeightPx` alone (before touching the anchor) already ate most of the
+  previous ~130px clearance above the End Turn/Flee buttons, down to ~40.6px at the ORIGINAL 480px
+  anchor. The first attempt at "move down more" (+60px, anchor 540px) was live-measured (forcing
+  Lane 1, the worst case, via `execute_code`) at **-19.4px clearance — an actual overlap** with the
+  End Turn button. Backed off to a +20px shift (anchor 500px), re-measured at +20.6px clearance —
+  positive but tight. Left as-is rather than silently picking a different tradeoff (e.g. keeping the
+  full +60px shift and shrinking `LaneRowHeightPx` back down) since the user asked for both
+  explicitly; flagged to the user that pushing further down from here will need to trade off against
+  row size, or the buttons themselves would need to move.
+- **Verified:** 317/317 EditMode tests pass, clean compile. Live-verified via `execute_code` in two
+  passes (accounting for the same worldBound-lags-a-frame staleness noted above): first the -19.4px
+  overlap at the rejected +60px shift, then +20.6px clearance at the accepted +20px shift, both with
+  Lane 1 forced as the worst case. Screenshotted the final state (bigger rows, shifted down, guide
+  lines confirmed drawing behind the stage creatures/buttons) and sent it to the user.
+- **Follow-up #3 (same session, user-directed) — row resize + diagonal melee Approach:** "the lanes
+  can be reduced by around 15% then also move the L1 up by about 20px" (freeing up the clearance
+  budget from Follow-up #2), plus a separate, more substantial report: "when i move to a different
+  lane the projectiles shoot without any issues, but on the melee it just moves horizontal within the
+  lane then melee animation comes out. I was expecting it to move diagonally to get to the in front
+  of the target then the melee comes out."
+  - **Sizing:** `LaneMovementSystem.LaneRowHeightPx` reduced ~15% (90f -> 76.5f); `.stage-side`'s `top`
+    anchor in `BattleHUD.uss` moved back to 480px (the same value as before Follow-up #2, but for a
+    different reason — the row shrink freed up room again, this isn't a revert). Re-measured Lane 1's
+    worst-case clearance above the End Turn button live: 81.1px, well clear.
+  - **Diagonal Approach (real gap, not a request for polish):** the closing lunge only ever tweened
+    `style.left` — fine when attacker and target share a row (the only case tested so far, since both
+    sides default to Lane 4), but an attacker on a different row than its target would slide sideways
+    at its OWN row's height and pop the Attack from there, never actually lining up with the target.
+    Projectile-based attacks never had this problem since a projectile just flies to the target's real
+    on-screen position regardless of row. Fixed: `BeatSequenceRunner.RunApproach` now ALSO tweens
+    `style.top` toward `LaneMovementSystem.GetLaneScreenTop(target.LaneIndex, ...)`, concurrently with
+    the existing horizontal tween — both sides share the identical row-to-`top` mapping (no mirroring),
+    so no cross-container worldBound math is needed for this axis, unlike the horizontal one. A no-op
+    when rows already match, so same-row attacks are visually unchanged. New
+    `VisualElementTweening.TweenTop` (mirrors `TweenLeft`). `RunReturn` gained a `restingTop` parameter
+    (captured once by `BattleManager.ResolveMeleeBeatSequence`, alongside the existing `restingLeft`)
+    so the automatic Return-to-origin undoes the same detour afterward — the attacker's actual
+    `LaneIndex`/depth scale are never touched by any of this, purely a visual line-up.
+  - **Verified:** 317/317 EditMode tests pass, clean compile. Live-verified via `execute_code`: forced
+    the player creature to row 2 and the enemy to row 6, ran `BeatSequenceRunner.RunApproach` directly
+    — attacker's `style.top` moved from 382.5 (its own row 2) to exactly 76.5 (the target's row 6)
+    while `style.left` closed the horizontal gap concurrently, confirming real diagonal movement; ran
+    `RunReturn` with the captured resting values and confirmed both `left` and `top` landed back on
+    their exact pre-Approach values. Screenshotted the resized rows with guide lines on and sent it to
+    the user.
+- **Follow-up #4 (same session, user-directed) — scale now follows the diagonal, not just position:**
+  "as the phasix moves across the diagonal i was expecting the size of the phasix to scale with the
+  vertical position... it maintained the same size from its original position. And same on the way
+  back, it should return to its original size after its attack." The diagonal fix above moved `top`
+  but left scale untouched, so an attacker crossing rows would visually detour to the target's height
+  while staying its own original size the whole time — same class of bug as the original "why does
+  the size change during purely left-right movement" report from earlier this session, just the
+  mirror image (size NOT changing when it should have this time). Built: `RunApproach` now ALSO
+  tweens `style.scale` to `LaneMovementSystem.GetDepthScale(target.LaneIndex)`, in parallel with the
+  `top`/`left` tweens over the identical duration — since all three share DOTween's same default
+  easing curve, a parallel start-to-end scale tween is visually identical to continuously deriving
+  scale from the live `top` value every frame, without resurrecting the more complex continuous-
+  position-to-scale machinery (`GetDepthScaleFromLeft`/`TweenLeftWithDepthScale`) removed earlier
+  this session — that removal isn't being reversed, this is a simpler approach that happens to
+  produce the same result. `RunReturn` now tweens scale back to
+  `LaneMovementSystem.GetDepthScale(attacker.LaneIndex)` (the attacker's own canonical row) alongside
+  the position return. Also fixed a related bug this surfaced on read: `RunWindup` was computing its
+  squash baseline from `attacker.LaneIndex` (the attacker's OWN row) rather than the element's actual
+  current on-screen scale — harmless before this fix (attacker never visually left its own row), but
+  would have snapped the squash to the wrong value the instant Windup started once Approach began
+  changing scale. Changed to read the element's live `resolvedStyle.scale` instead, correct whether
+  or not an Approach ran before it.
+- **Verified:** 317/317 EditMode tests pass, clean compile. Live-verified via `execute_code`: forced
+  player to row 7 (scale 0.55) and enemy target to row 3 (scale 0.95), ran `RunApproach` — attacker's
+  scale grew from 0.55 to exactly 0.95 in step with `top` reaching the target's row; ran `RunReturn` —
+  scale returned to exactly 0.55 (its own row 7), position returned to its own row's `top` too.
+- **Follow-up #5 (same session, user-directed) — narrowed the depth-scale range, row spacing
+  untouched:** "keep lane size the same, but make the scale at L7 to be 0.85 and scale at L1 to be
+  1.10." `LaneMovementSystem.MaxDepthScale` (Lane 1) 1.15f -> 1.10f, `MinDepthScale` (Lane 7) 0.55f ->
+  0.85f — `LaneRowHeightPx` (76.5f, row spacing/position) deliberately left alone, since this ask was
+  scoped to size only. Live-verified: `GetDepthScale(1)=1.10`, `GetDepthScale(7)=0.85`,
+  `GetDepthScale(4)=0.975` (midpoint, as expected), `LaneRowHeightPx` confirmed unchanged at 76.5.
+  317/317 EditMode tests still pass (no test hardcodes the old scale constants, only relative
+  ordering/monotonicity, so nothing needed updating there). Screenshotted Lane 1 next to a default-row
+  enemy — the front-to-back size difference now reads noticeably subtler than the old 0.55–1.15 range
+  — and sent it to the user.
+
+---
+
+[2026-08-11] Phase 3 — Attack Pattern Directive implementation: real 7-lane system + melee Beat Sequence (Slash)
+- **Context:** First implementation pass against `Attack_Pattern_Directive_v0_1_0.md` (added as a
+  design doc in the prior session, nothing built yet). User decided: import real DOTween now, build
+  the real 7-lane system (not a minimal shim), and build exactly one attack — a minimal "Slash"
+  (`Approach -> Windup-Real -> Attack`) — per the directive's own Part 1 validation approach.
+- **Built:**
+  - **DOTween** actually imported (`Assets/Plugins/Demigiant/DOTween/`, precompiled DLL) — confirmed
+    no ASMDEF needed (`Phasix.Runtime.asmdef`'s `overrideReferences: false` auto-includes it);
+    `"DOTween.dll"` added to `Phasix.Tests.EditMode.asmdef`'s `precompiledReferences` allowlist so a
+    future test can reference `DG.Tweening` without a confusing compile error.
+  - **Lane system**: `BeatType.cs` (new enum), `LaneMovementSystem.cs` (new — pure math: default
+    lane, clamping, adjacency, cost-agnostic stepping, depth scale, screen-position mapping, in-lane
+    spacing). `BattleParticipant` gained `LaneIndex`/`PreSequenceOriginLane` +
+    `BeginBeatSequenceIfNeeded`/`ClearBeatSequenceOrigin`. `BattleHUDController`'s stage layout
+    reworked from party-slot-index columns to real per-lane positioning
+    (`LayoutPlayerStageCreaturesByLane`, `ApplyLaneLayout`, `ApplyEnemyLaneDepthScale`,
+    `RestoreStageCreatureDepthOrder` now sorts by lane depth) plus new
+    `GetStageCreatureElement`/`UpdatePlayerStageCreatureLane` accessors for beat-sequence code.
+  - **SkillData** gained `_beatSequence` (`BeatType[]`, empty-by-default — inert for all 95
+    pre-existing assets). New `BeatSequenceConfig.cs` centralizes beat timing constants (windup
+    durations, lunge distance, hop height — all pending-calibration placeholders), keeping per-skill
+    assets free of numeric fields.
+  - **Beat Sequence runtime**: `VisualElementTweening.cs` (DOTween `.To()` wrappers for
+    `VisualElement.style`, since the stage has no Transform to tween), `BeatSequenceRunner.cs`
+    (Approach/Windup/Return coroutines). `BattleManager` gained `ResolveMeleeBeatSequence`,
+    `ResolveMeleeAttackBeatOffense`/`Defense` (mirror the existing offense Good/Perfect and defense
+    Dodge/Parry+counter systems, minus the projectile, plus a lunge+hit-flash), and
+    `RunMeleeLungeAndFlash`. Two new dispatch branches: `ResolveSkillAction` (player attacking) and
+    `ResolveEnemyDamageAction` (enemy attacking) both check `skill.BeatSequence` and route into the
+    new path when non-empty; every other skill's behavior is unchanged.
+  - `CombatVfxController.FlashStageElement`/`BattleHUDController.FlashStageCreatureHit` — real public
+    hit-flash methods, corrects a doc/code discrepancy found this session (see DECISIONS.md ->
+    [Combat]): last session's "Parry counter-attack hit-flash" entries described these as already
+    built; they weren't.
+  - **`Melee_Slash` skill asset** authored and wired into `SkillDatabase` (GUID
+    `59259b9cd92745c418cc0d819a507408`) — `TreeType Utility`, `BeatSequence [Approach, WindupReal,
+    Attack]`. Verified via `execute_code`: resolves correctly by GUID, and `Utility` is naturally
+    unlocked for `Test_FireType` at tier 1 (first entry in `AvailableTreeTypes`) — no debug-harness
+    workaround needed for manual Play Mode testing.
+- **Decided:** See DECISIONS.md -> `[Combat]` for the full set: cross-side lane adjacency (same lane
+  index = adjacent, inferred from `BattleLaneLayout`'s already-mirrored math), enemy-side lane
+  symmetry (mechanics real for both sides, occupancy-spacing visuals player-only until multi-enemy
+  battles exist), Approach/Return movement cost (folded into the skill's existing Aura cost, no new
+  cost), and the FlashStageElement discrepancy correction.
+- **Verified:** Full EditMode suite passes both before and after the fixes below (317/317, zero
+  regressions) — new coverage: `LaneMovementSystemTests.cs`, `SkillDataTests.cs`, plus additions to
+  `BattleParticipantTests.cs`. Compile-checked after every file addition via `read_console`, zero
+  errors throughout. **Live Play Mode screenshot check (user-requested)** caught two real bugs
+  neither tests nor compilation could — see `LESSONS_LEARNED.md` -> `[Combat]` "Real 7-lane
+  positioning shipped with the enemy off-screen and party members stacked" for the full writeup: the
+  enemy rendered off-screen (its stage container was never resized to match its new lane-based
+  position — fixed via a new `_enemyStageArea` sizing step in `ApplyEnemyLaneDepthScale`), and same-
+  lane party members read as one blob (in-lane spacing was too small — `LaneMovementSystem.
+  InLaneSpacingPx` raised 20f -> 90f after two iterative screenshot checks). Both confirmed fixed via
+  a follow-up screenshot; enemy now on-screen, party members show clear visual separation.
+- **Also noted:** `ProjectSettings.asset` picked up `DOTWEEN;DOTWEEN_UITOOLKIT` scripting defines for
+  every platform partway through this session, unprompted (see `DECISIONS.md` -> `[Tweening]` update)
+  — DOTween's official `VisualElement` extension methods are now active alongside (not conflicting
+  with) this session's custom `VisualElementTweening.cs` wrappers.
+- **Follow-up (same session, user-directed):** In-lane spacing moved from vertical (`translate.y`) to
+  horizontal (`left`) and widened 90f -> 150f, referencing a Sonny 2 screenshot — same-lane party
+  members now read as a horizontal row, and an open skill-ring wheel clears its neighbor without
+  overlapping (150px vs. the ~147px `SkillSlotRadius`-derived minimum). `BeatSequenceRunner.
+  RunApproach`/`RunReturn` and `BattleManager.RunMeleeLungeAndFlash` updated to preserve an
+  occupant's live spacing offset instead of snapping it back to the lane's unspaced base position
+  mid-action. See `DECISIONS.md` -> `[Combat]` "In-lane spacing moved from vertical to horizontal."
+  Re-verified: 317/317 EditMode tests still pass, clean compile, and a follow-up screenshot confirms
+  the horizontal spread with no overlap.
+- **Follow-up #2 (same session, user-reported "a little too far left"):** The `2*InLaneSpacingPx`
+  width padding added to `PlayerStageArea` (for centering-math safety on extreme same-lane-occupant
+  spreads) had an unintended side effect: `.stage-side-player`'s `translate: -50% -50%` re-centers
+  around whatever width the box reports, so padding the width WITHOUT also shifting children right
+  by half that padding shifted the entire visible party group ~150px left of its intended position.
+  Fixed with a `centeringCompensationPx` offset in `LayoutPlayerStageCreaturesByLane` (adds back
+  exactly half the padding to every child's `left`) — box stays padded for safety, visible position
+  matches what an unpadded box would have shown. Re-verified: 317/317 tests pass, clean compile,
+  follow-up screenshot confirms the group sits back at its intended position.
+- **Follow-up #3 (same session, user-directed):** Two more asks — "move it in a bit more" (concern:
+  back-lane creatures clipping the nameplate column) and "does moving forward/back adjust size to
+  depict depth?" The second question caught a real gap on code review: `BeatSequenceRunner.
+  RunApproach`/`RunReturn` only ever tweened `left` (position), never `scale` — a mover's visual size
+  stayed frozen at whatever it was when the sequence started, only catching up to its real lane's
+  depth at the next full `Initialize` (i.e. not until the battle restarts). Fixed: both methods now
+  tween `LaneMovementSystem.GetDepthScale` toward each lane as they move, matching Combat_Directive
+  Part 2 ("sprites automatically scale as they move between lanes"). Live-verified via `execute_code`
+  driving `BeatSequenceRunner.RunApproach` directly against a real battle: Lane 4 (scale 0.85) ->
+  Lane 1 (scale 1.15) moved AND grew correctly, screenshotted. Separately, `LaneMovementSystem.
+  LaneEdgeGapPx` raised 28f -> 90f (moves the whole lane range, especially back-lane/Lane 7 — the
+  case closest to the nameplate column — further from screen edge) per the "move it in more" ask.
+  Re-verified: 317/317 tests pass, clean compile.
+- **Follow-up #4 (same session, user-directed):** User pasted a generic Transform/SpriteRenderer
+  continuous-depth-scaling spec (localScale, sortingOrder, FixedUpdate, furthestY/closestY/minScale/
+  maxScale fields, diagonal tracking) and asked to apply it — clarified first via AskUserQuestion
+  since none of those APIs exist on our UI Toolkit stage. Landed on: keep the 7-lane mechanical model
+  (Combat_Directive's locked targeting/movement authority) but make the VISUAL scale a genuinely
+  continuous function of live position instead of snapping between two tween-endpoint values. Built
+  `LaneMovementSystem.GetDepthScaleFromLeft` (continuous, position-based — companion to the existing
+  discrete `GetDepthScale(laneIndex)`, proven to agree exactly at every lane's own position) and
+  `VisualElementTweening.TweenLeftWithDepthScale` (one combined tween drives both `left` and `scale`
+  from the same live value every frame, replacing the prior two-independent-tweens approach in
+  `BeatSequenceRunner.RunApproach`/`RunReturn`). `1.15f`/`0.55f` extracted into named
+  `MaxDepthScale`/`MinDepthScale` constants (kept as `const` on the existing static class rather than
+  Inspector `[SerializeField]`s — flagged to user, see DECISIONS.md -> [Combat] for why). Translated
+  the spec's other 3 points explicitly rather than force-fitting them: diagonal tracking doesn't
+  apply (only `left`/X is depth-relevant here; `translate.y` is a separate decorative flourish),
+  dynamic per-frame sorting doesn't apply (`RestoreStageCreatureDepthOrder` already re-runs on every
+  actual lane change — UI Toolkit's paint order is discrete, not a continuous `sortingOrder`),
+  no-Update()-polling was already satisfied (DOTween-driven throughout, no new polling loop added).
+  10 new EditMode tests (327/327 total) including a direct continuity proof (scale at the exact
+  midpoint between two lane positions equals the midpoint of those lanes' scales). A live Play Mode
+  attempt to sample scale mid-tween via rapid `execute_code` calls hit `resolvedStyle` timing lag
+  (a measurement artifact of scripted rapid-fire calls with no frame in between, not a runtime bug) —
+  noted honestly rather than reported as a clean confirmation; the EditMode tests plus the
+  single-tween architecture (position and scale share one DOTween setter, cannot desync by
+  construction) are the actual basis for confidence here.
+- **Next:** Type E (Reaction) still has no trigger point against melee sequences (flagged prior
+  session, still open); Strike Points, ranged archetypes, and additional melee patterns (Part 5/6/9)
+  remain unbuilt by design — this pass deliberately proved the framework with one minimal example
+  only. A live interactive pass (actually clicking Slash's skill-ring orb, timing the Attack beat's
+  ring, watching the full Approach/Windup/Attack/Return play out) is still worth doing by hand — this
+  session's verification drove the battle programmatically (`execute_code`) and screenshotted the
+  resulting layout, but did not click through the actual skill-selection/timed-input UI.
+- **Follow-up #5 (same session, live-tested by user) — two real bugs found and fixed:** User asked
+  for a way to actually playtest Slash without scripting; extended the existing `GameManager.
+  ApplyDebugPlaytestLoadout` debug hook (already used for exactly this purpose last month) to also
+  force-equip Slash on the fallback starter. First real live test then surfaced two genuine bugs:
+  1. **"Expecting to move the phasix close to the target... that never happened."** Root cause:
+     `RunApproach`'s destination was `target.LaneIndex`, and `LaneMovementSystem.IsAdjacent`
+     considered same-lane-index-across-sides as "adjacent" — but BOTH sides default to Lane 4, so
+     attacker and target were ALWAYS trivially "already adjacent" the instant a battle started,
+     skipping Approach's animation on literally every fresh attack. Fixed: Approach's destination is
+     now always Lane 1 (the attacker's own front lane, explicitly "closest to the opposing side" per
+     Combat_Directive), not a function of the target's lane at all. `LaneMovementSystem.IsAdjacent`
+     itself is unchanged and still correct — only the call site's choice of destination was wrong.
+     See DECISIONS.md -> [Combat] "Cross-side lane adjacency... SUPERSEDED."
+  2. **"The phasix only goes ha[l]fway through the screen... expecting it to get right in front of
+     the target."** Root cause: the player and enemy stage areas are two separate, non-overlapping
+     UI Toolkit containers anchored to opposite screen edges with a large gap between them — Lane 1
+     only reaches the edge of the attacker's OWN container, nowhere near the opponent. Fixed:
+     `RunApproach` now runs a "closing lunge" after reaching Lane 1, computing the target's real
+     on-screen position (`worldBound`) and converting it into the attacker's own local coordinate
+     space, landing edge-to-edge with a 20px gap. Caught and fixed a real bug in the first version of
+     this formula too (center-based math was off by one attacker-half-width, verified via live
+     `execute_code` inspection against real battle `worldBound` values showing ~30px overlap instead
+     of the intended 20px gap) — rewrote as pure edge-to-edge math, re-verified exact. See
+     DECISIONS.md -> [Combat] "Approach's 'closing lunge'."
+  `spacingOffset` (in-lane occupancy spread) refactored from something each method re-derived from
+  live position into a value captured once by `BattleManager.ResolveMeleeBeatSequence` and threaded
+  through explicitly — a live re-derivation would have misread the closing lunge's travel as
+  permanent spacing. Verified: 327/327 EditMode tests pass throughout both fixes, clean compile,
+  and the full Approach -> Windup -> Attack -> Return pipeline confirmed running end-to-end multiple
+  times with real damage landing in the battle log. Repeated attempts to screenshot the lunge
+  mid-animation failed because the unfocused Editor throttles background frame rate enough that the
+  whole ~2-second sequence completed within a single tool round-trip every time — a testing-
+  environment artifact (confirmed via direct `worldBound` math instead, not a runtime bug).
+- **Next:** Same open items as above, plus: a normal interactive Play Mode pass (Editor focused,
+  clicking through the real UI) is the one verification step this session still couldn't do itself —
+  worth a live look to confirm the lunge reads well now that the math is confirmed correct.
+- **Follow-up #6 (same session, live-tested by user) — major correction: lanes are vertical rows,
+  not horizontal positions.** Two more live reports: "2 hitches in the first half of the movement...
+  second half looks clean and the bounce back looks clean too" (a real bug — the lane-stepping loop
+  tweened one lane at a time with real stops between each, unlike the already-continuous closing
+  lunge/Return), and "the player is just moving left to right, no vertical movement so why is the
+  size of the phasix also changing?" The second question led to a bigger realization: "wait isn't
+  the lane like 7 horizontal rows?" — yes. Combat_Directive's "3/4 perspective" framing and the
+  user's OWN original depth-scaling request several turns earlier (explicitly Y-position-based)
+  both pointed at vertical rows all along; the horizontal-lane implementation was the actual mistake,
+  not something needing a vertical cue bolted on. **Full rework:** `LaneMovementSystem.
+  GetLaneScreenLeft` -> `GetLaneScreenTop` (now `style.top`, Lane 1 lower/bigger, Lane 7 higher/
+  smaller, Lane 4 at the original baseline). Melee Approach/Return are now purely horizontal and
+  never change row, so depth scale stays constant throughout a Beat Sequence — which also
+  automatically fixes both the hitching (the lane-stepping loop that caused it no longer exists —
+  Approach is just the closing lunge now) and the "why does size change" question (it doesn't
+  anymore). Removed as dead weight once the row never changes during movement: `LaneMovementSystem.
+  GetDepthScaleFromLeft`, `VisualElementTweening.TweenLeftWithDepthScale` (10 tests removed with
+  them), and `BattleParticipant.PreSequenceOriginLane`/`BeginBeatSequenceIfNeeded`/
+  `ClearBeatSequenceOrigin` (replaced by a plain `restingLeft` float threaded through
+  `ResolveMeleeBeatSequence`). Verified: 317/317 tests pass; live `execute_code` check against a real
+  battle confirmed `top`/`scale` read the identical resting values (90, 0.85) before the attack,
+  after the closing lunge, and after the full Return — depth truly never changes during movement now
+  — and the full pipeline still lands real damage in the battle log. See DECISIONS.md -> [Combat]
+  "Lane axis corrected: 7 vertical rows (Y), not 7 horizontal positions (X)."
+- **Next:** A normal interactive Play Mode pass is still the one thing this session couldn't verify
+  itself — worth checking that the vertical row spacing (30px/row, placeholder) reads well visually,
+  and that the now-purely-horizontal Approach/lunge feels right without any vertical travel.
+
+---
+
 [2026-08-11] Phase 3 follow-up — Battle log damage breakdown (base/type/timing, colored)
 - **Context:** User-directed: "show the (base damage + type advantage damage + timing bonus
   damage) just for visibility rn" — a temporary debug-style breakdown of how each attack's final

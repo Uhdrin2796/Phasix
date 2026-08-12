@@ -118,4 +118,33 @@ public static class WildSpawnSystem
             }
         }
     }
+
+    /// <summary>
+    /// TEMPORARY debug override (2026-08-12, user: "give the enemy a slash to try out so i can
+    /// see if it works the same way and i can block") — force-equips a single skill (matched by
+    /// SkillName) on a wild instance, clearing everything else it was seeded with, so
+    /// EnemyAI.ChooseSkill has no other damage option to randomly pick instead and the Melee Beat
+    /// Sequence framework's enemy-attacking path (ResolveEnemyDamageAction -&gt;
+    /// ResolveMeleeBeatSequence -&gt; ResolveMeleeAttackBeatDefense) is guaranteed to trigger on
+    /// every enemy turn, letting the player reliably test Dodge/Parry against it. Mirrors
+    /// GameManager.ApplyDebugPlaytestLoadout's pattern for the player side. No-op if
+    /// skillDatabase is null or no skill with the given name exists. Called from
+    /// EncounterTrigger's "Debug Override" Inspector toggle — DELETE both once the Beat Sequence
+    /// framework has real content and doesn't need a forced single-skill loadout to exercise.
+    /// </summary>
+    public static void ApplyDebugSingleSkillOverride(PhasixRuntimeData runtime, SkillDatabase skillDatabase, string skillName)
+    {
+        if (skillDatabase == null) return;
+
+        foreach ((SkillData skill, string guid) in skillDatabase.AllSkills)
+        {
+            if (skill.SkillName != skillName) continue;
+
+            runtime.learnedSkillGuids.Clear();
+            runtime.equippedSkillGuids.Clear();
+            runtime.learnedSkillGuids.Add(guid);
+            runtime.equippedSkillGuids.Add(guid);
+            return;
+        }
+    }
 }

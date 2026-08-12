@@ -419,6 +419,17 @@ public class BattleHUDController : MonoBehaviour
     private VisualElement _enemyStageCreature;
 
     /// <summary>
+    /// EnemyStageArea (BattleHUD.uxml) — the enemy-side analog of _playerStageArea, needed once
+    /// ApplyEnemyLaneDepthScale started giving _enemyStageCreature a real lane-based `left` (2026-
+    /// 08-11). Previously this container never needed explicit sizing (its one child had no `left`
+    /// set, so it just centered via .stage-side-enemy's own flex/translate). Confirmed live via
+    /// Play Mode screenshot: without resizing this to the full lane range, a non-Lane-1 `left` value
+    /// pushed the enemy creature outside this box's small implicit bounds and off-screen — same fix
+    /// LayoutPlayerStageCreaturesByLane already applies to _playerStageArea.
+    /// </summary>
+    private VisualElement _enemyStageArea;
+
+    /// <summary>
     /// Placeholder per-hit projectile/flash VFX (2026-08-10 — Phase 3 close-out pass; combat had
     /// no visual feedback for attacks/skills landing before this). Constructed in Awake() once
     /// _stage/_playerStageCreatures/_enemyStageCreature all exist. Owned here rather than as its
@@ -596,6 +607,7 @@ public class BattleHUDController : MonoBehaviour
         }
 
         _enemyStageCreature = _root.Q<VisualElement>("EnemyStageSlot0");
+        _enemyStageArea = _root.Q<VisualElement>("EnemyStageArea");
         _vfxController = new CombatVfxController(this, _stage, _playerStageCreatures, _enemyStageCreature);
 
         _actionAnnouncement = _root.Q<VisualElement>("ActionAnnouncement");
@@ -1147,6 +1159,9 @@ public class BattleHUDController : MonoBehaviour
         creature.style.opacity = participant.IsAlive ? 1f : 0.25f;
     }
 
+    /// <summary>Matches `.stage-creature`'s fixed `width: 72px; height: 72px;` (BattleHUD.uss) — used by LayoutPlayerStageCreaturesByLane/ApplyLaneLayout/ApplyEnemyLaneDepthScale to size the stage areas around the 7-row range without hardcoding the 72 magic number in three places.</summary>
+    private const float StageCreatureSizePx = 72f;
+
     /// <summary>
     /// Groups visible player stage slots by BattleParticipant.LaneIndex, and refreshes
     /// _playerStageCreatureLaneIndex for each — shared by LayoutPlayerStageCreaturesByLane (left
@@ -1172,48 +1187,50 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Places each player stage creature at its LaneMovementSystem.GetLaneScreenLeft position — real
-    /// 7-lane depth (Combat_Directive Part 2/3), not the old party-slot-index columns — and sizes
-    /// PlayerStageArea to the FULL lane range (LaneCount * LaneColumnWidthPx) rather than party
-    /// size, since any visible creature can sit as far back as Lane 7 regardless of how many party
-    /// members are present this battle; `.stage-side-player`'s own `translate: -50% -50%` centering
-    /// still depends on its box having a real size once children are absolutely positioned (2026-
-    /// 08-06 — see .stage-creature in BattleHUD.uss for why absolute over flex). Called once from
-    /// Initialize, after party size AND each participant's LaneIndex are known; each creature's own
-    /// internal box (skill slots — PositionSkillSlots) is a completely separate coordinate space and
-    /// unaffected by this. Also the intended hook for a future "place this Phasix here" formation
-    /// feature — flagged as deferred in DECISIONS.md, this is where per-slot lane would stop being
-    /// always LaneMovementSystem.DefaultStartingLane and become player-chosen.
+    /// Places each player stage creature's HORIZONTAL position — GetInLaneSpacingOffsetPx for any
+    /// row shared by more than one occupant (2026-08-11, user-directed: occupants sharing a lane
+    /// should spread HORIZONTALLY — see DECISIONS.md -> [Combat]) — now that lanes are vertical rows
+    /// (2026-08-12 correction, see LaneMovementSystem's class doc comment), horizontal position no
+    /// longer depends on which row a creature is in at all, only on in-row spacing. Sizes
+    /// PlayerStageArea's WIDTH for the max in-row spread (padded by 2*InLaneSpacingPx for safety
+    /// margin, compensated via centeringCompensationPx so the padding doesn't shift the visible
+    /// group off-anchor — same fix as DECISIONS.md -> [Combat] "a little too far left"); HEIGHT is
+    /// sized separately by ApplyLaneLayout below, once row/depth positions are known. Called once
+    /// from Initialize, after party size is known; each creature's own internal box (skill slots —
+    /// PositionSkillSlots) is a completely separate coordinate space and unaffected by this.
     /// </summary>
     private void LayoutPlayerStageCreaturesByLane(List<BattleParticipant> playerSide)
     {
         Dictionary<int, List<int>> slotsByLane = GetPlayerSlotsGroupedByLane(playerSide);
+        float centeringCompensationPx = LaneMovementSystem.InLaneSpacingPx;
 
         foreach (KeyValuePair<int, List<int>> entry in slotsByLane)
         {
-            float left = LaneMovementSystem.GetLaneScreenLeft(entry.Key, isPlayerSide: true);
-            foreach (int slotIndex in entry.Value)
-                _playerStageCreatures[slotIndex].style.left = left;
+            for (int occupantIndex = 0; occupantIndex < entry.Value.Count; occupantIndex++)
+            {
+                int slotIndex = entry.Value[occupantIndex];
+                float spacingX = LaneMovementSystem.GetInLaneSpacingOffsetPx(occupantIndex, entry.Value.Count);
+                _playerStageCreatures[slotIndex].style.left = spacingX + centeringCompensationPx;
+            }
         }
 
-        _playerStageArea.style.width = BattleLaneLayout.LaneCount * LaneMovementSystem.LaneColumnWidthPx;
-        _playerStageArea.style.height = 72f;
+        _playerStageArea.style.width = 2 * LaneMovementSystem.InLaneSpacingPx + StageCreatureSizePx;
     }
 
     /// <summary>
-    /// Applies real per-lane depth scale (LaneMovementSystem.GetDepthScale) and, for any lane shared
-    /// by more than one occupant, symmetric in-lane spacing (GetInLaneSpacingOffsetPx) as a
-    /// `translate` — a pure rendering-time transform, not a layout change, so it doesn't disturb
-    /// LayoutPlayerStageCreaturesByLane's `left` positions and doesn't affect PositionSkillSlots'
-    /// math (already computed relative to each creature's own untransformed 72x72 box before this
-    /// runs). Formerly a fixed 3-slot cosmetic zigzag (StageCreatureStaggerY, 2026-08-06) — replaced
-    /// by real lane mechanics this session (see DECISIONS.md -> [Combat]). Also reorders the
-    /// siblings back-to-front by lane depth (see RestoreStageCreatureDepthOrder) — 2026-08-06, user
-    /// caught the front lane's skill orbs rendering behind a further-back lane's creature; still
-    /// applies once "further back" means a real LaneIndex instead of a fixed offset. Safe to reorder
-    /// freely now that .stage-creature is absolutely positioned (BringToFront no longer moves a
-    /// creature within a flex row — see BattleHUD.uss comment on .stage-creature for the bug this
-    /// fixed).
+    /// Applies real per-row VERTICAL position (LaneMovementSystem.GetLaneScreenTop) and depth scale
+    /// (LaneMovementSystem.GetDepthScale) — 2026-08-12 correction: lanes are vertical rows, not
+    /// horizontal positions (see LaneMovementSystem's class doc comment); this method used to set
+    /// `style.scale` only, with horizontal lane position living in LayoutPlayerStageCreaturesByLane —
+    /// now it owns the row/depth axis (`top` + `scale`) while that method owns pure in-row horizontal
+    /// spacing (`left`), matching the corrected model. Sizes PlayerStageArea's HEIGHT to exactly
+    /// contain the 7-row range (LaneMovementSystem.RowRangeHeightPx) plus one creature's own height.
+    /// Also reorders the siblings back-to-front by row depth (see RestoreStageCreatureDepthOrder) —
+    /// 2026-08-06, user caught the front lane's skill orbs rendering behind a further-back lane's
+    /// creature; still applies once "further back" means a real row instead of a fixed offset. Safe
+    /// to reorder freely now that .stage-creature is absolutely positioned (BringToFront no longer
+    /// moves a creature within a flex row — see BattleHUD.uss comment on .stage-creature for the bug
+    /// this fixed).
     /// </summary>
     private void ApplyLaneLayout(List<BattleParticipant> playerSide)
     {
@@ -1221,28 +1238,39 @@ public class BattleHUDController : MonoBehaviour
 
         foreach (KeyValuePair<int, List<int>> entry in slotsByLane)
         {
+            float top = LaneMovementSystem.GetLaneScreenTop(entry.Key, isPlayerSide: true);
             float scale = LaneMovementSystem.GetDepthScale(entry.Key);
-            for (int occupantIndex = 0; occupantIndex < entry.Value.Count; occupantIndex++)
+            foreach (int slotIndex in entry.Value)
             {
-                int slotIndex = entry.Value[occupantIndex];
-                float spacingY = LaneMovementSystem.GetInLaneSpacingOffsetPx(occupantIndex, entry.Value.Count);
-                _playerStageCreatures[slotIndex].style.translate = new Translate(0, spacingY);
+                _playerStageCreatures[slotIndex].style.top = top;
                 _playerStageCreatures[slotIndex].style.scale = new Scale(new Vector3(scale, scale, 1f));
             }
         }
+
+        _playerStageArea.style.height = LaneMovementSystem.RowRangeHeightPx + StageCreatureSizePx;
 
         RestoreStageCreatureDepthOrder();
     }
 
     /// <summary>
-    /// Single-slot equivalent of ApplyLaneLayout for the lone enemy stage slot — no in-lane spacing
-    /// needed since multi-enemy battles don't have per-enemy stage creatures yet (see class doc
-    /// comment). Called from Initialize once the enemy side's lane index is known.
+    /// Single-slot equivalent of LayoutPlayerStageCreaturesByLane + ApplyLaneLayout for the lone
+    /// enemy stage slot — no in-row spacing needed since multi-enemy battles don't have per-enemy
+    /// stage creatures yet (see class doc comment). Called from Initialize once the enemy side's row
+    /// is known. `left` stays at the compensation baseline (single occupant, no spread needed) rather
+    /// than 0, matching the player side's own baseline so a lone enemy isn't visually offset from
+    /// where a lone player creature would sit.
     /// </summary>
     private void ApplyEnemyLaneDepthScale(BattleParticipant enemyParticipant)
     {
+        if (_enemyStageArea != null)
+        {
+            _enemyStageArea.style.width = 2 * LaneMovementSystem.InLaneSpacingPx + StageCreatureSizePx;
+            _enemyStageArea.style.height = LaneMovementSystem.RowRangeHeightPx + StageCreatureSizePx;
+        }
+
         int lane = enemyParticipant.LaneIndex;
-        _enemyStageCreature.style.left = LaneMovementSystem.GetLaneScreenLeft(lane, isPlayerSide: false);
+        _enemyStageCreature.style.left = LaneMovementSystem.InLaneSpacingPx;
+        _enemyStageCreature.style.top = LaneMovementSystem.GetLaneScreenTop(lane, isPlayerSide: false);
         float scale = LaneMovementSystem.GetDepthScale(lane);
         _enemyStageCreature.style.scale = new Scale(new Vector3(scale, scale, 1f));
     }
@@ -1255,6 +1283,84 @@ public class BattleHUDController : MonoBehaviour
     public VisualElement GetStageCreatureElement(int slotIndex, bool isPlayerSide)
     {
         return isPlayerSide ? _playerStageCreatures[slotIndex] : _enemyStageCreature;
+    }
+
+    /// <summary>
+    /// Public re-entry point into LayoutPlayerStageCreaturesByLane + ApplyLaneLayout for anything
+    /// that changes a player BattleParticipant's LaneIndex outside of a Beat Sequence (currently
+    /// only DebugLaneCycler, 2026-08-12 — user: "is there a way that i can test the lane
+    /// movement") and needs the row's screen position/depth scale/in-row spacing recomputed
+    /// immediately, the same way Initialize does at battle start.
+    /// </summary>
+    public void RefreshPlayerLaneLayout(List<BattleParticipant> playerSide)
+    {
+        LayoutPlayerStageCreaturesByLane(playerSide);
+        ApplyLaneLayout(playerSide);
+    }
+
+    private LaneGuideOverlay _laneGuideOverlay;
+
+    /// <summary>
+    /// TEMPORARY debug (2026-08-12, user: "add a debug button for the '\' button to toggle show
+    /// on and off the lane lines") — shows/hides a full-Stage-width dotted line at every lane/row
+    /// boundary. Lazily creates and parents a LaneGuideOverlay directly under Stage (a sibling of
+    /// PlayerStageArea/EnemyStageArea, not inside either, so one set of lines covers both sides).
+    /// Converts LaneMovementSystem's box-local `top` values into Stage-local ones using
+    /// PlayerStageArea's own resolvedStyle (anchor `top` + box height) — both sides share the same
+    /// USS anchor and box-sizing formula, so this single conversion is valid for either side (see
+    /// LaneMovementSystem.GetLaneScreenTop's "identical formula for both sides" doc comment).
+    /// Called by DebugLaneCycler on a `\` keypress — DELETE alongside that file once real stage art
+    /// exists.
+    /// </summary>
+    public void SetLaneGuideLinesVisible(bool visible)
+    {
+        if (_laneGuideOverlay == null)
+        {
+            _laneGuideOverlay = new LaneGuideOverlay();
+            _stage.Add(_laneGuideOverlay);
+        }
+
+        // Always the backmost Stage child (2026-08-12, user: "make sure the lane lines are also
+        // the furthest back i want everything else on the layer in front") — re-asserted on every
+        // call, not just at creation, since UI Toolkit's painter's algorithm paints later document
+        // siblings on top and nothing else currently reorders Stage's own direct children, but
+        // this guarantees it regardless.
+        _laneGuideOverlay.SendToBack();
+
+        if (visible)
+        {
+            float boxHeight = LaneMovementSystem.RowRangeHeightPx + StageCreatureSizePx;
+            float boxTopInStageSpace = _playerStageArea.resolvedStyle.top - boxHeight / 2f;
+            float halfRow = LaneMovementSystem.LaneRowHeightPx / 2f;
+
+            // LaneCount+1 boundaries for LaneCount rows: index 0 is Lane 1's near (largest-top,
+            // closest-to-viewer) edge; index N is row N's far (smaller-top) edge, which is also
+            // row N+1's near edge for every N < LaneCount — rows are evenly spaced by
+            // LaneRowHeightPx so adjacent rows' shared edge is the same value computed either way.
+            var boundaries = new float[BattleLaneLayout.LaneCount + 1];
+            boundaries[0] = boxTopInStageSpace + LaneMovementSystem.GetLaneScreenTop(1, isPlayerSide: true) + halfRow;
+            for (int lane = 1; lane <= BattleLaneLayout.LaneCount; lane++)
+            {
+                float rowCenter = LaneMovementSystem.GetLaneScreenTop(lane, isPlayerSide: true);
+                boundaries[lane] = boxTopInStageSpace + rowCenter - halfRow;
+            }
+
+            _laneGuideOverlay.SetBoundaries(boundaries);
+        }
+
+        _laneGuideOverlay.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    /// <summary>
+    /// Public passthrough to CombatVfxController.FlashStageElement, resolving slotIndex/isPlayerSide
+    /// to the right element via GetStageCreatureElement — the melee Beat Sequence's Attack beat
+    /// (BattleManager.ResolveMeleeAttackBeatOffense/Defense) has no projectile to carry a hit-flash,
+    /// so it calls this directly instead. See CombatVfxController.FlashStageElement's doc comment
+    /// for the doc/code discrepancy this also corrects.
+    /// </summary>
+    public void FlashStageCreatureHit(int slotIndex, bool isPlayerSide, PrimalType colorType)
+    {
+        _vfxController?.FlashStageElement(GetStageCreatureElement(slotIndex, isPlayerSide), colorType);
     }
 
     /// <summary>

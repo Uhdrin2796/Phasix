@@ -346,6 +346,14 @@ namespace Phasix.Tests.EditMode
             Object.DestroyImmediate(database);
         }
 
+        [Test]
+        public void LaneIndex_DefaultsToLaneMovementSystemDefaultStartingLane()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            Assert.AreEqual(LaneMovementSystem.DefaultStartingLane, participant.LaneIndex);
+        }
+
         private static void SetPrivateField(object target, string fieldName, object value)
         {
             FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);

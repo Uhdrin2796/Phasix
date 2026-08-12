@@ -198,6 +198,7 @@ GameObject:
   - component: {fileID: 2030567416}
   - component: {fileID: 2030567415}
   - component: {fileID: 2030567417}
+  - component: {fileID: 2030567418}
   m_Layer: 0
   m_Name: _BattleManager
   m_TagString: Untagged
@@ -246,6 +247,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 188c558336cf0c5499c60d4c90dc2a46, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Phasix.Runtime::BattleStageGizmos
+--- !u!114 &2030567418
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2030567414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07e2bf747ef471c429c9e17007ac9421, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Phasix.Runtime::DebugLaneCycler
 --- !u!1 &2123304856
 GameObject:
   m_ObjectHideFlags: 0

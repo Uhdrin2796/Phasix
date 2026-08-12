@@ -416,6 +416,17 @@ public class CombatVfxController
         _coroutineHost.StartCoroutine(HitFlashRoutine(element, colorType));
     }
 
+    /// <summary>
+    /// Public passthrough to the private FlashStageCreature/HitFlashRoutine above — added 2026-08-11
+    /// for the melee Beat Sequence's Attack beat (BattleManager.ResolveMeleeAttackBeatOffense/
+    /// Defense), which has no projectile to carry a hit-flash and needs to trigger one directly.
+    /// Also corrects a doc/code discrepancy: DECISIONS.md/CHANGELOG.md's 2026-08-11 "Parry
+    /// counter-attack hit-flash" entries described this exact method (and BattleHUDController.
+    /// FlashStageCreatureHit below) as already built that session — verified via grep it did not
+    /// actually exist until now; see DECISIONS.md -> [Combat] for the correction.
+    /// </summary>
+    public void FlashStageElement(VisualElement element, PrimalType colorType) => FlashStageCreature(element, colorType);
+
     private IEnumerator HitFlashRoutine(VisualElement element, PrimalType colorType)
     {
         Color restingColor = element.resolvedStyle.backgroundColor;

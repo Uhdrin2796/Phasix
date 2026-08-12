@@ -61,6 +61,20 @@ public class BattleParticipant
     public bool HasActedThisTurn { get; set; }
 
     /// <summary>
+    /// Which of the 7 depth lanes (rows — Combat_Directive Part 2/3, LaneMovementSystem) this
+    /// participant currently occupies — defaults to LaneMovementSystem.DefaultStartingLane ("Mid").
+    /// Plain public state, same tier as HasActedThisTurn: battle-only, formation/depth-scale
+    /// positioning only. 2026-08-12 rework: melee Beat Sequences (BeatSequenceRunner.RunApproach/
+    /// RunReturn) are purely horizontal gap-closing moves and no longer change this at all — see
+    /// LaneMovementSystem's class doc comment for the full correction (lanes are vertical rows, not
+    /// horizontal positions; Approach doesn't cross rows). A prior PreSequenceOriginLane/
+    /// BeginBeatSequenceIfNeeded/ClearBeatSequenceOrigin mechanism for restoring LaneIndex after a
+    /// sequence was removed the same pass — it's dead weight once LaneIndex never changes during a
+    /// sequence in the first place.
+    /// </summary>
+    public int LaneIndex { get; set; } = LaneMovementSystem.DefaultStartingLane;
+
+    /// <summary>
     /// Trailing-history window shared by every combo-detection rule (cross-tree, repeat-skill,
     /// timed-input-streak) — matches ComboEngine.DetectCombo's own Quad ceiling (4), not a new
     /// number. 2026-08 session, see DECISIONS.md -> [Combat].
