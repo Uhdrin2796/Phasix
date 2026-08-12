@@ -185,6 +185,24 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-12] Phase 3 follow-up #4 — Recommended build order for Part 5/6 skill archetypes
+- **Context:** User asked which of `Attack_Pattern_Directive`'s still-unbuilt Part 5/6 archetypes to
+  build in what order for the next session, and whether any should be built together vs. isolated.
+  Worked through it in chat, then asked to persist it rather than leave it stuck in conversation.
+- **Built (docs only):** Added a "Recommended build order" subsection to `Attack_Pattern_Directive
+  _v0_1_0.md` Part 1, right after the existing Status tracker. Groups the 13 unbuilt archetypes/
+  systems by how much they reuse existing infrastructure: Group 1 (Instant Strike, Feint, Metronome/
+  Jitter, Direct Projectile) reuses Slash's Windup-Real/Fake and ring-timing almost as-is; Group 2
+  (Multi-Hit Volley, then Charge & Release + Sustained Pressure together) each need one new timing
+  primitive; Group 3 (Zone/Positional, then Split Attention) builds directly on this session's
+  formation-grid work for the defender's response; Group 4 (Counter-Bait, Windup-Applies-Status) are
+  small but isolated to verify no regression; Multi-Turn Buildup, Lane Displacement Attack, and
+  Strike Points are called out to save for last as the genuinely bigger lifts.
+- **Next:** Start Group 1 next session — cheapest, validates that ranged skills don't need an
+  Approach beat before anything else gets built on top of that assumption.
+
+---
+
 [2026-08-12] Phase 3 follow-up #3 — Synced updated directives, tracked enemy-side position gap
 - **Context:** User asked to verify the formation grid/Move work built this session actually aligns
   with the two updated directive docs they'd attached earlier (`Combat_Directive_v0_1_0_1.md`,

@@ -8,6 +8,9 @@ Multi-Turn Buildup. Part 8 gained the Tank response option, per-lane/blind-side 
 the occupancy-model resolution (7 lanes × 5 positions — see `Combat_Directive_v0_1_0.md`'s matching
 2026-08-12 errata). Part 9 resolved the Strike Points/sub-position question — stays independent, no
 model change. Part 10 updated to match. Addition/refinement only — no version bump.
+**Errata (2026-08-12, later same session):** Part 1 gained a recommended build order for the
+still-unbuilt Part 5/6 archetypes, sequencing them by shared infrastructure vs. standalone lift —
+see the Status tracker's new subsection. Addition only — no version bump.
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
 **Related:** Combat_Directive_v0_1_0.md (lane system, timed input system, lane occupancy — authoritative for those mechanics; this doc builds on top)
 
@@ -49,6 +52,56 @@ For each system: build one deliberately **minimal** example and one deliberately
 | Sustained Pressure | Not designed | — | — | — |
 | Multi-Turn Buildup | Not designed | — | — | — |
 | Windup-Applies-Status | Not designed | Status system (§17, locked) | — | — |
+
+### Recommended build order for Part 5/6 archetypes (added 2026-08-12)
+None of Part 5's archetypes are built yet beyond the melee Beat Sequence's own minimal example
+(Slash). This order sequences them by how much they reuse what already exists vs. how much genuinely
+new mechanical infrastructure each one needs — front-loading the cheap, infrastructure-reusing ones
+validates "ranged doesn't need Approach" and the shared timing primitives before committing to the
+archetypes that need a wholly new input model or temporal structure.
+
+**Group 1 — build together (near-free extensions of what's already built):**
+1. **Instant Strike / Read-the-Tell** — structurally almost identical to Slash's
+   `Windup-Real → Attack`, just without the Approach beat (no lane-closing) and no travel time.
+   Cheapest possible ranged skill; proves ranged doesn't need Approach at all.
+2. **Feint** — `Windup-Fake` already exists from Slash; applying it to Instant Strike just proves the
+   fake/real read generalizes past melee. Build alongside #1, not as separate work.
+3. **Metronome/Learned Rhythm & Jitter/No Fixed Rhythm** — not new systems, just windup-timing data
+   patterns (fixed vs. randomized) applied to whatever skill from #1 already exists.
+4. **Direct Projectile** — check first whether the existing `BuiltInMoveType.Attack` baseline already
+   covers this (the Worked Examples table below calls it "current implemented pattern") before
+   spending build time on it — may already be effectively done.
+
+**Group 2 — one dedicated pass each (new input primitives):**
+5. **Multi-Hit Volley** — calls the existing `RunTimedInput` multiple times in sequence, which
+   `Combat_Directive` explicitly built it to support. Proves that extension point actually works.
+6. **Charge & Release** + **Sustained Pressure** — build these two *together*: both are "hold input"
+   instead of "tap input," diverging only in scoring (release timing vs. duration matching). Share
+   one new hold-input primitive.
+
+**Group 3 — one dedicated pass, builds directly on the 2026-08-12 formation grid work:**
+7. **Zone/Positional** — the Lane Selection input model (no timing, just picking lanes) plus a
+   visible "marked lanes" tell. The defender's Evade/Tank response reuses the player position system
+   already built this session (`FormationSystem.cs`, `LaneMovementSystem.cs`).
+8. **Split Attention** — build immediately after #7, not standalone — it's Zone/Positional with two
+   simultaneous marks (one or both fake), same infrastructure.
+
+**Group 4 — small, isolate to verify no regression:**
+9. **Counter-Bait** — needs tracking "did the player just guard" as a trigger condition. Small, but
+   worth its own verification pass since it hooks existing guard state.
+10. **Windup-Applies-Status** — check the status engine's current hook points first (does it fire only
+    at Attack resolution, or can it trigger mid-Windup?) before starting; likely small if the engine is
+    already wired into live battle.
+
+**Save for last — genuinely bigger lifts, don't bundle with anything else:**
+11. **Multi-Turn Buildup** (+ the Telegraphed Area Attack worked example) — a new temporal structure
+    (decisions made across multiple turns), not a reflex test at all. Biggest lift in Part 5.
+12. **Lane Displacement Attack** — gated behind building the reactive dodge-to-adjacent-slot mechanic
+    first (see DECISIONS.md -> [Combat] "Enemy-side position support" for why this is also shared
+    groundwork any future enemy-side work would need).
+13. **Strike Points** (Part 9) — not really a Part 5 archetype; treat as a capstone once a few of the
+    above exist, to validate Beat Sequence's own stated maximal case (the Shadow teleport-strike
+    example from the Validation approach above).
 
 ### Confirmed — placeholder animation approach
 Melee beats use **Transform-tweening (DOTween)** on the existing placeholder sprite, not drawn art:
