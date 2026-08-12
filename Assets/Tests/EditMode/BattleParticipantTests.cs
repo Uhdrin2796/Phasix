@@ -354,6 +354,46 @@ namespace Phasix.Tests.EditMode
             Assert.AreEqual(LaneMovementSystem.DefaultStartingLane, participant.LaneIndex);
         }
 
+        [Test]
+        public void PositionIndex_DefaultsToLaneMovementSystemDefaultStartingPosition()
+        {
+            var participant = MakeParticipant(aura: 10);
+
+            Assert.AreEqual(LaneMovementSystem.DefaultStartingPosition, participant.PositionIndex);
+        }
+
+        [Test]
+        public void Constructor_SeedsLaneAndPositionFromRuntimeDataPreferredValues()
+        {
+            var phasix = new PhasixRuntimeData("test-node-guid")
+            {
+                baseStats = new StatBlock { Vitality = 20, Aura = 10 },
+                preferredLaneIndex = 2,
+                preferredPositionIndex = 5,
+            };
+
+            var participant = new BattleParticipant(phasix, isPlayerSide: true);
+
+            Assert.AreEqual(2, participant.LaneIndex);
+            Assert.AreEqual(5, participant.PositionIndex);
+        }
+
+        [Test]
+        public void Constructor_ClampsOutOfRangePreferredValues()
+        {
+            var phasix = new PhasixRuntimeData("test-node-guid")
+            {
+                baseStats = new StatBlock { Vitality = 20, Aura = 10 },
+                preferredLaneIndex = 99,
+                preferredPositionIndex = -4,
+            };
+
+            var participant = new BattleParticipant(phasix, isPlayerSide: true);
+
+            Assert.AreEqual(LaneMovementSystem.ClampLane(99), participant.LaneIndex);
+            Assert.AreEqual(LaneMovementSystem.ClampPosition(-4), participant.PositionIndex);
+        }
+
         private static void SetPrivateField(object target, string fieldName, object value)
         {
             FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);

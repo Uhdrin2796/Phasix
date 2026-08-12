@@ -185,6 +185,173 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-12] Phase 3 follow-up #3 — Synced updated directives, tracked enemy-side position gap
+- **Context:** User asked to verify the formation grid/Move work built this session actually aligns
+  with the two updated directive docs they'd attached earlier (`Combat_Directive_v0_1_0_1.md`,
+  `Attack_Pattern_Directive_v0_1_0.md`, both dated 2026-08-12) — important since upcoming skill
+  authoring work needs to build against a directive that matches reality. Comparison surfaced one
+  real gap (enemy-side positions) and confirmed everything else lines up; user asked for it to be
+  clearly tracked (roadmap/decisions) and the docs pushed.
+- **Synced:** The two directive files actually in `Assets/Docs/` were still the stale 2026-08-11
+  versions — the updated Downloads copies had only ever been read into context, never committed.
+  Both now replaced with the current content. `DOCUMENT_INDEX.md`'s status notes updated to match
+  (Combat_Directive's position-exclusive 7×5 refinement, Attack_Pattern_Directive's Move/formation
+  build status and the enemy-side gap).
+- **Confirmed aligned:** 7×5 lane×position occupancy model (position-exclusive, lane-shared) —
+  exact match to what was built. Movement cost being context-dependent (Move costs a full turn) —
+  matches `Combat_Directive` Part 3's cost-agnostic design. Depth scaling/anchor-lane model —
+  unaffected. UI interaction model (drag icon) — directives don't specify one, no conflict either way.
+- **Gap found and tracked, not fixed this session:** `Attack_Pattern_Directive`'s 2026-08-12 errata
+  says enemy-side position support is "un-deferred" (needs building alongside player-side) — the
+  actual implementation is player-side only, confirmed as a deliberate choice during this session's
+  planning (`AskUserQuestion`: "Leave deferred for now"). Full rationale, the concrete list of what's
+  needed to close the gap (enemy stage rendering as an array, per-enemy position layout, target
+  selection UI, multi-enemy spawning — the real gate, enemy AI repositioning logic, the still-unbuilt
+  reactive Lane Displacement Attack dodge, starting formation assignment), and the revisit trigger
+  (a specific skill/encounter that needs 2+ simultaneous enemies) are all in `DECISIONS.md` -> [Combat]
+  "Enemy-side position support." Also added as a row in `Roadmap_v2.md`'s "What Is Not In This
+  Roadmap" table.
+- **Next:** Start real skill content against `Attack_Pattern_Directive` Part 5/6 archetypes — nothing
+  is blocking that now. Enemy-side positions stay parked until a specific skill genuinely needs
+  multiple simultaneous enemies (see the DECISIONS.md entry above for the full build-out list when
+  that day comes).
+
+---
+
+[2026-08-12] Phase 3 follow-up #2 — Nameplate shift tuning (1.25 columns) + cold-boot save/fallback bugfix
+- **Context:** User asked to tune `PlayerNameplateClearanceShiftPx` down twice after live-testing
+  (2 columns felt like an overcompensation → 1.5 → 1.25, final), then separately reported an empty
+  party on a normal Editor Play press ("im just press the play button on the unity editor and ive
+  never had an issue... at first it was showing no phasix in the party").
+- **Fixed [SAVE-001]:** Reproduced directly via `manage_editor play` — zero `[GameManager]` console
+  output on a fresh boot, empty `PartySystem` despite valid, resolvable saves already on disk and a
+  correctly-assigned fallback starter species. Root cause: Unity's Editor doesn't fire
+  `SceneManager.sceneLoaded` for the scene already open when Play is pressed (only for runtime
+  `LoadScene` calls, like the debug "New Game" reload) — a standalone, pre-existing Editor
+  limitation, unrelated to this session's earlier `LoadSceneMode.Single` guard. `GameManager` now
+  also runs the boot sequence from `Start()` (fires reliably on a cold boot, unlike `sceneLoaded`),
+  alongside the existing `HandleSceneLoaded` path (still needed for reloads after the first, since
+  `Start()` never re-fires for this `DontDestroyOnLoad` survivor). Full writeup in KNOWN_ISSUES.md.
+- **Verified:** 339/339 EditMode tests pass. Live-verified: before the fix, a fresh Play press
+  produced zero `[GameManager]` logs and an empty party; after, `[GameManager] Loaded save slot 0...`
+  logs correctly and the real saved Phasix resolves into slot 0. `read_console` clean.
+
+---
+
+[2026-08-12] Phase 3 follow-up — Formation grid bugfixes + Move redesigned as drag-to-stage-position icon
+- **Context:** User live-tested the formation grid pass directly below and reported three real bugs/
+  requests, with two updated design docs attached (`Combat_Directive_v0_1_0_1.md`,
+  `Attack_Pattern_Directive_v0_1_0.md`, confirming the 7x5 exclusive-position model as locked): the
+  grid rendered upside-down; formation didn't survive into battle (party stacked on top of each
+  other); and Move should stop being a skill-ring orb and become a dedicated per-creature icon you
+  drag to a destination, with legal destinations hidden until a drag starts and aligned to the real
+  stage. Went through Plan Mode (2 Explore agents traced root causes, a Plan agent drafted the shape,
+  2 rounds of `AskUserQuestion` resolved: dedicated Move icon as the drag handle not the creature
+  sprite itself; drag-time grid aligned to real stage coordinates not a centered popup; Move keeps
+  triggering combo-streak/`SkillUsed` bookkeeping like it used to). Full design/rationale recorded in
+  DECISIONS.md's `[Combat] Formation grid orientation/persistence bugfixes...` entry — see that entry
+  for the complete file-by-file breakdown; this entry summarizes.
+- **Fixed:**
+  - Grid orientation: `FormationGridPicker.Build`'s row loop reversed (7→1) to match the real stage's
+    front=bottom/back=top convention; cells now carry `userData = (lane, position)`.
+  - Formation persistence, two independent compounding causes: `GameManager.HandleSceneLoaded` now
+    ignores non-`Single` scene loads (the additive battle-scene load was silently re-applying the
+    last save over the live party); `PhasixSaveData` now actually serializes
+    `preferredLaneIndex`/`preferredPositionIndex` (previously dropped entirely, silently resetting
+    everyone to the default slot on any save/load).
+- **Built (Move redesign):** Move removed from the equippable Standard skill pool entirely. New
+  always-present `.move-icon` per player creature (visible for alive, not-yet-acted creatures at turn
+  start); dragging it reveals 35 stage-aligned position markers built from the same
+  `GetLaneScreenTop`/`GetPositionOffsetPx` formulas real creatures use (correct orientation for free,
+  hidden again on drop/reject/cancel); dropping on a free marker fires a new
+  `BattleHUDController.MoveConfirmed` event handled directly by `BattleManager.HandleMoveConfirmed`
+  (bypasses the normal skill-selection wait-loop, reuses `ResolveBuiltInMove`'s existing `Move` case
+  unchanged). `PlayerTurn`'s open-ring tracking promoted to a field so a Move completing mid-ring-open
+  reconciles cleanly. New `LaneMovementSystem.PlayerNameplateClearanceShiftPx` (a follow-up user
+  request: "the 2 columns on the right are interfering with the health hud... its the player
+  nameplates... move it over by 2 columns", applied identically to creature and marker positioning,
+  grid width/spacing left untouched per "Dont shrink the grid"). Old click-to-confirm centered
+  overlay plumbing deleted (not flagged off) — fully superseded.
+- **Verified:** Full EditMode suite green (new `FormationGridPickerTests.cs`; `SaveSystemTests`'s
+  round-trip extended with non-default lane/position values; `WildSpawnSystemTests` extended to
+  assert Move is never learned/equipped). Live `execute_code` verification against a real 3-member
+  party seeded to distinct (lane, position) slots and a real additive battle transition (worked around
+  the known duplicate-`BattleScene_Main` race by filtering for the populated `PlayerSide` instance):
+  confirmed `PlayerSide[i].LaneIndex`/`PositionIndex` matched exactly what was set pre-battle;
+  inspected the marker overlay's raw style values directly (correct front/back orientation, full
+  5-column spacing preserved, shifted clear of the nameplates); screenshotted the live stage
+  mid-drag-equivalent state confirming no nameplate overlap and correct marker/creature layering.
+  `read_console` clean (only pre-existing unrelated A* Pathfinding Project network-check warnings).
+- **Next:** Enemy-side position support remains deferred (confirmed out of scope — only one enemy
+  stage slot exists, no multi-enemy battles yet); `PlayerNameplateClearanceShiftPx`'s doc comment
+  flags the opposite-sign mirror a future enemy-side pass would need. Move's reposition is still
+  instant/non-animated, same precedent as Charge/Heal/Regen.
+
+---
+
+[2026-08-12] Phase 3 — Exclusive 5-position formation grid: pre-battle picker + in-battle Move skill
+- **Context:** User, after confirming the melee framework "feels good so far": no way to pre-slot
+  which lane each of 3 party members starts a battle in, and no way to move lanes during battle.
+  Discussion landed on: movement should cost the whole turn (like a skill), "jump to any row in one
+  turn" rather than one-row-per-turn (user's choice, via AskUserQuestion), then a further
+  clarification — "lets just have 5 positions across a lane. Then you can preset which position you
+  want to be in... only one position can be filled at a time... similar to how the skill wheel is
+  set up, but instead it would look like a 7 by 5 grid... The inbattle move could use the same...
+  system that the preslot uses for selection."
+- **Built:**
+  - `LaneMovementSystem.cs` gained `PositionsPerLane` (5), `DefaultStartingPosition` (3, center),
+    `ClampPosition`, `GetPositionOffsetPx` (fixed column offset — replaces the removed
+    `GetInLaneSpacingOffsetPx`'s occupant-count-based spread, since occupancy is exclusive now),
+    `PositionRangeWidthPx`.
+  - New `FormationSystem.cs` — pure `IsSlotOccupied(occupiedSlots, lane, position)` exclusivity
+    check, decoupled from which concrete type is asking (works for both `PhasixRuntimeData` and
+    `BattleParticipant` via caller-side projection).
+  - New `FormationGridPicker.cs` — builds the shared 7x5 clickable grid (current slot starred,
+    others' occupied slots disabled with a short label), used identically by both the Party menu and
+    the in-battle Move skill.
+  - `PhasixRuntimeData` gained `preferredLaneIndex`/`preferredPositionIndex` (persistent, default
+    center of each range). `BattleParticipant` gained `PositionIndex`; its constructor now seeds
+    both `LaneIndex`/`PositionIndex` from the runtime data's preferred fields.
+  - `BattleHUDController.LayoutPlayerStageCreaturesByLane` reworked to place each creature directly
+    from its own `PositionIndex` (no more grouping/spreading — a column's offset is now a pure
+    per-participant lookup). New `ShowFormationGridForMove`/`HideFormationGridForMove` — a centered
+    overlay panel shown when the Move orb is pressed (bypassing the normal drag-to-a-creature flow
+    entirely, since Move targets a grid slot, not a creature), wired into `BeginDragForSkill`.
+    `ShowMoveSelection` gained an optional `playerSideForFormationGrid` parameter so the picker can
+    check occupancy against live allies.
+  - `ChosenMove` gained optional `DestinationLane`/`DestinationPosition` (only ever set for Move).
+  - New `BuiltInMoveType.Move` + `Standard_Move.asset` (`_skillName: "M"`), seeded alongside the
+    other Standard built-ins (`WildSpawnSystem.SeedInitialSkills`, `GameManager`'s debug loadout),
+    hard-excluded from `EnemyAI.ChooseSkill` (same treatment as Capture — no AI logic for deciding
+    when an enemy should reposition). `BattleManager.ResolveBuiltInMove` gained a `Move` case:
+    validates the destination isn't ally-occupied (defense in depth on top of the UI already
+    disabling those cells), updates `LaneIndex`/`PositionIndex`, refreshes the layout, logs, done —
+    same "instant, no travel animation" treatment Charge/Heal/Regen already have.
+  - `OverworldMenuController.ShowDetail` gained a formation section reusing the same
+    `FormationGridPicker` inline (not as an overlay) — picking a cell updates the runtime's
+    preferred fields and rebuilds the whole detail view so the highlight moves.
+  - `.formation-grid*` CSS lives in `BattleHUD.uss` only (`OverworldMenu.uxml` already references it
+    as a second stylesheet, so the Party menu picks the same classes up with no duplication).
+- **Superseded:** DECISIONS.md's "Lane occupancy — non-exclusive, in-lane visual spacing" (2026-08-11)
+  — the exact "exclusive occupancy" alternative that entry rejected is what got built here, once
+  pre-battle placement turned into a real feature. Marked superseded, not deleted.
+- **Verified:** 332/332 EditMode tests pass (added position-math, `FormationSystem`,
+  `PhasixRuntimeData`, and `BattleParticipant` seeding/clamping coverage). Live-verified against a
+  real 3-member party in a real battle via `execute_code`: a move onto an ally-occupied slot was
+  correctly rejected (battle log confirmed), a move to a free slot succeeded with `LaneIndex`/
+  `PositionIndex`/`style.top`/`style.left` all matching expected values exactly. Inspected the
+  constructed grid overlay's element tree directly (7x5, correct current/occupied cell states).
+  Party menu picker verified structurally (opening it mid-battle for the screenshot attempt
+  confused the two simultaneously-active UIDocuments — not a real-game scenario, so verified via
+  direct element-tree inspection instead). Screenshotted the in-battle grid overlay and sent it to
+  the user.
+- **Next:** The Move skill's reposition is instant (no travel animation) — a natural upgrade once
+  real art/animation exists, matching Charge/Heal/Regen's own "instant" precedent for now. No
+  per-enemy formation/positioning exists (scoped out, same as every other lane-system pass this
+  session — no multi-enemy battles yet).
+
+---
+
 [2026-08-11] Phase 3 — Attack Pattern Directive implementation: real 7-lane system + melee Beat Sequence (Slash)
 - **Context:** First implementation pass against `Attack_Pattern_Directive_v0_1_0.md` (added as a
   design doc in the prior session, nothing built yet). User decided: import real DOTween now, build

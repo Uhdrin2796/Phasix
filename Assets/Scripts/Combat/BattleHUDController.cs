@@ -457,6 +457,30 @@ public class BattleHUDController : MonoBehaviour
     /// <summary>The skill currently being dragged (always non-null once a drag is in progress — every skill-ring slot, built-in move or tree skill, is real SkillData now).</summary>
     private SkillData _draggingSkill;
 
+    /// <summary>
+    /// Live player side, set once by Initialize. 2026-08-12: replaces the old, ring-open-scoped
+    /// `_playerSideForFormationGrid` — the Move-drag flow (see below) needs occupancy data
+    /// available at ANY time a Move icon might be pressed, independent of whether a skill ring
+    /// happens to be open, so this is set once for the whole battle rather than per-ShowMoveSelection
+    /// call. Always the same List reference BattleState.PlayerSide holds, so LaneIndex/PositionIndex
+    /// reads are always live with no explicit refresh needed.
+    /// </summary>
+    private List<BattleParticipant> _playerSide;
+
+    // --- In-battle Move (2026-08-12 redesign): a dedicated always-present per-creature icon, NOT a
+    // skill-ring orb — dragging it reveals a set of stage-aligned position markers (hidden the rest
+    // of the time) and drops onto one to reposition, reusing the same drag-line/pointer-capture
+    // mechanics as skill orbs but as a fully independent flow (own fields below, never touching
+    // _draggingFromSlotIndex/_draggingSkill) since Move no longer routes through ChosenMove/
+    // _onMoveConfirmed at all — see BattleManager.HandleMoveConfirmed. ---
+    private readonly VisualElement[] _playerMoveIcons = new VisualElement[BattleConfig.ActivePartySize];
+    private SkillData _moveSkill;
+    private int _moveDragSlotIndex = -1;
+    private VisualElement _stagePositionMarkers;
+
+    /// <summary>Fires (slotIndex, lane, position) when a Move-icon drag is released on a free stage position marker — BattleManager.HandleMoveConfirmed applies it directly via ResolveBuiltInMove, bypassing the ChosenMove/ResolveSkillAction pipeline entirely (Move isn't "a skill choice" anymore).</summary>
+    public event Action<int, int, int> MoveConfirmed;
+
     // Shared converging-ring timing visual (2026-08-05, user-directed — see DECISIONS.md ->
     // [Combat]): reparented per use — above the targeted enemy for RunTimedInput (offense), above
     // the defending player creature for RunDefenseTimedInput. Never both at once (PlayerTurn and
@@ -581,6 +605,29 @@ public class BattleHUDController : MonoBehaviour
                 slot.RegisterCallback<PointerLeaveEvent>(evt => _tooltip.Hide());
             }
             PositionSkillSlots(_playerSkillSlots[i]);
+
+            // Persistent Move icon (2026-08-12 redesign — user: "it should have its own icon that
+            // exists for every player instead of it being a skill") — a small always-present badge,
+            // separate from the 12-slot skill ring, parented directly under the stage-creature so it
+            // automatically follows every ApplyLaneLayout position/scale change with zero extra
+            // bookkeeping (no PositionSkillSlots-style per-frame math needed). Visibility is owned
+            // by SetMoveIconVisible (tied to HasActedThisTurn/turn state, see BattleManager),
+            // entirely independent of SetSkillRingVisible/ShowMoveSelection/HideMoveSelection's
+            // ring-only lifecycle — the icon is available whether or not the ring is open.
+            var moveIcon = new VisualElement();
+            moveIcon.AddToClassList("move-icon");
+            moveIcon.style.display = DisplayStyle.None; // hidden until SetMoveIconVisible(true) at turn start
+            _playerStageCreatures[i].Add(moveIcon);
+            _playerMoveIcons[i] = moveIcon;
+
+            int capturedMoveSlotIndex = i;
+            moveIcon.RegisterCallback<PointerDownEvent>(evt =>
+            {
+                // A Move-icon press must not also open the skill ring via PlayerCreatureClicked —
+                // same StopPropagation reasoning as every skill-ring slot above.
+                evt.StopPropagation();
+                BeginMoveDrag(capturedMoveSlotIndex, evt);
+            });
         }
 
         // Depth-scale/in-lane-spacing (formerly a fixed 3-slot stagger, 2026-08-06 — see
@@ -861,6 +908,11 @@ public class BattleHUDController : MonoBehaviour
     /// </summary>
     public void Initialize(List<BattleParticipant> playerSide, List<BattleParticipant> enemySide, SkillDatabase skillDatabase = null)
     {
+        // 2026-08-12: single source of truth for the Move-drag flow's occupancy checks
+        // (ShowStagePositionMarkers/OnMoveDragPointerUp) — needs live player-side data available
+        // whenever a Move icon might be pressed, not just while a skill ring happens to be open.
+        _playerSide = playerSide;
+
         for (int i = 0; i < MaxNameplateSlots; i++)
         {
             bool hasSlot = i < playerSide.Count;
@@ -1164,10 +1216,13 @@ public class BattleHUDController : MonoBehaviour
 
     /// <summary>
     /// Groups visible player stage slots by BattleParticipant.LaneIndex, and refreshes
-    /// _playerStageCreatureLaneIndex for each — shared by LayoutPlayerStageCreaturesByLane (left
-    /// position) and ApplyLaneLayout (depth scale + in-lane spacing) so both derive from the same
-    /// grouping rather than recomputing it inconsistently. Combat_Directive's non-exclusive-
-    /// occupancy rule means a lane can hold more than one entry.
+    /// _playerStageCreatureLaneIndex for each — used by ApplyLaneLayout (row depth: top + scale) and
+    /// RestoreStageCreatureDepthOrder (paint order), both of which only care about ROW, never
+    /// column/PositionIndex. 2026-08-12: occupancy within a row is now EXCLUSIVE per (lane,
+    /// position) pair (see LaneMovementSystem's class doc comment), but a single lane/row can still
+    /// legitimately hold more than one entry (up to 5, one per column) — this grouping is still
+    /// correct for that, it just no longer feeds horizontal placement (LayoutPlayerStageCreaturesByLane
+    /// reads PositionIndex directly instead — see that method's own doc comment).
     /// </summary>
     private Dictionary<int, List<int>> GetPlayerSlotsGroupedByLane(List<BattleParticipant> playerSide)
     {
@@ -1187,34 +1242,39 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Places each player stage creature's HORIZONTAL position — GetInLaneSpacingOffsetPx for any
-    /// row shared by more than one occupant (2026-08-11, user-directed: occupants sharing a lane
-    /// should spread HORIZONTALLY — see DECISIONS.md -> [Combat]) — now that lanes are vertical rows
-    /// (2026-08-12 correction, see LaneMovementSystem's class doc comment), horizontal position no
-    /// longer depends on which row a creature is in at all, only on in-row spacing. Sizes
-    /// PlayerStageArea's WIDTH for the max in-row spread (padded by 2*InLaneSpacingPx for safety
-    /// margin, compensated via centeringCompensationPx so the padding doesn't shift the visible
-    /// group off-anchor — same fix as DECISIONS.md -> [Combat] "a little too far left"); HEIGHT is
+    /// Places each player stage creature's HORIZONTAL position directly from
+    /// BattleParticipant.PositionIndex (LaneMovementSystem.GetPositionOffsetPx) — 2026-08-12 rework:
+    /// occupancy is now EXCLUSIVE (at most one combatant per (lane, position) pair, see
+    /// LaneMovementSystem's class doc comment for the full "5-position formation grid" correction),
+    /// so a column's screen offset no longer depends on how many others happen to share a row —
+    /// unlike the removed occupant-count-based spread, this needs no grouping step at all, just a
+    /// direct per-participant lookup. Sizes PlayerStageArea's WIDTH to exactly contain the 5-column
+    /// range (LaneMovementSystem.PositionRangeWidthPx) plus one creature's own width, with a fixed
+    /// centering-compensation term (half the range) so the padding doesn't shift the visible group
+    /// off-anchor — same fix as DECISIONS.md -> [Combat] "a little too far left", now derived
+    /// algebraically the same way GetLaneScreenTop's vertical centering term already is. HEIGHT is
     /// sized separately by ApplyLaneLayout below, once row/depth positions are known. Called once
     /// from Initialize, after party size is known; each creature's own internal box (skill slots —
     /// PositionSkillSlots) is a completely separate coordinate space and unaffected by this.
+    ///
+    /// Also applies LaneMovementSystem.PlayerNameplateClearanceShiftPx (2026-08-12, user: "the 2
+    /// columns on the right are interferring with the health hud [player nameplates]... move the
+    /// grid over by 2 columns") — a pure rightward positional shift, NOT a change to the grid's own
+    /// width/spacing (explicitly not shrunk, per the user). Applied here AND in
+    /// ShowStagePositionMarkers identically — they must move together, since a Move-drag marker's
+    /// position is a promise of exactly where the creature will land if dropped there.
     /// </summary>
     private void LayoutPlayerStageCreaturesByLane(List<BattleParticipant> playerSide)
     {
-        Dictionary<int, List<int>> slotsByLane = GetPlayerSlotsGroupedByLane(playerSide);
-        float centeringCompensationPx = LaneMovementSystem.InLaneSpacingPx;
+        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f + LaneMovementSystem.PlayerNameplateClearanceShiftPx;
 
-        foreach (KeyValuePair<int, List<int>> entry in slotsByLane)
+        for (int i = 0; i < playerSide.Count && i < _playerStageCreatures.Length; i++)
         {
-            for (int occupantIndex = 0; occupantIndex < entry.Value.Count; occupantIndex++)
-            {
-                int slotIndex = entry.Value[occupantIndex];
-                float spacingX = LaneMovementSystem.GetInLaneSpacingOffsetPx(occupantIndex, entry.Value.Count);
-                _playerStageCreatures[slotIndex].style.left = spacingX + centeringCompensationPx;
-            }
+            float spacingX = LaneMovementSystem.GetPositionOffsetPx(playerSide[i].PositionIndex);
+            _playerStageCreatures[i].style.left = spacingX + centeringCompensationPx;
         }
 
-        _playerStageArea.style.width = 2 * LaneMovementSystem.InLaneSpacingPx + StageCreatureSizePx;
+        _playerStageArea.style.width = LaneMovementSystem.PositionRangeWidthPx + StageCreatureSizePx;
     }
 
     /// <summary>
@@ -1491,6 +1551,14 @@ public class BattleHUDController : MonoBehaviour
                 skillDatabase.TryGetByGuid(guid, out skill);
             }
 
+            // Defensive: Move (2026-08-12) is no longer equippable (WildSpawnSystem never seeds it
+            // into equippedSkillGuids anymore), but a save file or live party from earlier this
+            // session's playtesting could still have its guid sitting in that list — render as an
+            // empty/locked slot rather than a non-functional "M" orb (BeginDragForSkill no longer
+            // has a Move-specific branch to send it to, so leaving it populated would silently do
+            // nothing on click).
+            if (skill != null && skill.BuiltInMove == BuiltInMoveType.Move) skill = null;
+
             _playerSkillSlotSkills[slotIndex][ring] = skill;
             slot.EnableInClassList("skill-slot-locked", skill == null);
             // Hover tooltip content (name, description, flat placeholder Aura cost) is read live
@@ -1685,6 +1753,19 @@ public class BattleHUDController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Shows/hides one creature's Move icon (2026-08-12 redesign) — entirely independent of
+    /// SetSkillRingVisible/ShowMoveSelection/HideMoveSelection's ring-only lifecycle, since Move is
+    /// no longer a ring orb. BattleManager calls this at turn start (show for every alive,
+    /// not-yet-acted player creature) and the instant a creature's HasActedThisTurn becomes true
+    /// (hide, whether that happened via a normal skill or via Move itself).
+    /// </summary>
+    public void SetMoveIconVisible(int slotIndex, bool visible)
+    {
+        if (_playerMoveIcons[slotIndex] == null) return;
+        _playerMoveIcons[slotIndex].style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
     private void BeginDragForSkill(int slotIndex, PointerDownEvent evt, SkillData skill)
     {
         if (_playerSlotReadOnly[slotIndex]) return;
@@ -1767,6 +1848,162 @@ public class BattleHUDController : MonoBehaviour
         _dragLine.style.display = DisplayStyle.None;
         _draggingFromSlotIndex = -1;
         _draggingSkill = null;
+    }
+
+    // --- In-battle Move drag flow (2026-08-12 redesign) — independent of the skill-ring drag above
+    // (own fields, own pointer-up handler); reuses the shared _dragLine and the generic
+    // OnDragPointerMove (it only touches _dragLine, nothing skill-specific) but hit-tests against
+    // stage-aligned position markers instead of enemy/self creature bounds. ---
+
+    /// <summary>
+    /// Starts a Move-icon drag — "just like how we do the projectile," per the user, reusing the
+    /// exact same drag-line/pointer-capture mechanics BeginDragForSkill uses for orbs, just against
+    /// a different target set. Markers appear here, at drag START, not before — the "hidden during
+    /// normal combat, shown once you've selected to move" requirement. Re-checks alive/not-acted
+    /// directly rather than trusting the icon's own visibility (same "don't trust the UI alone"
+    /// posture as FormationSystem/ResolveBuiltInMove elsewhere in this codebase).
+    /// </summary>
+    private void BeginMoveDrag(int slotIndex, PointerDownEvent evt)
+    {
+        if (_playerSide == null || slotIndex < 0 || slotIndex >= _playerSide.Count) return;
+        BattleParticipant caster = _playerSide[slotIndex];
+        if (!caster.IsAlive || caster.HasActedThisTurn) return;
+
+        _moveDragSlotIndex = slotIndex;
+        ShowStagePositionMarkers(slotIndex);
+
+        Vector2 startWorld = _playerStageCreatures[slotIndex].worldBound.center;
+        _dragLine.Start = _dragLine.WorldToLocal(startWorld);
+        _dragLine.End = _dragLine.WorldToLocal(evt.position);
+        _dragLine.style.display = DisplayStyle.Flex;
+        _dragLine.Refresh();
+
+        _root.CapturePointer(evt.pointerId);
+        _root.RegisterCallback<PointerMoveEvent>(OnDragPointerMove);
+        _root.RegisterCallback<PointerUpEvent>(OnMoveDragPointerUp);
+    }
+
+    private void OnMoveDragPointerUp(PointerUpEvent evt)
+    {
+        _root.ReleasePointer(evt.pointerId);
+        int casterSlotIndex = _moveDragSlotIndex;
+        EndMoveDrag();
+
+        (int lane, int position)? hitSlot = null;
+        if (_stagePositionMarkers != null)
+        {
+            foreach (VisualElement marker in _stagePositionMarkers.Children())
+            {
+                if (marker.worldBound.Contains(evt.position))
+                {
+                    hitSlot = ((int, int))marker.userData;
+                    break;
+                }
+            }
+        }
+
+        HideStagePositionMarkers();
+
+        // No marker hit (released outside all of them) — the cancel path: no move applied, icon
+        // stays enabled, nothing else to undo (the ring was never touched by this flow).
+        if (hitSlot == null || _playerSide == null || casterSlotIndex < 0 || casterSlotIndex >= _playerSide.Count) return;
+
+        (int lane, int position) = hitSlot.Value;
+        BattleParticipant caster = _playerSide[casterSlotIndex];
+
+        // Live re-validation, not just trusting the marker's disabled-at-build-time state — the
+        // same "safety re-check" posture ResolveBuiltInMove's own Move case already has.
+        var others = new System.Collections.Generic.List<(int, int)>();
+        foreach (BattleParticipant p in _playerSide)
+        {
+            if (p == caster || !p.IsAlive) continue;
+            others.Add((p.LaneIndex, p.PositionIndex));
+        }
+        if (FormationSystem.IsSlotOccupied(others, lane, position)) return; // cancel: occupied
+
+        MoveConfirmed?.Invoke(casterSlotIndex, lane, position);
+    }
+
+    private void EndMoveDrag()
+    {
+        _root.UnregisterCallback<PointerMoveEvent>(OnDragPointerMove);
+        _root.UnregisterCallback<PointerUpEvent>(OnMoveDragPointerUp);
+        _dragLine.style.display = DisplayStyle.None;
+        _moveDragSlotIndex = -1;
+    }
+
+    /// <summary>
+    /// Builds the 7x5 set of Move-drag target markers, ALIGNED TO THE REAL STAGE — each marker's
+    /// `top`/`left` is computed via the exact same LaneMovementSystem.GetLaneScreenTop/
+    /// GetPositionOffsetPx formulas LayoutPlayerStageCreaturesByLane/ApplyLaneLayout already use for
+    /// real creatures (2026-08-12, user-directed: markers should sit "where the player could move
+    /// to," not in a generic centered popup) — this also means orientation is correct automatically,
+    /// with no separate row-ordering logic to get wrong the way FormationGridPicker's flex-grid
+    /// layout did. Reuses FormationGridPicker.BuildCell for cell appearance/state (current/occupied/
+    /// free) so the Party menu's grid and these markers never drift out of visual sync. Parented
+    /// into _playerStageArea (the same container real creatures live in) and sent to the back so
+    /// creatures render on top of markers, not behind them (same precedent as LaneGuideOverlay).
+    /// </summary>
+    private void ShowStagePositionMarkers(int casterSlotIndex)
+    {
+        HideStagePositionMarkers();
+        if (_playerSide == null || casterSlotIndex < 0 || casterSlotIndex >= _playerSide.Count) return;
+
+        BattleParticipant caster = _playerSide[casterSlotIndex];
+
+        string GetOccupantLabel(int lane, int position)
+        {
+            foreach (BattleParticipant ally in _playerSide)
+            {
+                if (ally == caster || !ally.IsAlive) continue;
+                if (ally.LaneIndex == lane && ally.PositionIndex == position)
+                    return ally.DisplayName.Length > 0 ? ally.DisplayName.Substring(0, 1) : "?";
+            }
+            return null;
+        }
+
+        _stagePositionMarkers = new VisualElement();
+        _stagePositionMarkers.AddToClassList("stage-position-markers");
+        _stagePositionMarkers.pickingMode = PickingMode.Ignore; // hit-testing is manual (OnMoveDragPointerUp), not UI Toolkit picking
+
+        // + PlayerNameplateClearanceShiftPx: must match LayoutPlayerStageCreaturesByLane's own
+        // shift exactly, or a marker's position stops being a truthful promise of where the
+        // creature will actually land (2026-08-12, user: "move the grid over by 2 columns").
+        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f + LaneMovementSystem.PlayerNameplateClearanceShiftPx;
+        const float markerSizePx = 28f; // matches .formation-grid-cell's width/height
+        float centerOffsetPx = (StageCreatureSizePx - markerSizePx) / 2f; // aligns marker CENTER with where a creature's center would be, not just its top-left
+
+        for (int lane = 1; lane <= BattleLaneLayout.LaneCount; lane++)
+        {
+            float top = LaneMovementSystem.GetLaneScreenTop(lane, isPlayerSide: true) + centerOffsetPx;
+
+            for (int position = 1; position <= LaneMovementSystem.PositionsPerLane; position++)
+            {
+                bool isCurrent = lane == caster.LaneIndex && position == caster.PositionIndex;
+                string occupantLabel = GetOccupantLabel(lane, position);
+                Button marker = FormationGridPicker.BuildCell(lane, position, isCurrent, occupantLabel, onClick: null);
+
+                marker.style.position = Position.Absolute;
+                marker.style.top = top;
+                marker.style.left = LaneMovementSystem.GetPositionOffsetPx(position) + centeringCompensationPx + centerOffsetPx;
+                marker.style.marginTop = 0;
+                marker.style.marginLeft = 0;
+                marker.style.marginRight = 0;
+                marker.style.marginBottom = 0;
+
+                _stagePositionMarkers.Add(marker);
+            }
+        }
+
+        _playerStageArea.Add(_stagePositionMarkers);
+        _stagePositionMarkers.SendToBack();
+    }
+
+    private void HideStagePositionMarkers()
+    {
+        if (_stagePositionMarkers == null) return;
+        _stagePositionMarkers.RemoveFromHierarchy();
+        _stagePositionMarkers = null;
     }
 
     /// <summary>

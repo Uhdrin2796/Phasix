@@ -81,6 +81,21 @@ public class BattleManager : MonoBehaviour
     private SkillData _pendingSkill; // always non-null once a move is confirmed — every orb (built-in move or tree skill) is real SkillData now, see BuiltInMoveType
     private bool _battleEndedEarly; // set true by a successful Capture — EndBattle already ran, RunBattleLoop must not also call EnemyTurn
 
+    /// <summary>Standard_Move.asset, resolved once in Start() by BuiltInMove lookup (not equipped by any creature, see WildSpawnSystem — the Move icon works unconditionally) — cached for HandleMoveConfirmed's combo-streak bookkeeping.</summary>
+    private SkillData _moveSkill;
+
+    /// <summary>
+    /// Which player creature's skill ring is currently open in PlayerTurn's loop, -1 if none.
+    /// Promoted from a local variable to a field (2026-08-12) so HandleMoveConfirmed can read/
+    /// react to it — a Move-icon drag can now complete for a creature while ITS OWN ring happens
+    /// to be open (the icon is independent of ring state), which PlayerTurn's WaitUntil predicate
+    /// wouldn't otherwise notice. Read/written only inside PlayerTurn and HandleMoveConfirmed.
+    /// </summary>
+    private int _activePlayerRingSlot = -1;
+
+    /// <summary>Set by HandleMoveConfirmed when it force-closes the currently-open ring (see _activePlayerRingSlot) — wakes PlayerTurn's WaitUntil so its own bookkeeping resets instead of going stale.</summary>
+    private bool _ringForcedClosedByMove;
+
     // Running totals for the post-battle summary screen (2026-08 session — replaces the old
     // spend-here-and-now Aura Allocation screen, see DECISIONS.md -> [Combat]). Player-side only —
     // damage the ENEMY deals to the player, or Aura/healing the enemy might hypothetically gain,
@@ -168,6 +183,18 @@ public class BattleManager : MonoBehaviour
         // unload), so no explicit unsubscribe is needed.
         BattleHUDController.Instance.BurstBarClicked += HandleBurstBarClicked;
 
+        // In-battle Move (2026-08-12 redesign) — a dedicated always-present icon per creature, not
+        // a skill-ring orb, so it's wired the same way BurstBarClicked is: an instant, independent
+        // HUD event, not routed through PlayerTurn's _pendingSkill/ChosenMove wait-loop.
+        BattleHUDController.Instance.MoveConfirmed += HandleMoveConfirmed;
+        if (_skillDatabase != null)
+        {
+            foreach ((SkillData skill, string _) in _skillDatabase.AllSkills)
+            {
+                if (skill.BuiltInMove == BuiltInMoveType.Move) { _moveSkill = skill; break; }
+            }
+        }
+
         // Free-choice creature selection (2026-08-06, user-directed — see DECISIONS.md ->
         // [Combat]): PlayerTurn's own loop consumes these two fields via WaitUntil rather than
         // acting on them directly in the handler — keeps all the actual turn-flow logic in one
@@ -198,6 +225,48 @@ public class BattleManager : MonoBehaviour
         BattleHUDController.Instance.SetBurstFillBar(slotIndex, p.BurstGauge.FillPercent, ready: false);
         BattleHUDController.Instance.SetBurstStatus(slotIndex, p.BurstGauge.RemainingDurationTurns);
         BattleHUDController.Instance.AppendBattleLog($"{p.DisplayName}'s Evolution Burst ignites!");
+    }
+
+    /// <summary>
+    /// Handles a completed Move-icon drag (2026-08-12 redesign — BattleHUDController.MoveConfirmed,
+    /// fired once OnMoveDragPointerUp validates the drop against a free stage position marker).
+    /// Bypasses ResolveSkillAction/the ChosenMove pipeline entirely, same "instant, independent
+    /// HUD-event handler" shape as HandleBurstBarClicked above — Move is no longer "a skill the
+    /// player picked from a menu," it's a dedicated action with its own always-present icon.
+    /// Re-checks alive/not-acted directly (BattleHUDController's own drag-start guard already does
+    /// this, but this handler doesn't trust the UI alone either, matching this codebase's general
+    /// posture elsewhere — e.g. FormationSystem/ResolveBuiltInMove's own occupancy re-checks).
+    /// </summary>
+    private void HandleMoveConfirmed(int slotIndex, int lane, int position)
+    {
+        if (slotIndex < 0 || slotIndex >= _state.PlayerSide.Count) return;
+        BattleParticipant attacker = _state.PlayerSide[slotIndex];
+        if (!attacker.IsAlive || attacker.HasActedThisTurn) return;
+
+        // User-directed: Move still counts as "using a skill" for combo-streak/SkillUsed purposes,
+        // same bookkeeping ResolveSkillAction runs for every other move — reproduced explicitly
+        // here since this path deliberately bypasses that method.
+        if (_moveSkill != null)
+        {
+            attacker.RecordSkillTreeUse(_moveSkill.TreeType);
+            attacker.RecordSkillUse(_moveSkill);
+            EventBus.Raise_SkillUsed(attacker.RuntimeData, _moveSkill);
+        }
+
+        attacker.HasActedThisTurn = true;
+        BattleHUDController.Instance.SetMoveIconVisible(slotIndex, false);
+
+        // If this creature's own skill ring happened to be open, PlayerTurn's WaitUntil loop has
+        // no other way to notice this action landed — force-close it and flag PlayerTurn to reset
+        // its bookkeeping (_activePlayerRingSlot) on its next wake, same as every other "something
+        // closed the ring out from under the loop" case it already handles.
+        if (slotIndex == _activePlayerRingSlot)
+        {
+            BattleHUDController.Instance.HideMoveSelection();
+            _ringForcedClosedByMove = true;
+        }
+
+        StartCoroutine(ResolveBuiltInMove(attacker, slotIndex, BuiltInMoveType.Move, null, lane, position));
     }
 
     /// <summary>Builds player-side participants from PartySystem's filled slots, capped at BattleConfig.ActivePartySize.</summary>
@@ -283,21 +352,29 @@ public class BattleManager : MonoBehaviour
         BattleHUDController.Instance.SetEndTurnButtonVisible(true);
         BattleHUDController.Instance.SetFleeButtonVisible(true);
 
+        // Move icons (2026-08-12 redesign) reset alongside HasActedThisTurn above — every alive
+        // creature's icon becomes visible again at the start of its side's turn.
+        for (int i = 0; i < _state.PlayerSide.Count; i++)
+        {
+            if (_state.PlayerSide[i].IsAlive) BattleHUDController.Instance.SetMoveIconVisible(i, true);
+        }
+
         // Auto-open the first living party member's move wheel (2026-08 follow-up — user-directed:
         // "instead of having to click the wheel open, Auto open the phasix that is first in the
         // roster... so its a good indicator that its the players turn"). Sets the SAME field a
-        // real click would set, so the loop's normal "activeSlot < 0" branch below opens it through
-        // its existing logic — no separate wheel-opening code path to keep in sync.
+        // real click would set, so the loop's normal "_activePlayerRingSlot < 0" branch below opens
+        // it through its existing logic — no separate wheel-opening code path to keep in sync.
         int firstAliveSlot = _state.PlayerSide.FindIndex(p => p.IsAlive);
         if (firstAliveSlot >= 0) _pendingCreatureClickSlot = firstAliveSlot;
 
-        int activeSlot = -1; // -1 = no wheel currently open
+        _activePlayerRingSlot = -1; // -1 = no wheel currently open
+        _ringForcedClosedByMove = false;
 
         while (!_endTurnRequested && !_fleeRequested)
         {
             if (_state.EnemySide.TrueForAll(e => !e.IsAlive)) yield break; // wiped mid-turn — battle is already over, TryEndBattle picks this up right after PlayerTurn returns
 
-            if (activeSlot < 0)
+            if (_activePlayerRingSlot < 0)
             {
                 yield return new WaitUntil(() => _endTurnRequested || _fleeRequested || _pendingCreatureClickSlot >= 0);
                 if (_endTurnRequested || _fleeRequested) break;
@@ -307,22 +384,22 @@ public class BattleManager : MonoBehaviour
                 // we're about to open below.
                 _backgroundClickRequested = false;
 
-                activeSlot = _pendingCreatureClickSlot;
+                _activePlayerRingSlot = _pendingCreatureClickSlot;
                 _pendingCreatureClickSlot = -1;
 
-                BattleParticipant clicked = _state.PlayerSide[activeSlot];
-                if (!clicked.IsAlive) { activeSlot = -1; continue; }
+                BattleParticipant clicked = _state.PlayerSide[_activePlayerRingSlot];
+                if (!clicked.IsAlive) { _activePlayerRingSlot = -1; continue; }
 
                 if (clicked.HasActedThisTurn)
                 {
-                    BattleHUDController.Instance.ShowMoveSelectionReadOnly(activeSlot);
+                    BattleHUDController.Instance.ShowMoveSelectionReadOnly(_activePlayerRingSlot);
                 }
                 else
                 {
                     _playerActionChosen = false;
                     _pendingSkill = null;
                     List<BattleParticipant> aliveEnemiesForWheel = _state.EnemySide.FindAll(e => e.IsAlive);
-                    BattleHUDController.Instance.ShowMoveSelection(activeSlot, clicked, aliveEnemiesForWheel,
+                    BattleHUDController.Instance.ShowMoveSelection(_activePlayerRingSlot, clicked, aliveEnemiesForWheel,
                         chosen =>
                         {
                             _pendingSkill = chosen.Skill; // always non-null now — every orb (built-in move or tree skill) is real SkillData, see BuiltInMoveType
@@ -335,41 +412,53 @@ public class BattleManager : MonoBehaviour
             // Wait for whichever comes first: End Turn, a move confirmed (only possible in the
             // functional branch above), the player switching to a DIFFERENT creature (valid from
             // either the functional or read-only branch — "click on another phasix the current
-            // phasix orb menu closes, then the new clicked phasix menu shows"), or a click on the
+            // phasix orb menu closes, then the new clicked phasix menu shows"), a click on the
             // empty stage background (2026-08-06, user-directed: "clicking outside of that should
-            // hide any open skill wheels").
-            int openedSlot = activeSlot;
+            // hide any open skill wheels"), or — 2026-08-12 — this slot's Move icon completing a
+            // drag while its ring happened to be open (HandleMoveConfirmed force-closes the ring
+            // and sets _ringForcedClosedByMove so this loop notices and resets, rather than
+            // leaving _activePlayerRingSlot stale).
+            int openedSlot = _activePlayerRingSlot;
             yield return new WaitUntil(() =>
                 _endTurnRequested ||
                 _fleeRequested ||
                 _playerActionChosen ||
                 _backgroundClickRequested ||
+                _ringForcedClosedByMove ||
                 (_pendingCreatureClickSlot >= 0 && _pendingCreatureClickSlot != openedSlot));
 
             if (_endTurnRequested || _fleeRequested) break;
+
+            if (_ringForcedClosedByMove)
+            {
+                _ringForcedClosedByMove = false;
+                _activePlayerRingSlot = -1;
+                continue; // ring already hidden by HandleMoveConfirmed — next iteration just waits again
+            }
 
             if (_backgroundClickRequested)
             {
                 _backgroundClickRequested = false;
                 BattleHUDController.Instance.HideMoveSelection();
-                activeSlot = -1;
-                continue; // nothing to open — next iteration's "activeSlot < 0" branch just waits again
+                _activePlayerRingSlot = -1;
+                continue; // nothing to open — next iteration's "_activePlayerRingSlot < 0" branch just waits again
             }
 
             if (_pendingCreatureClickSlot >= 0 && _pendingCreatureClickSlot != openedSlot)
             {
                 BattleHUDController.Instance.HideMoveSelection();
-                activeSlot = -1;
-                continue; // next iteration's "activeSlot < 0" branch picks up the pending click
+                _activePlayerRingSlot = -1;
+                continue; // next iteration's "_activePlayerRingSlot < 0" branch picks up the pending click
             }
 
             if (!_playerActionChosen) continue; // read-only wheel, nothing else happened yet — keep waiting
 
-            BattleParticipant attacker = _state.PlayerSide[activeSlot];
-            int attackerSlotIndex = activeSlot;
+            BattleParticipant attacker = _state.PlayerSide[_activePlayerRingSlot];
+            int attackerSlotIndex = _activePlayerRingSlot;
             _playerActionChosen = false;
-            activeSlot = -1; // the wheel this action came from is already hidden by BeginDragForSkill's own confirm/drag flow
+            _activePlayerRingSlot = -1; // the wheel this action came from is already hidden by BeginDragForSkill's own confirm/drag flow
             attacker.HasActedThisTurn = true;
+            BattleHUDController.Instance.SetMoveIconVisible(attackerSlotIndex, false);
 
             // Every orb — built-in move or tree skill — is real SkillData now (2026-08 follow-up:
             // Attack/Charge/Heal/Regen/Capture became equippable Standard-tree SkillData, see
@@ -534,6 +623,9 @@ public class BattleManager : MonoBehaviour
 
         if (skill.BuiltInMove != BuiltInMoveType.None)
         {
+            // Move (BuiltInMoveType.Move) never reaches here — it's no longer a ring-orb choice
+            // (2026-08-12 redesign), see HandleMoveConfirmed, which calls ResolveBuiltInMove
+            // directly with a real destination instead of routing through this method.
             yield return StartCoroutine(ResolveBuiltInMove(attacker, attackerSlotIndex, skill.BuiltInMove, target));
             yield break;
         }
@@ -884,10 +976,50 @@ public class BattleManager : MonoBehaviour
     /// early-EndBattle-on-successful-capture path (sets _battleEndedEarly, checked by PlayerTurn
     /// right after this coroutine returns).
     /// </summary>
-    private IEnumerator ResolveBuiltInMove(BattleParticipant attacker, int attackerSlotIndex, BuiltInMoveType move, BattleParticipant target)
+    private IEnumerator ResolveBuiltInMove(BattleParticipant attacker, int attackerSlotIndex, BuiltInMoveType move, BattleParticipant target,
+        int? destinationLane = null, int? destinationPosition = null)
     {
         switch (move)
         {
+            case BuiltInMoveType.Move:
+            {
+                // No damage, no timed input, no target — repositions the caster to a different
+                // formation slot (2026-08-12, user: "5 positions across a lane... only one
+                // position can be filled at a time"). destinationLane/Position always non-null
+                // here in practice (called only from HandleMoveConfirmed, itself only invoked by
+                // BattleHUDController.MoveConfirmed after a successful marker drop — see
+                // OnMoveDragPointerUp) — falls back to the caster's OWN current slot (a no-op
+                // move) if somehow missing, rather than throwing.
+                int lane = LaneMovementSystem.ClampLane(destinationLane ?? attacker.LaneIndex);
+                int position = LaneMovementSystem.ClampPosition(destinationPosition ?? attacker.PositionIndex);
+
+                // Safety re-check, not just UI-level prevention — FormationGridPicker already
+                // disables occupied cells, but party state could in principle change between the
+                // grid being built and the click landing (nothing does today, this is defense in
+                // depth matching the project's general "don't trust the UI alone" posture).
+                bool occupied = FormationSystem.IsSlotOccupied(
+                    _state.PlayerSide.FindAll(p => p.IsAlive && p != attacker).ConvertAll(p => (p.LaneIndex, p.PositionIndex)),
+                    lane, position);
+
+                if (occupied)
+                {
+                    BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} couldn't move there — already occupied!");
+                    yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                        "Slot already occupied!", BattleConfig.AutoMessageDurationSeconds));
+                    yield break;
+                }
+
+                attacker.LaneIndex = lane;
+                attacker.PositionIndex = position;
+                BattleHUDController.Instance.RefreshPlayerLaneLayout(_state.PlayerSide);
+                BattleHUDController.Instance.AppendBattleLog($"{attacker.DisplayName} moves to row {lane}, position {position}!");
+                AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse);
+
+                yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                    $"{attacker.DisplayName} repositions!", BattleConfig.AutoMessageDurationSeconds));
+                yield break;
+            }
+
             case BuiltInMoveType.Charge:
             {
                 // No attack, no timed input, just restores Aura and ends this attacker's action

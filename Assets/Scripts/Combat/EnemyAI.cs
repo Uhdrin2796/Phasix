@@ -73,9 +73,11 @@ public static class EnemyAI
 
     /// <summary>
     /// Resolves attacker's RuntimeData.equippedSkillGuids into a chosen move + intent bucket.
-    /// Hard-excludes BuiltInMoveType.Capture (never a sensible enemy action). Buckets the rest into
-    /// Damage / SelfSupport / Debuff using BuiltInMoveType for the 4 remaining built-ins and
-    /// PlaceholderSkillResolver.Resolve()'s DealsDamage/SelfTargeted flags for tree skills. Below
+    /// Hard-excludes BuiltInMoveType.Capture (never a sensible enemy action) and
+    /// BuiltInMoveType.Move (2026-08-12 — no AI logic exists yet for deciding when an enemy should
+    /// reposition on the formation grid). Buckets the rest into Damage / SelfSupport / Debuff using
+    /// BuiltInMoveType for the remaining built-ins and PlaceholderSkillResolver.Resolve()'s
+    /// DealsDamage/SelfTargeted flags for tree skills. Below
     /// BattleConfig.EnemySelfCareHpThreshold, has a BattleConfig.EnemySelfCareChance chance to pick
     /// a self-support move instead of attacking; otherwise prefers Damage, falling back to Debuff,
     /// then SelfSupport if that's genuinely all that's equipped.
@@ -96,6 +98,11 @@ public static class EnemyAI
         {
             if (!skillDatabase.TryGetByGuid(guid, out SkillData skill) || skill == null) continue;
             if (skill.BuiltInMove == BuiltInMoveType.Capture) continue;
+            // Move (2026-08-12, formation grid system) is also hard-excluded, same as Capture —
+            // no AI logic exists yet for deciding when an enemy should reposition. Would otherwise
+            // fall through this switch unhandled anyway (no case for it below), but excluding it
+            // explicitly here documents that as deliberate, not an oversight.
+            if (skill.BuiltInMove == BuiltInMoveType.Move) continue;
 
             switch (skill.BuiltInMove)
             {

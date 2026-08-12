@@ -12,6 +12,10 @@ applies symmetrically to both sides" line is resolved — lane *mechanics* are s
 sides; non-exclusive-occupancy *visual spacing* is player-side only until multi-enemy battles exist
 (see `DECISIONS.md` -> `[Combat]` "Enemy-side lane symmetry"). Line removed from the pending list
 below. Addition only — no version bump.
+**Errata (2026-08-12):** Part 3's Lane occupancy paragraph is refined, not reversed — each lane now
+has 5 discrete positions, confirmed symmetric on both player and enemy sides (supersedes the
+player-side-only deferral in the errata directly above). See `Attack_Pattern_Directive_v0_1_0.md`
+Part 8 for the reactive-dodge mechanics this enables. Addition/refinement only — no version bump.
 **GDD Refs:** §18 (Battle System), §18.5 (Wild Creature Behavior), §18.6 (Enemy AI Design)
 
 ---
@@ -90,7 +94,7 @@ Players and enemies can move **up and down between lanes** as a combat action or
 - **Protect vulnerable Phasix** — move a defensive Phasix into the lane of an incoming attack
 - **Exploit positional abilities** — some Phasix skills may have lane-specific effects or range requirements
 
-**Lane occupancy [DECISION LOCKED]:** Occupancy is **not exclusive** — multiple combatants may share the same lane. When they do, occupants are **visually spaced apart along the lane** so they read as distinct, appearing in a line rather than overlapping. This is a rendering/layout concern only — combat mechanics (targeting, movement, collision) continue to resolve against the lane index alone, per the center-anchor model above. Exact spacing values are pending numerical calibration.
+**Lane occupancy [DECISION LOCKED, refined 2026-08-12]:** Occupancy is **not exclusive at the lane level** — multiple combatants may share the same lane. Refinement: each lane has **5 discrete positions**, mirrored symmetrically on both player and enemy sides (supersedes the player-side-only deferral in the errata above). A *position* is exclusive — only one combatant per (lane, position) slot — while a *lane* as a whole can hold up to 5 combatants across its positions. This is still primarily a rendering/layout structure, but it now also grounds reactive movement: a dodge can target either an adjacent **lane** or an adjacent **position** within the current lane, and either option can be blocked if the destination slot is already occupied. Damage/targeting/AoE mechanics that operate at lane granularity (Primal typing, Territory AoE, Zone/Positional archetypes) are unaffected — they continue to resolve against the lane index alone; position exists beneath that, for movement/collision/visual-spacing purposes only. Exact position layout (visual spacing, adjacency order) is pending numerical calibration.
 
 **Movement cost model [DECISION LOCKED]:** Whether a given movement request costs an action turn or is free is decided by the context that triggers it (player-initiated reposition, a skill's Approach beat, a reactive dodge, etc.) rather than one fixed rule for all lane movement — the traversal system itself is cost-agnostic. See `Attack_Pattern_Directive_v0_1_0.md` Part 8 for how skill-triggered movement (Approach, automatic return-to-origin) uses this. Exact cost values per movement type remain pending combat system design/calibration.
 

@@ -75,6 +75,11 @@ namespace Phasix.Tests.EditMode
                 commonAura = 15,
                 auraAllocatedPoints = 6,
                 rareVariantAura = 2,
+                // Deliberately non-default (LaneMovementSystem.DefaultStartingLane/Position are
+                // 4/3) so a silent no-op bug in the DTO round-trip can't hide behind
+                // default-equals-default (2026-08-12 formation grid persistence fix).
+                preferredLaneIndex = 2,
+                preferredPositionIndex = 4,
             };
             runtime.unlockedTreeTypes.Add(SkillTreeType.Mirror);
             runtime.unlockedTreeTypes.Add(SkillTreeType.Reaction);
@@ -114,6 +119,8 @@ namespace Phasix.Tests.EditMode
             Assert.AreEqual(original.bondPercent, restored.bondPercent);
             Assert.AreEqual(original.commonAura, restored.commonAura);
             Assert.AreEqual(original.auraAllocatedPoints, restored.auraAllocatedPoints);
+            Assert.AreEqual(original.preferredLaneIndex, restored.preferredLaneIndex, "Formation lane preference must survive a real save/load cycle (2026-08-12 fix).");
+            Assert.AreEqual(original.preferredPositionIndex, restored.preferredPositionIndex, "Formation position preference must survive a real save/load cycle (2026-08-12 fix).");
             CollectionAssert.AreEquivalent(original.unlockedTreeTypes, restored.unlockedTreeTypes);
             CollectionAssert.AreEquivalent(original.learnedSkillGuids, restored.learnedSkillGuids);
             CollectionAssert.AreEquivalent(original.equippedSkillGuids, restored.equippedSkillGuids);

@@ -75,6 +75,18 @@ public class BattleParticipant
     public int LaneIndex { get; set; } = LaneMovementSystem.DefaultStartingLane;
 
     /// <summary>
+    /// Which of the 5 fixed horizontal positions (columns) within LaneIndex's row this participant
+    /// currently occupies — defaults to LaneMovementSystem.DefaultStartingPosition (center column).
+    /// Same tier as LaneIndex: battle-only, plain public state. 2026-08-12, user: "5 positions
+    /// across a lane... only one position can be filled at a time" — the constructor seeds this
+    /// from RuntimeData.preferredPositionIndex for player-side participants (Party menu formation
+    /// picker); changed during battle only by the Move built-in skill (BattleManager's Move
+    /// resolution), never by a melee Beat Sequence (Approach/Return still only ever tween the
+    /// element's VISUAL left/top, they don't touch this canonical field — same as LaneIndex).
+    /// </summary>
+    public int PositionIndex { get; set; } = LaneMovementSystem.DefaultStartingPosition;
+
+    /// <summary>
     /// Trailing-history window shared by every combo-detection rule (cross-tree, repeat-skill,
     /// timed-input-streak) — matches ComboEngine.DetectCombo's own Quad ceiling (4), not a new
     /// number. 2026-08 session, see DECISIONS.md -> [Combat].
@@ -217,6 +229,16 @@ public class BattleParticipant
         CurrentHP = MaxHP;
         MaxAura = Mathf.Max(0, runtimeData.EffectiveStat(StatType.Aura));
         CurrentAura = MaxAura;
+
+        // Seeds the battle-starting formation slot from the Party menu's pre-battle preference
+        // (2026-08-12 — see PositionIndex's own doc comment). Applies to both sides uniformly
+        // rather than branching on isPlayerSide — an enemy's PhasixRuntimeData simply never had
+        // its preferred fields touched by the (player-only) Party menu picker, so it's still
+        // exactly LaneMovementSystem.DefaultStartingLane/DefaultStartingPosition, identical to the
+        // property's own default initializer; applying it unconditionally is simpler than a
+        // per-side branch and produces the same result for enemies either way.
+        LaneIndex = LaneMovementSystem.ClampLane(runtimeData.preferredLaneIndex);
+        PositionIndex = LaneMovementSystem.ClampPosition(runtimeData.preferredPositionIndex);
     }
 
     /// <summary>Applies damage, clamped so HP never goes negative. Negative/zero amounts are ignored.</summary>

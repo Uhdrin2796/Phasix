@@ -132,33 +132,59 @@ namespace Phasix.Tests.EditMode
             Assert.AreEqual(LaneMovementSystem.RowRangeHeightPx, lane1Top - lane7Top, 0.001f);
         }
 
-        [Test]
-        public void GetInLaneSpacingOffsetPx_SingleOccupant_ReturnsZero()
+        [TestCase(0, 1)]
+        [TestCase(1, 1)]
+        [TestCase(5, 5)]
+        [TestCase(6, 5)]
+        [TestCase(-3, 1)]
+        [TestCase(3, 3)]
+        public void ClampPosition_ClampsToValidRange(int input, int expected)
         {
-            Assert.AreEqual(0f, LaneMovementSystem.GetInLaneSpacingOffsetPx(0, 1));
-        }
-
-        [TestCase(2)]
-        [TestCase(3)]
-        [TestCase(5)]
-        public void GetInLaneSpacingOffsetPx_MultipleOccupants_SpreadSymmetricallyAroundZero(int occupantCount)
-        {
-            float sum = 0f;
-            for (int i = 0; i < occupantCount; i++)
-                sum += LaneMovementSystem.GetInLaneSpacingOffsetPx(i, occupantCount);
-
-            Assert.AreEqual(0f, sum, 0.001f, "Offsets across all occupants in a lane should sum to (approximately) zero.");
+            Assert.AreEqual(expected, LaneMovementSystem.ClampPosition(input));
         }
 
         [Test]
-        public void GetInLaneSpacingOffsetPx_OccupantsAreDistinct_NotOverlapping()
+        public void GetPositionOffsetPx_CenterColumn_ReturnsZero()
         {
-            float first = LaneMovementSystem.GetInLaneSpacingOffsetPx(0, 3);
-            float second = LaneMovementSystem.GetInLaneSpacingOffsetPx(1, 3);
-            float third = LaneMovementSystem.GetInLaneSpacingOffsetPx(2, 3);
+            Assert.AreEqual(0f, LaneMovementSystem.GetPositionOffsetPx(LaneMovementSystem.DefaultStartingPosition));
+        }
 
-            Assert.Less(first, second);
-            Assert.Less(second, third);
+        [Test]
+        public void GetPositionOffsetPx_IsMonotonicallyIncreasing_AcrossAllPositions()
+        {
+            float previous = LaneMovementSystem.GetPositionOffsetPx(1);
+            for (int position = 2; position <= LaneMovementSystem.PositionsPerLane; position++)
+            {
+                float current = LaneMovementSystem.GetPositionOffsetPx(position);
+                Assert.Greater(current, previous, $"Offset must increase from column {position - 1} to {position}.");
+                previous = current;
+            }
+        }
+
+        [Test]
+        public void GetPositionOffsetPx_SymmetricAroundCenter()
+        {
+            float leftOfCenter = LaneMovementSystem.GetPositionOffsetPx(LaneMovementSystem.DefaultStartingPosition - 1);
+            float rightOfCenter = LaneMovementSystem.GetPositionOffsetPx(LaneMovementSystem.DefaultStartingPosition + 1);
+
+            Assert.AreEqual(-leftOfCenter, rightOfCenter, 0.001f);
+        }
+
+        [Test]
+        public void GetPositionOffsetPx_DoesNotDependOnOtherOccupants()
+        {
+            // Unlike the removed GetInLaneSpacingOffsetPx, a column's offset is a pure function of
+            // its own index — calling it twice for the same position must always agree.
+            Assert.AreEqual(LaneMovementSystem.GetPositionOffsetPx(2), LaneMovementSystem.GetPositionOffsetPx(2));
+        }
+
+        [Test]
+        public void PositionRangeWidthPx_MatchesTotalSpanOfExtremeColumns()
+        {
+            float leftmost = LaneMovementSystem.GetPositionOffsetPx(1);
+            float rightmost = LaneMovementSystem.GetPositionOffsetPx(LaneMovementSystem.PositionsPerLane);
+
+            Assert.AreEqual(LaneMovementSystem.PositionRangeWidthPx, rightmost - leftmost, 0.001f);
         }
     }
 }

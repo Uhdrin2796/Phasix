@@ -20,6 +20,14 @@ namespace Phasix.Tests.EditMode
             return skill;
         }
 
+        private static SkillData MakeBuiltInSkill(BuiltInMoveType builtInMove)
+        {
+            var skill = ScriptableObject.CreateInstance<SkillData>();
+            SetPrivateField(skill, "_treeType", SkillTreeType.Standard);
+            SetPrivateField(skill, "_builtInMove", builtInMove);
+            return skill;
+        }
+
         private static PhasixData MakeSpecies(int tier, List<SkillTreeType> availableTrees)
         {
             var species = ScriptableObject.CreateInstance<PhasixData>();
@@ -131,6 +139,36 @@ namespace Phasix.Tests.EditMode
 
             Object.DestroyImmediate(utility1);
             Object.DestroyImmediate(utility2);
+            Object.DestroyImmediate(database);
+            Object.DestroyImmediate(species);
+        }
+
+        [Test]
+        public void SeedInitialSkills_NeverLearnsOrEquipsMove()
+        {
+            // Regression test for the 2026-08-12 formation grid redesign: Move stopped being an
+            // equippable skill-ring orb entirely (it's a dedicated always-present icon instead —
+            // see BattleHUDController), so it must never end up in a freshly-seeded creature's
+            // learned or equipped lists even though Standard_Move.asset still exists as the
+            // underlying BattleManager.ResolveBuiltInMove dispatch identity.
+            SkillData attack = MakeBuiltInSkill(BuiltInMoveType.Attack);
+            SkillData move = MakeBuiltInSkill(BuiltInMoveType.Move);
+
+            var database = ScriptableObject.CreateInstance<SkillDatabase>();
+            SetPrivateField(database, "_allSkills", new List<SkillData> { attack, move });
+            SetPrivateField(database, "_guids", new List<string> { "attack-guid", "move-guid" });
+
+            PhasixData species = MakeSpecies(tier: 1, availableTrees: new List<SkillTreeType>());
+            var runtime = new PhasixRuntimeData("test-node-guid");
+
+            WildSpawnSystem.SeedInitialSkills(runtime, species, database);
+
+            Assert.IsTrue(runtime.learnedSkillGuids.Contains("attack-guid"), "Attack should still be learned normally.");
+            CollectionAssert.DoesNotContain(runtime.learnedSkillGuids, "move-guid", "Move must never be learned.");
+            CollectionAssert.DoesNotContain(runtime.equippedSkillGuids, "move-guid", "Move must never be equipped.");
+
+            Object.DestroyImmediate(attack);
+            Object.DestroyImmediate(move);
             Object.DestroyImmediate(database);
             Object.DestroyImmediate(species);
         }

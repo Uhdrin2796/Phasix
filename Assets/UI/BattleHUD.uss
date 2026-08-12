@@ -460,6 +460,46 @@
     opacity: 0.35;
 }
 
+/* Persistent Move icon (2026-08-12 redesign) — a small always-present badge on every player stage
+   creature's top-right corner, deliberately NOT reusing any of the 5 ring-orb colors above (all
+   already claimed: green=Attack, blue=Charge, pink=Heal, purple=Regen, gold=Capture) — teal reads
+   as "not a skill," matching the redesign's intent that Move is a different kind of action.
+   BattleHUDController parents this directly under the 72px .stage-creature so it inherits every
+   ApplyLaneLayout position/scale change automatically. */
+.move-icon {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    background-color: rgb(50, 110, 110);
+    border-width: 2px;
+    border-color: rgb(120, 220, 220);
+}
+
+/* "Already acted" / not-your-turn state — mirrors .move-option-disabled. SetMoveIconVisible fully
+   hides the icon instead of using this for the common case (turn hasn't started / already acted),
+   kept as a distinct class in case a future "visible but temporarily unusable" state needs it. */
+.move-icon-disabled {
+    opacity: 0.35;
+}
+
+/* Stage-aligned position markers (2026-08-12 redesign) — the in-battle Move-drag target set,
+   BattleHUDController.ShowStagePositionMarkers. Reuses .formation-grid-cell's exact look (see
+   below) via FormationGridPicker.BuildCell, but each marker is individually absolute-positioned to
+   the real stage coordinates (LaneMovementSystem.GetLaneScreenTop/GetPositionOffsetPx) rather than
+   flex-flowed into rows/columns — .stage-position-markers is just a plain full-size container,
+   not a grid/flex layout itself.
+*/
+.stage-position-markers {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
 /* Skill slot ring (2026-08-06, user-directed — see DECISIONS.md -> [Combat]): 12 dark grey
    circles distributed one per clock hour around the acting creature, on the SAME radius path as
    "A"/"C"/"H"/"R"/"K" (.move-option-placeholder, MoveOptionRadius) — user preferred that original
@@ -702,4 +742,56 @@
     border-width: 3px;
     border-color: rgb(120, 160, 200);
     border-radius: 10px;
+}
+
+/* Formation grid picker (2026-08-12, user: "5 positions across a lane... similar to how the skill
+   wheel is set up, but instead a 7 by 5 grid") — FormationGridPicker.cs, shared between the Party
+   menu's pre-battle picker and the in-battle Move skill. Lives here (not OverworldMenu.uss) because
+   OverworldMenu.uxml already references this file as a second stylesheet — see that file's own
+   header comment for why (same reasoning as its shared skill-ring classes). */
+.formation-grid {
+    align-items: center;
+}
+
+.formation-grid-row {
+    flex-direction: row;
+    justify-content: center;
+}
+
+.formation-grid-cell {
+    width: 28px;
+    height: 28px;
+    margin: 2px;
+    padding: 0;
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    background-color: rgba(50, 50, 58, 0.9);
+    border-width: 1px;
+    border-color: rgb(90, 90, 100);
+    color: rgb(220, 220, 225);
+}
+
+.formation-grid-cell-current {
+    background-color: rgba(90, 200, 100, 0.35);
+    border-color: rgb(90, 200, 100);
+    color: rgb(140, 255, 150);
+}
+
+.formation-grid-cell-occupied {
+    background-color: rgba(170, 55, 55, 0.35);
+    border-color: rgb(170, 55, 55);
+    color: rgb(255, 180, 180);
+}
+
+/* .formation-grid-title is used by the Party menu's inline formation section
+   (OverworldMenuController.BuildFormationSection) — the in-battle equivalent
+   (.formation-grid-overlay/-cancel-button, a centered click-to-confirm popup) was REMOVED
+   2026-08-12 when Move became a drag-to-real-stage-position action instead (see
+   BattleHUDController.ShowStagePositionMarkers/.stage-position-markers below) — no popup, no
+   Cancel button, releasing outside every marker is the cancel path. */
+.formation-grid-title {
+    font-size: 15px;
+    color: rgb(230, 230, 230);
+    -unity-font-style: bold;
+    margin-bottom: 8px;
 }

@@ -2,6 +2,12 @@
 **Version:** 0.1.0
 **Date:** August 2026
 **Status:** Working — design exploration, not yet locked. Captures direction for the next coding session.
+**Errata (2026-08-12):** Part 2 gained AI Targeting Visualization. Part 5 gained two new archetypes —
+Lane Displacement Attack (Reflex-based) and a worked Telegraphed Area Attack example under
+Multi-Turn Buildup. Part 8 gained the Tank response option, per-lane/blind-side resolution rule, and
+the occupancy-model resolution (7 lanes × 5 positions — see `Combat_Directive_v0_1_0.md`'s matching
+2026-08-12 errata). Part 9 resolved the Strike Points/sub-position question — stays independent, no
+model change. Part 10 updated to match. Addition/refinement only — no version bump.
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
 **Related:** Combat_Directive_v0_1_0.md (lane system, timed input system, lane occupancy — authoritative for those mechanics; this doc builds on top)
 
@@ -71,6 +77,9 @@ Every attack (ranged or melee) can be described by these parameters, set per-ski
 
 A named "archetype" (Part 5) is just a common setting of these knobs. New attacks don't need new systems — they need new knob values.
 
+### AI Targeting Visualization
+For attacker-locks-onto-defender attacks (most single-lane Reflex-based archetypes), the primary target is explicitly locked at the start of Windup, and a visual line connects attacker to target for the duration — makes "who is this attack actually going to hit" unambiguous before the reaction window opens, independent of which Tell location knob setting is used.
+
 ---
 
 ## Part 3 — Physical vs Elemental (clarification)
@@ -109,10 +118,12 @@ Grouped by what they test in the player:
 - **Direct Projectile** — travels across the lane, tracked in real time. Baseline pattern; uses traditional ring timing.
 - **Instant Strike / Read-the-Tell** — no travel time; short windup cue on the attacker, reacted to pre-emptively, not tracked. Still ring timing, just retimed to the tell instead of the payoff.
 - **Multi-Hit Volley** — several small hits in sequence, each its own small window. Tests rhythm/consistency.
+- **Lane Displacement Attack** — single-lane targeted strike (AI Targeting Visualization applies, Part 2) with a QTE-style reaction window. Success dodges the primary target to an adjacent **lane** or an adjacent **position** within the current lane (player's choice, per the 7×5 occupancy model — Part 8); either option can be blocked if that destination slot is occupied. Failure, no input, or being fully trapped (both dodge options blocked) deals full damage and inflicts a knockback-style status — see Part 8's flagged open item on naming/reconciling that status against the locked §17 list.
 
 **Patience-based**
 - **Charge & Release** — long obvious windup, uncertain exact release moment.
 - **Multi-Turn Buildup** — windup spans several turns; not a reflex test, a strategic warning (swap Phasix, reposition, prep counter). Uses the Persistent/Cross-Turn input model (Part 4).
+  - **Worked example — Telegraphed Area Attack:** Turn 1 marks the affected lanes (primary target's lane + designated collateral lanes) with zero damage — this is Zone/Positional's "tell" (below) stretched across a full player turn instead of resolving same-turn. The player's turn is a strategic branch, not a reflex response: **Evade** (spend movement to fully clear fragile members from marked lanes) or **Tank** (leave defensive members in place, spend the turn on shields/taunts/buffs instead). Turn 2 deals undodgeable damage to whoever still occupies a marked lane at that point — resolved **per lane**, not per originally-targeted character, so a teammate left behind after the primary target escapes still takes the full hit. No reflex prompt appears at any point in this attack.
 
 **Positional**
 - **Zone/Positional** — ground/zone tell; response is movement (lane change), not a timed press. Uses the Lane Selection input model (Part 4).
@@ -211,10 +222,22 @@ When a skill targets a zone (one or more lanes) rather than a single locked targ
 Once an attacker's zone skill activates, the defender must see which lanes are affected **before** the attack resolves — the concrete implementation of the Zone/Positional archetype's "tell" (Part 5):
 - Affected lane(s) are visually marked the moment the skill activates, not hidden until impact.
 - The defender's response is a Lane Selection decision (move out of the marked lanes), governed by the normal Lane Movement traversal rules — the player's own reactive movement, not a "sequence" subject to the Beat Sequence commitment rule (Part 7), which applies specifically to attackers' authored sequences.
+- **Two valid responses, not just one:** **Evade** (move a character fully out of marked lanes) or **Tank** (leave a defensive character in place and spend the turn on mitigation — shields, taunts, defensive buffs — instead of repositioning). Zone skills don't have to be dodge-or-die; standing and mitigating is a legitimate alternative, especially for Multi-Turn Buildup-style attacks where there's a full turn to decide.
+- **Resolution is per-lane, not per-original-target.** A zone attack checks final occupancy of each marked lane when it resolves — it does not care who was originally targeted. If the primary target escapes but a teammate is left behind in a marked lane (own choice or otherwise), that teammate takes the full hit regardless of not being the original target.
+
+### Occupancy model — resolved (7 lanes × 5 positions)
+The contradiction is resolved by refinement, not reversal — see Combat_Directive's 2026-08-12 errata. Each lane holds up to **5 discrete positions**, mirrored on both player and enemy sides. Lane-level occupancy stays non-exclusive (unchanged, still true, still built); **position-level occupancy is exclusive** — one combatant per (lane, position) slot. This means:
+- A reactive dodge has **two options**: move to an adjacent **lane**, or move to an adjacent **position** within the current lane. Either can be blocked if the destination slot is occupied.
+- "Trapped" (Part 5's Lane Displacement Attack) now means both options are blocked — adjacent lane's relevant slot occupied *and* adjacent position(s) within the current lane occupied — not just one axis.
+- Everything that operates at lane granularity (damage/Primal typing, Territory AoE, Zone/Positional, Split Attention) is unchanged — position is a layer beneath lane, for movement/collision/spacing only.
+- **Un-defers the enemy side:** the 2026-08-11 errata deferred enemy-side visual spacing until multi-enemy battles exist. Since positions are now confirmed symmetric, enemy-side position support needs building alongside player-side, not deferred.
+
+**Resolved:** Strike Points stay independent of the position grid — no change to Part 9's model. Position-grid slots are persistent and occupancy-exclusive; Strike Points are transient (the attacker always returns to its real lane per Part 7's automatic return-to-origin) and purpose-built for animator-driven visual placement, which the proportional offset system already serves well. Snapping to 5 discrete slots would tie animation values to a number that belongs to calibration, and would fight the "place a marker where it looks right" authoring workflow. Loose naming convention worth keeping in mind during authoring: `Front`/`Rear` read as depth-axis (lane), `Flank-Near`/`Flank-Far` read as lateral-axis (position) — a naming echo of the grid's two axes, not a mechanical link to it.
 
 ### Open items
 - Per-lane cost for "multi-select one at a time" zone skills — fixed lane count per skill, or scaling Aura cost per additional lane selected?
 - Interaction between zone-marking and Split Attention's fake tells — does a fake tell get the same visual marking as a real one, or a distinguishable one?
+- **New status needed:** the Lane Displacement Attack's failure state ("Displacement" — knockback/shove to a different lane) doesn't map onto any of the 28 statuses in the locked GDD §17 list. Needs either a mapping to an existing status or a proposal to add one — not invented here, since §17 is locked.
 
 ---
 
@@ -249,14 +272,16 @@ Reuses the beat-sequence data shape from Part 7. Per the commitment rule (Part 7
 
 ## Part 10 — Open Items for Next Coding Session
 
-1. **Type E (Reaction) needs a new trigger point.** Removing Approach interruptibility removed the mechanism this doc had assigned to Reaction skills — see the flagged design gap in Part 7. Needs a decision before Type E content can be authored.
-2. Approach lane-distance cost — fixed 1 lane per beat, or variable by creature Instinct/speed? (Pending numerical calibration.)
-3. Exact timing window sizes, windup durations, feint detection thresholds, in-lane spacing values — all pending `NumericalCalibration.md`.
-4. Map default archetypes to Tempers (Edge/Anchor/Flux) and Tempo types (Strike/Flow/Hold/Split/Stance) so species design (Phase 5) has defaults to start from.
-5. Decide whether the beat-sequence system needs its own runtime component now (Phase 3 vertical slice) or waits until Phase 5 content.
-6. Standardize the named strike-point set (Front/Rear/Flank-Near/Flank-Far, or a different list) before Phase 5 species authoring begins.
-7. Is enemy pre-battle placement shown to the player before battle starts, or hidden/only revealed once combat begins?
-8. Per-lane Aura cost for "multi-select one at a time" zone targeting — fixed lane count vs scaling cost?
+1. **Type E (Reaction) needs a new trigger point.** Removing Approach interruptibility removed the mechanism this doc had assigned to Reaction skills — see the flagged design gap in Part 7. Needs a decision before Type E content can be authored. Possible connection: the new Dodge/Parry system in Combat_Directive (Parry = auto counter-attack) may be a natural fit — not yet explored.
+2. **Occupancy model resolved (7 lanes × 5 positions, Part 8)** — but enemy-side position support now needs building (previously deferred, un-deferred by this resolution), and exact position layout/spacing is pending calibration. Strike Points/sub-position question is resolved: they stay independent (Part 9).
+3. Approach lane-distance cost — fixed 1 lane per beat, or variable by creature Instinct/speed? (Pending numerical calibration.)
+4. Exact timing window sizes, windup durations, feint detection thresholds, in-lane spacing values — all pending `NumericalCalibration.md`.
+5. Map default archetypes to Tempers (Edge/Anchor/Flux) and Tempo types (Strike/Flow/Hold/Split/Stance) so species design (Phase 5) has defaults to start from.
+6. Decide whether the beat-sequence system needs its own runtime component now (Phase 3 vertical slice) or waits until Phase 5 content.
+7. Standardize the named strike-point set (Front/Rear/Flank-Near/Flank-Far, or a different list) before Phase 5 species authoring begins.
+8. Is enemy pre-battle placement shown to the player before battle starts, or hidden/only revealed once combat begins?
+9. Per-lane Aura cost for "multi-select one at a time" zone targeting — fixed lane count vs scaling cost?
+10. New "Displacement" status (Part 8) needs reconciliation with the locked §17 status list.
 
 ---
 

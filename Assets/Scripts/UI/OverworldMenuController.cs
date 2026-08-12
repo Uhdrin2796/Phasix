@@ -355,6 +355,59 @@ public class OverworldMenuController : MonoBehaviour
         int tier = runtime.speciesData != null ? runtime.speciesData.EvolutionTier : 1;
         body.Add(BuildSkillArea(runtime, tier));
         _partyDetailView.Add(body);
+
+        _partyDetailView.Add(BuildFormationSection(runtime));
+    }
+
+    /// <summary>
+    /// Pre-battle formation slot picker (2026-08-12, user: "lets just have 5 positions across a
+    /// lane. Then you can preset which position you want to be in") — reuses
+    /// FormationGridPicker.Build (a flex-flowed row/column grid, click-to-select) for THIS static
+    /// screen. The in-battle Move redesign (same session, user: "drag and drop a player to a
+    /// location... just like how we do the projectile") shows a DIFFERENT construction instead —
+    /// BattleHUDController.ShowStagePositionMarkers, individually positioned to match real stage
+    /// coordinates and hit-tested via drag-release rather than clicked — but both share
+    /// FormationGridPicker.BuildCell for cell appearance/state, so a slot always LOOKS the same
+    /// whether you're picking it here or dragging to it in battle. Occupancy
+    /// is checked against every OTHER party slot's PhasixRuntimeData.preferredLaneIndex/
+    /// preferredPositionIndex (comparing PhasixRuntimeData references directly — party slots hold
+    /// distinct instances, no two slots can ever reference the same one). Picking a cell updates
+    /// the runtime fields directly (read by BattleParticipant's constructor at battle start) and
+    /// rebuilds the whole detail view via ShowDetail so the grid's "current" highlight moves — the
+    /// same "just rebuild everything, this isn't a hot path" approach ShowDetail already uses for
+    /// every other click in this view.
+    /// </summary>
+    private VisualElement BuildFormationSection(PhasixRuntimeData runtime)
+    {
+        var section = new VisualElement();
+        section.AddToClassList("detail-formation-section");
+
+        var title = new Label("Starting Formation");
+        title.AddToClassList("formation-grid-title");
+        section.Add(title);
+
+        string GetOccupantLabel(int lane, int position)
+        {
+            if (PartySystem.Instance == null) return null;
+            for (int i = 0; i < PartySystem.MaxPartySize; i++)
+            {
+                PhasixRuntimeData other = PartySystem.Instance.GetSlot(i);
+                if (other == null || other == runtime) continue;
+                if (other.preferredLaneIndex == lane && other.preferredPositionIndex == position)
+                    return other.speciesData != null && other.speciesData.SpeciesName.Length > 0 ? other.speciesData.SpeciesName.Substring(0, 1) : "?";
+            }
+            return null;
+        }
+
+        void OnCellChosen(int lane, int position)
+        {
+            runtime.preferredLaneIndex = lane;
+            runtime.preferredPositionIndex = position;
+            ShowDetail(runtime);
+        }
+
+        section.Add(FormationGridPicker.Build(runtime.preferredLaneIndex, runtime.preferredPositionIndex, GetOccupantLabel, OnCellChosen));
+        return section;
     }
 
     private static VisualElement BuildStatColumn(PhasixRuntimeData phasix)

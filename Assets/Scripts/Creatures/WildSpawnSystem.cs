@@ -60,19 +60,29 @@ public static class WildSpawnSystem
 
         var learnedByTree = new System.Collections.Generic.List<System.Collections.Generic.List<string>>();
 
-        // Standard (2026-08 follow-up — the 5 built-in moves Attack/Charge/Heal/Regen/Capture
-        // became real, equippable SkillData, see BuiltInMoveType) is NOT one of the species'
-        // unlocked trees — every creature always has it, regardless of species.AvailableTreeTypes.
-        // Seeded FIRST in learnedByTree so its skills win round-robin pass 0, guaranteeing Attack
-        // (registered first in SkillDatabase among the 5 Standard assets) claims an equip slot
-        // before any tree skill does — a temporary default confirmed acceptable with the user
-        // pending a real move-pool-assignment design; players can freely unequip it afterward.
+        // Standard (2026-08 follow-up — the built-in moves Attack/Charge/Heal/Regen/Capture became
+        // real, equippable SkillData, see BuiltInMoveType) is NOT one of the species' unlocked
+        // trees — every creature always has it, regardless of species.AvailableTreeTypes. Seeded
+        // FIRST in learnedByTree so its skills win round-robin pass 0, guaranteeing Attack
+        // (registered first in SkillDatabase among the Standard assets) claims an equip slot before
+        // any tree skill does — a temporary default confirmed acceptable with the user pending a
+        // real move-pool-assignment design; players can freely unequip it afterward.
         // unlockedTreeTypes deliberately does NOT get Standard added — that list means "unlocked
         // skill TREES" in the GDD taxonomy sense, and Standard isn't one of the 18
         // (SkillTreeType.Standard's own doc comment).
+        //
+        // Move (BuiltInMoveType.Move, added 2026-08-12 alongside the formation grid system, then
+        // REMOVED from this seeding the same session — see DECISIONS.md -> [Combat]) is skipped
+        // here entirely: it's no longer a skill-ring orb a creature equips at all, it's a dedicated
+        // always-present icon (BattleHUDController's new Move-drag flow) unconditionally available
+        // to every player creature, so it has no business in learnedSkillGuids/equippedSkillGuids —
+        // Standard_Move.asset and BuiltInMoveType.Move still exist as the underlying dispatch
+        // identity BattleManager.ResolveBuiltInMove's Move case resolves against, just never
+        // resolved through the equip system anymore.
         var standardGuids = new System.Collections.Generic.List<string>();
         foreach (SkillData skill in skillDatabase.GetByTreeType(SkillTreeType.Standard))
         {
+            if (skill.BuiltInMove == BuiltInMoveType.Move) continue;
             if (!skillDatabase.TryGetGuid(skill, out string standardGuid)) continue;
             runtime.learnedSkillGuids.Add(standardGuid);
             standardGuids.Add(standardGuid);

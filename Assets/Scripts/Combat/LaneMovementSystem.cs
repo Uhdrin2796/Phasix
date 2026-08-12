@@ -26,11 +26,29 @@ using UnityEngine;
 /// "movement cost model [DECISION LOCKED]" rule says cost is decided by the calling context. Neither
 /// IsAdjacent nor StepToward (kept as general row-index utilities, even though the melee Beat
 /// Sequence path no longer calls them — see BeatSequenceRunner) takes a cost parameter.
+///
+/// 2026-08-12 follow-up — EXCLUSIVE 5-position formation grid (SUPERSEDES the "non-exclusive
+/// occupancy, symmetric auto-spread" model this class originally shipped with — see DECISIONS.md ->
+/// [Combat] "Lane occupancy — non-exclusive, in-lane visual spacing," now superseded): each of the 7
+/// rows has exactly 5 fixed horizontal positions (columns), and at most ONE combatant may occupy a
+/// given (lane, position) pair at a time — user: "lets just have 5 positions across a lane. Then you
+/// can preset which position you want to be in... only one position can be filled at a time." A
+/// position's screen offset (GetPositionOffsetPx) is now a FIXED lookup, not derived from "how many
+/// others currently share this row" — GetInLaneSpacingOffsetPx (occupant-count-based spread) is
+/// removed as dead weight now that occupancy is exclusive, not shared. Exclusivity itself is NOT
+/// enforced by this class (pure math, no state) — see FormationSystem.IsSlotOccupied for the
+/// occupied-check used by both the Party menu's pre-battle picker and the in-battle Move skill.
 /// </summary>
 public static class LaneMovementSystem
 {
     /// <summary>Combat_Directive Part 2's stated default starting lane ("Mid").</summary>
     public const int DefaultStartingLane = 4;
+
+    /// <summary>Number of fixed horizontal positions (columns) within a single row — 2026-08-12, user-directed ("5 positions across a lane").</summary>
+    public const int PositionsPerLane = 5;
+
+    /// <summary>Center column of the 5 — the default starting position, mirroring DefaultStartingLane's "Mid" framing.</summary>
+    public const int DefaultStartingPosition = 3;
 
     /// <summary>
     /// Pixel height of one lane "row," VisualElement.style.top-space. Placeholder — TODO: pending
@@ -41,16 +59,29 @@ public static class LaneMovementSystem
     public const float LaneRowHeightPx = 76.5f;
 
     /// <summary>
-    /// Symmetric spread (in px) between occupants sharing a lane/row, per Combat_Directive's "non-
-    /// exclusive occupancy" rule. Placeholder — TODO: pending numerical calibration. Value (150f)
-    /// and its full derivation history predate the row/column axis swap (see DECISIONS.md ->
-    /// [Combat] "In-lane spacing moved from vertical to horizontal," "Approach's 'closing lunge'")
-    /// — still horizontal (style.left) either way, since occupants sharing a row spread out ALONG
-    /// that row, which is the horizontal axis regardless of which axis represents depth.
+    /// Enemy-side single-occupant centering baseline ONLY (2026-08-12: renamed in intent, not
+    /// value, from the removed occupant-spread system — kept as its own constant, untouched, so
+    /// reworking the player side's column grid can't accidentally shift the enemy side, which stays
+    /// scoped out of this pass — multi-enemy battles don't exist yet, see
+    /// BattleHUDController.ApplyEnemyLaneDepthScale). Do NOT reuse this for the player's 5-column
+    /// grid math — see PositionColumnSpacingPx.
     /// </summary>
     public const float InLaneSpacingPx = 150f;
 
+    /// <summary>
+    /// Fixed pixel distance between adjacent columns in the 5-position formation grid. Placeholder —
+    /// TODO: pending numerical calibration. Same tuned value as the old InLaneSpacingPx (150f,
+    /// derived from Sonny 2's skill-wheel radius so two adjacent occupants' wheels never overlap —
+    /// see DECISIONS.md -> [Combat] "In-lane spacing moved from vertical to horizontal") — a
+    /// SEPARATE constant, not a reuse of InLaneSpacingPx, so the enemy side's baseline (unaffected
+    /// by this pass) and the player's real column grid can be tuned independently later.
+    /// </summary>
+    public const float PositionColumnSpacingPx = 150f;
+
     public static int ClampLane(int lane) => Mathf.Clamp(lane, 1, BattleLaneLayout.LaneCount);
+
+    /// <summary>Clamps a column/position index to the valid 1..PositionsPerLane range.</summary>
+    public static int ClampPosition(int position) => Mathf.Clamp(position, 1, PositionsPerLane);
 
     /// <summary>
     /// "Already in the same row" — kept as a general row-index utility (same-index equality) even
@@ -124,15 +155,50 @@ public static class LaneMovementSystem
     }
 
     /// <summary>
-    /// Symmetric horizontal spread (px) for the occupantIndexInLane-th of occupantCountInLane
-    /// combatants sharing one lane/row, per Combat_Directive's non-exclusive-occupancy rule ("spaced
-    /// apart along the lane so they read as distinct... appearing in a line"). A single occupant
-    /// gets 0 offset; multiple occupants spread symmetrically around 0, along the row (horizontal
-    /// axis) they share.
+    /// FIXED horizontal offset (px, relative to the row's center) for one of the 5 columns —
+    /// column DefaultStartingPosition (3, center) is 0; columns spread symmetrically to either side
+    /// at PositionColumnSpacingPx intervals. Unlike the removed GetInLaneSpacingOffsetPx, this does
+    /// NOT depend on how many other combatants are present — a given column's screen position is
+    /// always the same, since occupancy is now exclusive (at most one combatant per (lane, position)
+    /// pair — see this file's class doc comment).
     /// </summary>
-    public static float GetInLaneSpacingOffsetPx(int occupantIndexInLane, int occupantCountInLane)
+    public static float GetPositionOffsetPx(int position)
     {
-        if (occupantCountInLane <= 1) return 0f;
-        return (occupantIndexInLane - (occupantCountInLane - 1) / 2f) * InLaneSpacingPx;
+        return (ClampPosition(position) - DefaultStartingPosition) * PositionColumnSpacingPx;
     }
+
+    /// <summary>
+    /// Total pixel span of the 5-column position range (column 1's offset to column 5's) —
+    /// `(PositionsPerLane - 1) * PositionColumnSpacingPx`. Exposed so BattleHUDController can size
+    /// PlayerStageArea's width to exactly contain every column (plus one creature's own width)
+    /// without duplicating the arithmetic — mirrors RowRangeHeightPx's role on the vertical axis.
+    /// </summary>
+    public static float PositionRangeWidthPx => (PositionsPerLane - 1) * PositionColumnSpacingPx;
+
+    /// <summary>
+    /// Extra horizontal offset (1.25 columns' worth) applied on top of the normal centering
+    /// compensation for the PLAYER side only — 2026-08-12, user: "the 2 columns on the right are
+    /// interferring with the health hud [player nameplates]... move the grid over by 2 columns."
+    /// Then, same session, after live-testing that fix: "seems like i overcompensated on the move.
+    /// lets move the grid to the left by half a column" (2 -> 1.5), then again "adjust it to be
+    /// 1.25F i think that is better" (1.5 -> 1.25, final value).
+    /// The player nameplate sidebar sits in the top-left corner of the screen; without this shift
+    /// the formation grid's leftmost columns render close enough to overlap it. Applied uniformly
+    /// to BOTH real creature positioning (BattleHUDController.LayoutPlayerStageCreaturesByLane) and
+    /// the Move-drag markers (ShowStagePositionMarkers) — they must move together, since a marker's
+    /// position is a promise of exactly where the creature will end up if dropped there.
+    ///
+    /// Deliberately NOT baked into PositionRangeWidthPx/PositionColumnSpacingPx itself (per the
+    /// user's explicit "don't shrink the grid") — this is a pure positional shift, the grid's own
+    /// width/spacing is untouched.
+    ///
+    /// Enemy-side mirroring (flagged by the user, not yet built — enemy stage/Move UI stays
+    /// deferred, see DECISIONS.md -> [Combat]): the enemy nameplate sidebar sits in the top-RIGHT
+    /// corner instead, so a future enemy-side version of this same fix would need the opposite
+    /// sign (shift LEFT, toward center, not right) — same magnitude, mirrored direction, matching
+    /// how GetLaneScreenTop already produces an identical (non-mirrored) vertical mapping for both
+    /// sides while GetPositionOffsetPx's caller-applied horizontal centering has always been
+    /// side-specific plumbing (the two stage-side containers anchor at opposite screen edges).
+    /// </summary>
+    public const float PlayerNameplateClearanceShiftPx = 1.25f * PositionColumnSpacingPx;
 }

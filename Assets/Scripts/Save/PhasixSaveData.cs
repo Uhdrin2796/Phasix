@@ -51,6 +51,16 @@ public class PhasixSaveData
     public List<string> learnedSkillGuids = new List<string>();
     public List<string> equippedSkillGuids = new List<string>();
 
+    /// <summary>
+    /// Pre-battle formation slot preference (2026-08-12 formation grid system — see
+    /// PhasixRuntimeData.preferredLaneIndex's own doc comment). Missing from a legacy save (pre-fix)
+    /// deserializes as 0 for both, which BattleParticipant's constructor already clamps via
+    /// LaneMovementSystem.ClampLane/ClampPosition into a valid slot — graceful degradation, not a
+    /// crash, so no special-case defaulting logic is needed here.
+    /// </summary>
+    public int preferredLaneIndex;
+    public int preferredPositionIndex;
+
     /// <summary>Builds a save-ready DTO from a live PhasixRuntimeData. Returns null if speciesData can't be resolved to a GUID (e.g. not registered in the SpeciesDatabase) — a Phasix that can't be saved shouldn't silently corrupt the slot with a broken reference.</summary>
     public static PhasixSaveData FromRuntime(PhasixRuntimeData runtime, SpeciesDatabase speciesDatabase)
     {
@@ -85,6 +95,8 @@ public class PhasixSaveData
             unlockedTreeTypes = new List<SkillTreeType>(runtime.unlockedTreeTypes),
             learnedSkillGuids = new List<string>(runtime.learnedSkillGuids),
             equippedSkillGuids = new List<string>(runtime.equippedSkillGuids),
+            preferredLaneIndex = runtime.preferredLaneIndex,
+            preferredPositionIndex = runtime.preferredPositionIndex,
         };
 
         foreach (KeyValuePair<string, int> entry in runtime.specificAura)
@@ -127,6 +139,8 @@ public class PhasixSaveData
             unlockedTreeTypes = new List<SkillTreeType>(unlockedTreeTypes),
             learnedSkillGuids = new List<string>(learnedSkillGuids),
             equippedSkillGuids = new List<string>(equippedSkillGuids),
+            preferredLaneIndex = preferredLaneIndex,
+            preferredPositionIndex = preferredPositionIndex,
         };
 
         int pairCount = Math.Min(specificAuraKeys.Count, specificAuraValues.Count);

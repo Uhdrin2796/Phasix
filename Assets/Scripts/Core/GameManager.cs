@@ -14,13 +14,16 @@ using UnityEngine.SceneManagement;
 /// something?" in its OWN Start() would be a race. Load-then-maybe-seed happening sequentially
 /// inside a single method has no such ordering question.
 ///
-/// Runs on SceneManager.sceneLoaded rather than Start() (2026-08 follow-up bugfix — live-verified:
-/// the debug "New Game" button reloads the active scene while this object survives via
-/// DontDestroyOnLoad, and Start() only ever fires ONCE per component instance — it does NOT
-/// re-run just because the scene around a surviving DontDestroyOnLoad object gets reloaded. A
-/// Start()-based version silently never re-seeded the party after a debug reset, since nothing
-/// called it a second time. sceneLoaded fires for every load, including the very first one at
-/// boot, so this one handler covers both cases without a separate first-boot path.
+/// Runs on BOTH Start() and SceneManager.sceneLoaded (2026-08-12, two bugs found and fixed one
+/// after the other, see RunBootSequence's own doc comment for the second): a Start()-ONLY version
+/// silently never re-seeds the party after the debug "New Game" reset, since this object survives
+/// scene reloads via DontDestroyOnLoad and Start() only ever fires ONCE per component instance —
+/// it does NOT re-run just because the scene around a surviving object gets reloaded. But a
+/// sceneLoaded-ONLY version (what this used to be) silently never runs on a genuinely cold Editor
+/// Play press either — Unity's Editor does not fire sceneLoaded for the scene that was already
+/// open when Play is pressed, only for scenes loaded at runtime via SceneManager.LoadScene. Start()
+/// covers the boot sceneLoaded misses; sceneLoaded covers every reload Start() misses. See
+/// RunBootSequence for why calling both is safe (no double-seeding).
 ///
 /// Inspector Setup:
 ///   1. Create an empty GameObject in SampleScene named "_GameManager"
@@ -70,14 +73,58 @@ public class GameManager : MonoBehaviour
         SceneManager.sceneLoaded -= HandleSceneLoaded;
     }
 
-    /// <summary>Fires for every scene load this object survives, including the first one at boot — see the class doc comment for why this replaces a one-shot Start().</summary>
+    /// <summary>
+    /// Handles every scene load AFTER the very first one — see Start() for why the first one needs
+    /// its own separate call. 2026-08-12 bugfix: guarded to LoadSceneMode.Single only —
+    /// BattleTransition loads BattleScene_Main additively (the overworld stays loaded underneath
+    /// combat), and this handler used to fire for THAT load too, silently re-applying the last
+    /// on-disk save over the live PartySystem via TryAutoLoad right before
+    /// BattleManager.BuildPlayerSide() reads it — clobbering whatever the player had just set in
+    /// the Party menu's formation picker moments earlier (reported as "party members render
+    /// stacked in battle" — see DECISIONS.md -> [Save]). The fallback-seed check below is guarded
+    /// by the same early-return for the same reason: an additive battle load has no business
+    /// re-seeding a starter either, even though nothing currently exercises that specific edge.
+    /// </summary>
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (mode != LoadSceneMode.Single) return;
+        RunBootSequence();
+    }
+
+    /// <summary>
+    /// 2026-08-12 bugfix (user: "im just press the play button on the unity editor and ive never
+    /// had an issue" — reported seeing an empty party requiring the debug Add Party Member button
+    /// as a workaround). Root cause, confirmed live via a fresh manage_editor "play" with zero
+    /// [GameManager] log lines appearing: Unity's Editor does NOT fire SceneManager.sceneLoaded for
+    /// the scene that was already open when Play is pressed — that event only fires for scenes
+    /// loaded at runtime via SceneManager.LoadScene (e.g. ResetToNewGame's reload below), which is
+    /// why the debug "New Game" flow always worked while a genuinely cold Play press never actually
+    /// ran TryAutoLoad/SeedFallbackStarter at all. This is a real, standalone Unity Editor gotcha —
+    /// unrelated to this session's earlier additive-battle-load guard fix above, and predates it.
+    ///
+    /// Fix: also call RunBootSequence from Start(), which — unlike sceneLoaded — DOES reliably fire
+    /// once on a genuinely fresh boot. Start() alone can't replace HandleSceneLoaded entirely
+    /// (this object survives every later scene reload via DontDestroyOnLoad, and Start() never
+    /// re-fires for a surviving instance — see the class doc comment), so both paths stay: Start()
+    /// covers the first boot sceneLoaded misses, HandleSceneLoaded covers every reload after it.
+    /// Safe to call from both without double-seeding: TryAutoLoad re-running is a harmless
+    /// no-op-ish reload (same save into the same slot indices), and SeedFallbackStarter is already
+    /// guarded by "is slot 0 still empty" — if Start() already seeded it, a hypothetical later
+    /// double-fire (e.g. sceneLoaded firing for scene 0 in an actual built Player, unlike the
+    /// Editor) sees a non-empty slot 0 and no-ops.
+    /// </summary>
+    private void Start()
+    {
+        RunBootSequence();
+    }
+
+    private void RunBootSequence()
     {
         bool loaded = TryAutoLoad();
 
         // Only seed a fallback if nothing loaded AND the party is still genuinely empty — guards
-        // against a scene reload that already has a live party (shouldn't happen today, but keeps
-        // this handler idempotent rather than assuming it's always "the party is empty").
+        // against a scene reload (or a Start()+sceneLoaded double-fire) that already has a live
+        // party, keeping this idempotent rather than assuming it's always "the party is empty".
         if (!loaded && PartySystem.Instance != null && PartySystem.Instance.GetSlot(0) == null)
         {
             SeedFallbackStarter();
@@ -133,6 +180,12 @@ public class GameManager : MonoBehaviour
     /// Return, real 7-lane movement) had no in-game way to trigger it without manually equipping
     /// it through the Party menu's skill web first. Looked up by SkillName ("Slash"), same pattern
     /// as C1 below, since it's not a BuiltInMoveType.
+    ///
+    /// 2026-08-12 follow-up #2 — BuiltInMoveType.Move briefly added to desiredOrder alongside the
+    /// new formation grid system, then REMOVED the same session once Move stopped being an
+    /// equippable skill-ring orb entirely — it's now a dedicated always-present icon
+    /// (BattleHUDController's Move-drag flow) unconditionally available to every player creature,
+    /// so it needs no force-equip debug hook. See DECISIONS.md -> [Combat].
     /// </summary>
     private void ApplyDebugPlaytestLoadout(PhasixRuntimeData runtime)
     {

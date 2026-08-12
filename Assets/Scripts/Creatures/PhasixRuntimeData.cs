@@ -165,6 +165,24 @@ public class PhasixRuntimeData
     /// </summary>
     public bool DebugUnlockAllTrees;
 
+    /// <summary>
+    /// Preset battle starting position — which of the 7 depth lanes (rows) and which of the 5
+    /// fixed horizontal positions within that row (Combat_Directive Part 2/3, LaneMovementSystem)
+    /// this individual starts a battle in. Set via the Party menu's formation grid picker
+    /// (2026-08-12, user: "lets just have 5 positions across a lane... you can preset which
+    /// position you want to be in"). Read by BattleParticipant's constructor to seed
+    /// LaneIndex/PositionIndex; NOT the same as those live, battle-only fields — this is the
+    /// persistent pre-battle preference, they're the (possibly since-moved) in-battle state.
+    /// Defaults to the center of each range (lane 4 = "Mid", position 3 = center column), matching
+    /// LaneMovementSystem.DefaultStartingLane. Exclusive per party member — SetPreferredSlot on
+    /// the Party menu side (not built here, this is just storage) is responsible for preventing two
+    /// party members from sharing the same (lane, position) pair.
+    /// </summary>
+    public int preferredLaneIndex = LaneMovementSystem.DefaultStartingLane;
+
+    /// <summary>See preferredLaneIndex's doc comment. Defaults to the center column (3 of 5).</summary>
+    public int preferredPositionIndex = LaneMovementSystem.DefaultStartingPosition;
+
     public PhasixRuntimeData(string nodeGuid)
     {
         instanceId = Guid.NewGuid().ToString();

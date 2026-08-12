@@ -3882,7 +3882,7 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Ref:** `DamageCalculator.cs` (`ComputeBaseDamage`, `ComputeStatRatio`), `BattleLogFormatter.cs`
   (`FormatDamageBreakdown`, `FormatDeltaTerm`), `BattleManager.cs` (all 4 damage-log call sites).
 
-### [Combat] Lane occupancy — non-exclusive, in-lane visual spacing
+### [Combat] Lane occupancy — non-exclusive, in-lane visual spacing — SUPERSEDED 2026-08-12, see below
 - **Decided:** Multiple combatants may occupy the same lane simultaneously. When they do, they're
   visually spaced apart along the lane so they read as distinct occupants in a line rather than
   overlapping sprites. This is a rendering/layout rule only — targeting, movement, and collision
@@ -3895,8 +3895,11 @@ re-derive the reasoning from scratch before deciding whether to build these.
   8th/9th lane or placement restrictions neither directive nor the GDD asks for, purely to avoid a
   visual-spacing problem that's cheaper to solve in layout code.
 - **Date:** 2026-08-11
-- **Revisit if:** Exact in-lane spacing values, once picked (NumericalCalibration.md), read as
-  cramped at 5-per-side density — may need a soft per-lane occupant cap.
+- **SUPERSEDED 2026-08-12:** User: "lets just have 5 positions across a lane... only one position
+  can be filled at a time" — the exact "exclusive occupancy" alternative rejected above is what got
+  built instead, once pre-battle placement (which this entry's own "Why" flagged as depending on
+  this rule) turned into a real feature rather than a future one. See "Exclusive 5-position
+  formation grid" below for the replacement.
 - **Ref:** `Combat_Directive_v0_1_0.md` Part 3, `Attack_Pattern_Directive_v0_1_0.md` Part 8.
 
 ### [Combat] Lane movement cost — context-decided, cost-agnostic traversal system
@@ -4489,3 +4492,248 @@ re-derive the reasoning from scratch before deciding whether to build these.
   noticeably subtler than the previous 0.55–1.15 range.
 - **Date:** 2026-08-12
 - **Ref:** `LaneMovementSystem.cs` (`MaxDepthScale`, `MinDepthScale`).
+
+### [Combat] Exclusive 5-position formation grid — pre-battle picker + in-battle Move skill
+- **Decided:** Formation is now a real 7-lane x 5-position grid (35 slots), and occupancy is
+  EXCLUSIVE — at most one combatant per (lane, position) pair, replacing the "non-exclusive,
+  auto-spread" model this project shipped with (see the superseded entry above). Two new pieces,
+  sharing one UI component:
+  1. **Pre-battle:** `PhasixRuntimeData.preferredLaneIndex`/`preferredPositionIndex` (persistent,
+     defaults to the center of each range) — set via a grid picker in the Party menu's per-creature
+     detail view. `BattleParticipant`'s constructor seeds its live `LaneIndex`/`PositionIndex` from
+     these at battle start.
+  2. **In-battle:** `BuiltInMoveType.Move` (new — `Standard_Move.asset`, `_skillName: "M"`) — a real,
+     equippable built-in move, seeded alongside Attack/Charge/Heal/Regen/Capture on every creature.
+     Consumes the turn's action exactly like any other skill (`HasActedThisTurn` is already set
+     generically before dispatch). Picking it opens the SAME grid picker as an overlay instead of
+     the normal drag-to-a-creature flow — repositions the caster directly, no target creature
+     involved.
+  `FormationGridPicker.Build(currentLane, currentPosition, getOccupantLabel, onCellChosen)` is the
+  one shared UI builder both contexts call — occupied cells (by someone other than whoever's
+  picking) are disabled and show a short label; the picker's own current slot is marked with a star
+  and stays clickable (a harmless re-pick). `FormationSystem.IsSlotOccupied` is the shared pure
+  exclusivity check, given a projected `(lane, position)` sequence — deliberately decoupled from
+  which concrete type (`PhasixRuntimeData` vs `BattleParticipant`) is doing the asking.
+- **Why:** User: "so im thinking lets just have 5 positions across a lane. Then you can preset which
+  position you want to be in. So i think it could be similar to how the skiill wheel is set up, but
+  instead it would look like a 7 by 5 grid. 7 lanes, 5 positions. And only one position can be
+  filled at a time. This would be bundled with the preslot and in battle move. The inbattle move
+  could use the same or system that the preslot uses for selection." Follows from two earlier asks
+  in the same conversation: adding a way to pre-slot party formation before battle, and adding a way
+  to reposition mid-battle (with movement deliberately costing the full turn action, matching a
+  skill use, rather than being free — see the "Move costs the turn" design discussion earlier this
+  session, no separate DECISIONS.md entry since it was pure discussion, not yet code, until this
+  entry).
+- **Why the enemy side is untouched:** Same scoping precedent as every other lane-system pass this
+  session — multi-enemy battles don't exist yet (one visual enemy stage slot), so there's no
+  occupancy problem to solve there. `BattleParticipant`'s constructor seeding logic applies
+  uniformly to both sides (harmless for enemies — their `PhasixRuntimeData` simply never had its
+  preferred fields touched by the player-only Party menu), but the grid UI and Move skill are
+  player-only.
+- **Why Move is hard-excluded from EnemyAI.ChooseSkill:** Same treatment as Capture — no AI logic
+  exists yet for deciding when an enemy should reposition. Revisit alongside any future real enemy
+  decision-making framework.
+- **Verified:** 332/332 EditMode tests pass (added `LaneMovementSystemTests`'s `GetPositionOffsetPx`/
+  `ClampPosition` coverage, `FormationSystemTests`, `PhasixRuntimeDataTests`, `BattleParticipantTests`
+  seeding/clamping cases). Live-verified via `execute_code` against a real 3-member party in a real
+  battle: called `ResolveBuiltInMove` directly with `BuiltInMoveType.Move` — a move onto an
+  ally-occupied slot (4,3) was correctly rejected (battle log: "couldn't move there — already
+  occupied!", position unchanged) and a move to a free slot (2,1) succeeded exactly (`LaneIndex`/
+  `PositionIndex` updated, `style.top`/`style.left` matched `GetLaneScreenTop`/`GetPositionOffsetPx`
+  precisely, battle log confirmed). Inspected the constructed grid overlay's VisualElement tree
+  directly: 7 rows x 5 cells, the mover's current cell marked (star, enabled), the ally-occupied cell
+  correctly disabled with an occupant-initial label. Party menu: opened via reflection, confirmed the
+  same grid renders inline in the detail view with the correct current-cell highlight, and that
+  updating `preferredLaneIndex`/`preferredPositionIndex` + re-showing the detail view (what a real
+  cell click does) moves the highlight correctly. Screenshotted the in-battle grid overlay and sent
+  it to the user; the Party-menu screenshot attempt was confused by two UIDocuments (battle + party
+  menu) being simultaneously active in this artificial test scenario (opening the party menu mid-
+  battle, which normal play never does) — verified structurally instead, not a real-game issue.
+- **Date:** 2026-08-12
+- **Revisit if:** A real per-enemy formation/AI-positioning system is ever built (would need the
+  enemy-side scoping revisited); the Move skill's instant (non-animated) reposition reads poorly
+  once real art exists — Charge/Heal/Regen are the closest precedent for "instant, no travel
+  animation" built-ins, so this matches an existing convention rather than being a shortcut, but a
+  hop-tween (reusing `VisualElementTweening`) would be a natural upgrade.
+- **Ref:** `LaneMovementSystem.cs` (`PositionsPerLane`, `ClampPosition`, `GetPositionOffsetPx`,
+  `PositionRangeWidthPx`, `DefaultStartingPosition`), `FormationSystem.cs` (new),
+  `FormationGridPicker.cs` (new), `PhasixRuntimeData.cs` (`preferredLaneIndex`/
+  `preferredPositionIndex`), `BattleParticipant.cs` (`PositionIndex`), `BattleHUDController.cs`
+  (`LayoutPlayerStageCreaturesByLane` rework, `ShowFormationGridForMove`/`HideFormationGridForMove`,
+  `ShowMoveSelection`'s new parameter), `ChosenMove.cs` (`DestinationLane`/`DestinationPosition`),
+  `BattleManager.cs` (`ResolveBuiltInMove`'s `Move` case), `BuiltInMoveType.cs` (`Move`),
+  `Standard_Move.asset` (new), `EnemyAI.cs` (Move exclusion), `OverworldMenuController.cs`
+  (`BuildFormationSection`), `BattleHUD.uss`/`OverworldMenu.uss` (`.formation-grid*` classes).
+
+### [Combat] Formation grid orientation/persistence bugfixes + Move redesigned as a dedicated drag-to-stage-position icon
+- **Decided:** Three fixes/changes against the formation grid entry directly above, from the user's
+  own live playtest of that pass:
+  1. **Grid orientation fix:** `FormationGridPicker.Build`'s row loop now iterates lane 7→1 (was
+     1→7), so the picker's top row is lane 7 (back) and bottom row is lane 1 (front) — matching the
+     real stage's `LaneMovementSystem.GetLaneScreenTop` convention, which the grid had been inverted
+     against. Each built cell also now carries `userData = (lane, position)`, used by the Move
+     redesign's hit-testing (below).
+  2. **Persistence fix (two independent causes, both fixed):** `GameManager.HandleSceneLoaded` now
+     early-returns unless `mode == LoadSceneMode.Single`, so the additive battle-scene load (which
+     keeps the overworld loaded underneath) no longer re-triggers a save auto-load that clobbered
+     the live `PartySystem` moments before `BattleManager.BuildPlayerSide()` read it. Independently,
+     `PhasixSaveData` never serialized `preferredLaneIndex`/`preferredPositionIndex` at all — added
+     both fields to the DTO and both `FromRuntime`/`ToRuntime` conversions. Either bug alone
+     reproduced "everyone stacked at the default slot in battle"; both were live and compounding.
+  3. **Move redesigned:** Move is no longer an equippable `BuiltInMoveType.Move` skill-ring orb —
+     `WildSpawnSystem.SeedInitialSkills` now skips it entirely when seeding the Standard tree, and
+     `BattleHUDController.PopulateSkillRing` defensively treats a resolved Move skill as an empty
+     slot (guards stale save/Editor state from the prior pass). In its place, every player creature
+     gets a small always-present `.move-icon` (built procedurally in `Awake()`, parented under the
+     creature so it follows lane/position layout automatically) shown for alive, not-yet-acted
+     creatures at turn start and hidden the moment that creature acts. Pressing and dragging it
+     (`BeginMoveDrag`, a new drag path independent of the skill-ring's `BeginDragForSkill`/
+     `OnDragPointerUp`) reveals 35 stage-position marker elements (`ShowStagePositionMarkers`) built
+     from the exact same `GetLaneScreenTop`/`GetPositionOffsetPx` formulas real creatures use — so
+     orientation is correct for free and a marker sits exactly where the creature would land — hidden
+     again the instant the drag ends (drop, reject, or release-outside-all-markers cancel). Dropping
+     on a free marker fires `BattleHUDController.MoveConfirmed(slotIndex, lane, position)`, handled
+     directly by a new `BattleManager.HandleMoveConfirmed` (bypasses `PlayerTurn`'s
+     `_pendingSkill`/`ChosenMove` wait-loop entirely — same "instant HUD-event handler" shape as the
+     existing burst-bar click handler) which re-validates occupancy live, sets
+     `HasActedThisTurn`, and reuses `ResolveBuiltInMove`'s existing, unchanged `Move` case. Per the
+     user's explicit choice, Move still calls `RecordSkillTreeUse`/`RecordSkillUse`/
+     `EventBus.Raise_SkillUsed` against the (no-longer-equipped-but-still-existing) `Standard_Move`
+     asset, reproducing the combo-streak/`SkillUsed` bookkeeping the old ring-routed path had — this
+     was a deliberate "keep the old behavior" choice, not an oversight, when the alternative (Move
+     exempt from combo-streak accounting) was offered and declined. `PlayerTurn`'s ring-open-slot
+     local was promoted to a field (`_activePlayerRingSlot`) plus a new `_ringForcedClosedByMove`
+     flag so a Move completing while that same creature's ring happens to be open closes it cleanly
+     instead of leaving `PlayerTurn`'s bookkeeping stale. A follow-up request in the same session
+     ("the 2 columns on the right are interfering with the health hud... its the player nameplates")
+     added `LaneMovementSystem.PlayerNameplateClearanceShiftPx` (`2 * PositionColumnSpacingPx`),
+     applied identically to both real creature positioning and marker positioning so they never
+     drift apart — a pure positional shift, explicitly NOT baked into `PositionRangeWidthPx`/
+     `PositionColumnSpacingPx` (user: "Dont shrink the grid").
+  The old click-to-confirm centered overlay (`ShowFormationGridForMove`/`HideFormationGridForMove`,
+  `.formation-grid-overlay`/`-cancel-button` CSS, `ChosenMove.DestinationLane`/`DestinationPosition`,
+  `BattleManager`'s `_pendingDestinationLane`/`_pendingDestinationPosition`) is deleted, not kept
+  behind a flag — it's fully superseded, and the drag-to-real-position flow reuses
+  `ResolveBuiltInMove`'s Move case unchanged, so nothing else depended on the deleted plumbing.
+- **Why:** User, after live-testing the previous pass: grid orientation "doesnt look right"; formation
+  "not persisting through the formation picker then onto the battle scene... when i load into the
+  battle scene they're all stacked on top of one another"; and, for Move specifically: "its treated
+  like a skill for turn usage but it should have its own icon that exists for every player instead of
+  it being a skill... you can actually drag and drop a player to a location. Just like how we do the
+  projectile... the positions that the player could move to should be hidden when in combat, but when
+  you've selected to move then it shows the possible positions." Two follow-up choices via
+  `AskUserQuestion`: a small dedicated Move icon (not the creature sprite itself) as the drag handle,
+  and the drag-time grid aligned to real stage coordinates (not a centered popup) — both matching
+  what's described above.
+- **Why enemy-side position support stays deferred:** Confirmed with the user during planning — only
+  one enemy stage slot exists, no multi-enemy battles yet, nothing to build or test there. Same
+  scoping precedent as the original formation grid entry. `PlayerNameplateClearanceShiftPx`'s doc
+  comment explicitly flags that a future enemy-side mirror would need the opposite sign (enemy
+  nameplates sit top-right, not top-left) — not built here, just left discoverable.
+- **Verified:** Full EditMode suite green (new `FormationGridPickerTests.cs` covering the orientation
+  fix and `userData` tagging; `SaveSystemTests`'s round-trip test extended with non-default
+  `preferredLaneIndex`/`preferredPositionIndex` so a silent DTO no-op can't hide behind
+  default-equals-default; `WildSpawnSystemTests` extended with a case asserting Move is never learned
+  or equipped). Live-verified via `execute_code` against a real 3-member party seeded to three
+  distinct, non-default (lane, position) slots and a real additive battle transition (with the known
+  duplicate-`BattleScene_Main` race worked around by filtering for the `BattleManager` instance with a
+  populated `PlayerSide`): `BattleManager.PlayerSide[i].LaneIndex`/`PositionIndex` matched exactly
+  what was set pre-battle, confirming both persistence fixes together. Inspected the 35-marker stage
+  overlay's raw `style.left`/`style.top` values directly — lane 1 at the largest `top` (bottom of
+  screen), lane 7 at the smallest (top of screen), matching the real stage; leftmost column shifted
+  right of the player nameplates by `PlayerNameplateClearanceShiftPx` with the full 5-column width/
+  spacing intact (not shrunk). Screenshotted the live battle stage with markers shown mid-drag:
+  visually confirmed no nameplate overlap, markers rendered behind (not in front of) the real
+  creatures (`SendToBack`), and the Move icon rendering as a small icon distinct from all 12 skill-ring
+  orb slots (none of which resolve to Move). `read_console` clean (only pre-existing, unrelated A*
+  Pathfinding Project network-check warnings).
+- **Date:** 2026-08-12
+- **Revisit if:** Enemy-side positioning is ever built (mirror `PlayerNameplateClearanceShiftPx` with
+  the opposite sign per its own doc comment, and give enemies their own Move-equivalent affordance);
+  Move's reposition still has no travel animation (same "instant" precedent/upgrade note as the
+  original formation grid entry).
+- **Ref:** `FormationGridPicker.cs` (row-loop reversal, `userData`, new `BuildCell` split from
+  `Build`), `GameManager.cs` (`HandleSceneLoaded`'s `LoadSceneMode` guard, `ApplyDebugPlaytestLoadout`),
+  `PhasixSaveData.cs` (`preferredLaneIndex`/`preferredPositionIndex`), `WildSpawnSystem.cs`
+  (`SeedInitialSkills`'s Move skip), `BattleHUDController.cs` (`_playerMoveIcons`,
+  `SetMoveIconVisible`, `BeginMoveDrag`/`OnMoveDragPointerUp`/`EndMoveDrag`,
+  `ShowStagePositionMarkers`/`HideStagePositionMarkers`, `MoveConfirmed` event, `PopulateSkillRing`'s
+  Move guard, `LayoutPlayerStageCreaturesByLane`'s shift), `BattleManager.cs`
+  (`HandleMoveConfirmed`, `_activePlayerRingSlot`, `_ringForcedClosedByMove`, `_moveSkill`),
+  `ChosenMove.cs` (reverted to `Skill`/`Target` only), `LaneMovementSystem.cs`
+  (`PlayerNameplateClearanceShiftPx`), `BattleHUD.uss` (`.move-icon`, `.move-icon-disabled`,
+  `.stage-position-markers`; `.formation-grid-overlay`/`-cancel-button` removed),
+  `FormationGridPickerTests.cs` (new), `SaveSystemTests.cs`/`WildSpawnSystemTests.cs` (extended).
+
+### [Combat] Enemy-side position support — deliberately deferred past this session, gap tracked for later
+- **Decided:** The 7×5 occupancy model (lanes × positions) built this session is **player-side only**.
+  `Attack_Pattern_Directive_v0_1_0.md`'s 2026-08-12 errata (Part 8, Part 10 item 2) explicitly
+  "un-defers" the enemy side — states position support "needs building alongside player-side, not
+  deferred" — but the actual implementation does not do this. This entry exists specifically so that
+  divergence between the directive's stated resolution and the shipped code is tracked, not silently
+  lost, per the user's explicit request ("outline that clearly so we know that this is a gap we need
+  to address on the roadmap or in our decisions").
+- **Why:** Two reasons, one scoping and one structural:
+  1. **No multi-enemy battle system exists at all yet.** Only one enemy stage slot is rendered
+     (`BattleHUDController._enemyStageCreature` is a single `VisualElement`, not an array like
+     `_playerStageCreatures[]`), skill-drag target hit-testing checks that one element directly, and
+     `EncounterTrigger`/`WildSpawnSystem` spawn exactly one wild creature per encounter. Enemy-side
+     *positions* are meaningless with nothing but a single enemy to place — the directive's
+     "un-deferred" resolution describes the abstract data model, not what's actually buildable against
+     today's encounter/rendering pipeline.
+  2. **Confirmed with the user during this session's planning** (`AskUserQuestion`: "should this fix
+     pass build enemy-side PositionIndex support too?") — chose "Leave deferred for now (Recommended)"
+     over building it alongside the player-side fixes. `BattleParticipant`'s LaneIndex/PositionIndex
+     seeding already applies uniformly to both sides at the data layer (harmless for enemies — a wild
+     instance's `PhasixRuntimeData` just never has its preferred fields touched by the player-only
+     Party menu), so the underlying data model doesn't block a future build-out; only the UI/rendering/
+     spawning layers are player-only.
+  3. **Most near-term skill content doesn't need it anyway.** Walked through `Attack_Pattern_Directive`
+     Part 5's archetype list with the user: Direct Projectile, Instant Strike, Charge & Release,
+     Sustained Pressure, Metronome, Feint, and Counter-Bait are all single-target/timing tests against
+     the one enemy that already exists. Zone/Positional and the Telegraphed Area Attack example mark
+     the *player's own* lanes/positions (already built). Even Lane Displacement Attack's reactive dodge
+     is the *player* choosing an adjacent lane/position — using the grid that's already in place. The
+     only content that actually needs enemy-side positions is multi-enemy-specific (AoE hitting several
+     enemies, encounter composition) — naturally later anyway, since species/skill content is still
+     Phase 5 placeholder. Matches the directive's own Part 1 validation philosophy: "build one
+     deliberately minimal example... before populating the rest of the content catalog" — let a skill
+     that genuinely needs 2+ enemies be the trigger for coming back to this, rather than building it
+     speculatively ahead of any content that exercises it.
+- **What's needed to close the gap, when it's time (roughly cheap → expensive):**
+  1. **Enemy stage rendering as an array** — `_enemyStageCreature` (singular) → `_enemyStageCreatures[]`
+     mirroring `_playerStageCreatures[]`; every call site currently hardcoded to `enemySide[0]` (color,
+     alive-state, lane position) needs to iterate instead. Cheap in isolation, but not independently
+     verifiable/testable without #4 below (nothing to show more than one of).
+  2. **Per-enemy position layout** — mirror `GetPositionOffsetPx`'s math for the enemy side (see the
+     "mirrored 7×5 grids, not a unified 7×10" discussion this session — lane already mirrors via
+     `GetLaneScreenTop(lane, isPlayerSide)`; position needs the same treatment, not a shared/continuous
+     coordinate space).
+  3. **Target selection UI** — skill-drag hit-testing only checks the single `_enemyStageCreature`'s
+     `worldBound` today; picking among multiple enemies is new interaction work, not just data plumbing.
+  4. **Multi-enemy spawning** — `EncounterTrigger`/`WildSpawnSystem` need to generate N enemies per
+     encounter with distinct starting slots. This is the actual gate — nothing above has any real
+     content to render/test without it.
+  5. **Enemy AI repositioning logic** — `EnemyAI.ChooseSkill` hard-excludes Move entirely today ("no AI
+     logic exists yet for deciding when an enemy should reposition" — see this file's earlier
+     "Exclusive 5-position formation grid" entry). Giving enemies positions that matter means teaching
+     the AI to decide when to use them.
+  6. **Reactive dodge-to-adjacent-slot** (Lane Displacement Attack archetype) — a wholly separate,
+     unbuilt QTE system, for either side to dodge an incoming attack to an adjacent lane or position.
+     Arguably what makes position matter tactically in the first place; worth sequencing before or
+     alongside enemy formations rather than after.
+  7. **Starting enemy formation assignment** — analogous to the player's Party-menu picker but not
+     player-editable; something (fixed per-encounter design, or randomized) needs to assign each
+     enemy's starting slot, and resolve the directive's still-open question (`Attack_Pattern_Directive`
+     Part 8/Part 10 item 8): is enemy starting placement shown to the player before battle begins, or
+     only revealed once it starts?
+- **Date:** 2026-08-12
+- **Revisit if:** A specific skill or encounter is being built that genuinely requires 2+ simultaneous
+  enemies (an AoE hitting multiple enemy lanes, an encounter with a real enemy party composition) —
+  that's the natural trigger to come back and build items 1–7 above, starting with #4 (multi-enemy
+  spawning) since nothing else has anything to render or test without it first.
+- **Ref:** `Attack_Pattern_Directive_v0_1_0.md` Part 8/Part 10 item 2 (the "un-deferred" resolution
+  this entry tracks against), `Roadmap_v2.md` -> "What Is Not In This Roadmap" (gap row added same
+  session), `BattleHUDController.cs` (`_enemyStageCreature`, `_enemyNameplates[]`), `BattleState.cs`
+  (`EnemySide`), `EnemyAI.cs` (Move exclusion), `LaneMovementSystem.cs`/`FormationSystem.cs` (the
+  data-layer pieces that already generalize to both sides).
