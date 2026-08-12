@@ -110,12 +110,12 @@ namespace Phasix.Tests.EditMode
             var target = MakeParticipant(vitality: 30, isPlayerSide: false);
             var state = new BattleState(new List<BattleParticipant> { attacker }, new List<BattleParticipant> { target });
 
-            BattleEngine.QueueBasicAttack(state, attacker, target, TimedInputConfig.SuccessDamageMultiplier);
+            BattleEngine.QueueBasicAttack(state, attacker, target, TimedInputConfig.GoodDamageMultiplier);
             BattleEngine.ResolveQueuedActions(state);
 
-            int expectedDamage = Mathf.RoundToInt(BattleConfig.PlaceholderAttackDamage * TimedInputConfig.SuccessDamageMultiplier);
+            int expectedDamage = Mathf.RoundToInt(BattleConfig.PlaceholderAttackDamage * TimedInputConfig.GoodDamageMultiplier);
             Assert.AreEqual(30 - expectedDamage, target.CurrentHP,
-                "A successful offensive timing hit must scale damage by SuccessDamageMultiplier.");
+                "A successful offensive timing hit must scale damage by GoodDamageMultiplier.");
         }
 
         [Test]

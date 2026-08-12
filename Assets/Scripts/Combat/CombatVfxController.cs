@@ -363,15 +363,21 @@ public class CombatVfxController
     /// reversing its path back toward the original attacker and re-tinting it as counterColorType
     /// (the counter-attacker's own Primal type), arriving to flash the original attacker. This
     /// beat IS the counter-attack's hit feedback — BattleManager should not also call
-    /// LaunchProjectile separately for that damage. The defender's own outline flash (the "you
-    /// parried!" cue) is a SEPARATE, earlier call — see FlashHeldProjectileParryOutline, called by
-    /// BattleHUDController.RunDefenseTimedInput immediately on detecting Parry, not here. No-op if
-    /// nothing is currently held or either side's element can't be resolved (releases the
-    /// projectile in that case rather than leaving it stuck).
+    /// LaunchProjectile separately for that damage. Returns the projectile's real travel duration
+    /// (0f if nothing was actually launched) so the caller can await it before applying the
+    /// counter's damage — the flash fires here, on arrival, INSIDE that awaited window, so the
+    /// projectile's visual hit, this flash, and the caller's subsequent damage/HP-bar update all
+    /// land in the same beat (2026-08-11, user-directed: "I need the damage to register the moment
+    /// the projectile hits the target" — see BattleManager.ResolveEnemyDamageAction's counter-
+    /// attack block for the await). The defender's own outline flash (the "you parried!" cue) is a
+    /// SEPARATE, earlier call — see FlashHeldProjectileParryOutline, called by
+    /// BattleHUDController.RunDefenseTimedInput immediately on detecting Parry, not here. No-op
+    /// (returns 0f) if nothing is currently held or either side's element can't be resolved
+    /// (releases the projectile in that case rather than leaving it stuck).
     /// </summary>
-    public void ResolveHeldProjectileAsParryDeflect(PrimalType counterColorType)
+    public float ResolveHeldProjectileAsParryDeflect(PrimalType counterColorType)
     {
-        if (_held == null) return;
+        if (_held == null) return 0f;
         HeldProjectile held = _held;
         _held = null;
         StopHeldRoutine(held);
@@ -381,7 +387,7 @@ public class CombatVfxController
         if (returnFromElement == null || returnToElement == null)
         {
             _projectilePool.Release(held.Projectile);
-            return;
+            return 0f;
         }
 
         CombatProjectileVisual projectile = held.Projectile;
@@ -391,6 +397,7 @@ public class CombatVfxController
 
         float travelDuration = ComputeTravelDurationBetween(returnFromElement, returnToElement);
         _coroutineHost.StartCoroutine(AnimateAndResolveImmediately(projectile, returnToElement, travelDuration, counterColorType));
+        return travelDuration;
     }
 
     /// <summary>

@@ -12,8 +12,8 @@ namespace Phasix.Tests.EditMode
         [Test]
         public void ComputeWindowPercent_HigherInstinct_ProducesLargerWindow()
         {
-            float lowInstinct = TimedInputConfig.ComputeWindowPercent(instinct: 2, bondPercent: 0f);
-            float highInstinct = TimedInputConfig.ComputeWindowPercent(instinct: 20, bondPercent: 0f);
+            float lowInstinct = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 2, bondPercent: 0f);
+            float highInstinct = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 20, bondPercent: 0f);
 
             Assert.Greater(highInstinct, lowInstinct, "Higher Instinct must produce a larger timing window.");
         }
@@ -21,8 +21,8 @@ namespace Phasix.Tests.EditMode
         [Test]
         public void ComputeWindowPercent_HigherBond_ProducesLargerWindow()
         {
-            float noBond = TimedInputConfig.ComputeWindowPercent(instinct: 5, bondPercent: 0f);
-            float fullBond = TimedInputConfig.ComputeWindowPercent(instinct: 5, bondPercent: 100f);
+            float noBond = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 5, bondPercent: 0f);
+            float fullBond = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 5, bondPercent: 100f);
 
             Assert.Greater(fullBond, noBond, "Higher bond must produce a larger timing window.");
         }
@@ -30,7 +30,7 @@ namespace Phasix.Tests.EditMode
         [Test]
         public void ComputeWindowPercent_ClampsToMinimum_AtZeroStats()
         {
-            float window = TimedInputConfig.ComputeWindowPercent(instinct: 0, bondPercent: 0f);
+            float window = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 0, bondPercent: 0f);
 
             Assert.GreaterOrEqual(window, 5f, "Window must never shrink below the minimum floor.");
         }
@@ -38,7 +38,7 @@ namespace Phasix.Tests.EditMode
         [Test]
         public void ComputeWindowPercent_ClampsToMaximum_AtExtremeStats()
         {
-            float window = TimedInputConfig.ComputeWindowPercent(instinct: 9999, bondPercent: 100f);
+            float window = TimedInputConfig.ComputeWindowPercent(TimedInputConfig.DodgeBaseWindowPercent, instinct: 9999, bondPercent: 100f);
 
             Assert.LessOrEqual(window, 60f, "Window must never exceed the maximum ceiling, however high the stats.");
         }

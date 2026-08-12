@@ -23,6 +23,31 @@ public static class DamageCalculator
     /// </summary>
     public static int ComputeDamage(BattleParticipant attacker, BattleParticipant target, PrimalTypeChart typeChart, DamageCategory category, int skillPower)
     {
+        float statRatio = ComputeStatRatio(attacker, target, category);
+        float typeMultiplier = ComputeTypeMultiplier(attacker, target, typeChart);
+
+        float rawDamage = statRatio * skillPower * typeMultiplier;
+        return Mathf.Max(1, Mathf.RoundToInt(rawDamage));
+    }
+
+    /// <summary>
+    /// The stat-ratio-only damage BEFORE the Primal type multiplier — i.e. ComputeDamage's own
+    /// formula with typeMultiplier fixed at 1.0. Public so callers (the battle log's base/type/
+    /// timing damage breakdown — 2026-08-11, user-directed: "show the (base damage + type
+    /// advantage damage + timing bonus damage)... for visibility") can report the pure "base"
+    /// component on its own, with the type advantage then reported separately as the delta between
+    /// this and ComputeDamage's result. Display-only — never used to actually apply damage, so it
+    /// rounds independently rather than sharing ComputeDamage's single rounding pass; the delta is
+    /// still always exact since it's computed as a difference of two already-rounded values.
+    /// </summary>
+    public static int ComputeBaseDamage(BattleParticipant attacker, BattleParticipant target, DamageCategory category, int skillPower)
+    {
+        float statRatio = ComputeStatRatio(attacker, target, category);
+        return Mathf.Max(1, Mathf.RoundToInt(statRatio * skillPower));
+    }
+
+    private static float ComputeStatRatio(BattleParticipant attacker, BattleParticipant target, DamageCategory category)
+    {
         int attackerStat = category == DamageCategory.Physical
             ? attacker.RuntimeData.EffectiveStat(StatType.Force)
             : attacker.RuntimeData.EffectiveStat(StatType.Resonance);
@@ -34,11 +59,7 @@ public static class DamageCalculator
         // arithmetic safety until real species stats exist.
         defenderStat = Mathf.Max(1, defenderStat);
 
-        float statRatio = (float)attackerStat / defenderStat;
-        float typeMultiplier = ComputeTypeMultiplier(attacker, target, typeChart);
-
-        float rawDamage = statRatio * skillPower * typeMultiplier;
-        return Mathf.Max(1, Mathf.RoundToInt(rawDamage));
+        return (float)attackerStat / defenderStat;
     }
 
     /// <summary>

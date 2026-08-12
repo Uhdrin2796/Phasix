@@ -541,8 +541,15 @@ public class BattleManager : MonoBehaviour
 
         if (resolution.DealsDamage)
         {
-            float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
+            // Good/Perfect bands mirror Defend's own Dodge/Parry tolerances exactly (2026-08-11,
+            // user-directed — see DECISIONS.md -> [Combat]), scaled by the ATTACKER's own
+            // Instinct/bond (offense has always used the attacker's stats here; defense uses the
+            // defender's).
+            float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+            float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
                 attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
 
             // Launches the projectile now, concurrently with the ring below — sweepDuration is
@@ -552,8 +559,9 @@ public class BattleManager : MonoBehaviour
             float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
                 attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
             yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                $"{skill.SkillName} — {attacker.DisplayName}", toleranceHalfWidth, sweepDuration));
+                $"{skill.SkillName} — {attacker.DisplayName}", goodToleranceHalfWidth, perfectToleranceHalfWidth, sweepDuration));
 
+            BattleHUDController.OffenseOutcome timedOutcome = BattleHUDController.Instance.LastOffenseOutcome;
             bool timedSuccess = BattleHUDController.Instance.LastTimedInputSuccess;
             bool timedPerfect = BattleHUDController.Instance.LastTimedInputWasPerfect;
             // TimedInputStreak (C2) specifically tracks PERFECT hits, not merely successful ones
@@ -563,7 +571,18 @@ public class BattleManager : MonoBehaviour
             timedInputHappened = true;
             if (timedSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
 
-            float attackMultiplier = timedSuccess ? TimedInputConfig.SuccessDamageMultiplier : 1f;
+            // TODO: pending design — Perfect currently only grants bonus damage. Damage-dealing
+            // skills have no inherent status payload today (PlaceholderSkillResolver's damage/
+            // status tree split), so a "Perfect also applies a bonus status" reward is deferred
+            // until real skill content exists (2026-08-11, user-directed — see DECISIONS.md ->
+            // [Combat]).
+            float attackMultiplier = timedOutcome switch
+            {
+                BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
+                BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
+                _ => TimedInputConfig.MissDamageMultiplier
+            };
+            int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, resolution.Category, BattleConfig.PlaceholderSkillPower);
             int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, resolution.Category, BattleConfig.PlaceholderSkillPower);
             float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
 
@@ -574,7 +593,7 @@ public class BattleManager : MonoBehaviour
 
             foreach (BattleActionResult result in results)
             {
-                string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, result.DamageApplied, typeMultiplier);
+                string line = BattleLogFormatter.FormatSkillAttack(result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier, timedOutcome);
                 BattleHUDController.Instance.AppendBattleLog(line);
             }
 
@@ -719,11 +738,15 @@ public class BattleManager : MonoBehaviour
                 // (BattleParticipant.SpendAura).
                 attacker.SpendAura(BattleConfig.AttackAuraCost);
 
-                // Offensive action command (Combat_Directive Part 4): a successful timed press
-                // boosts this attack's damage. Ring tolerance scales with the attacker's own
-                // Instinct + bond.
-                float toleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
-                    TimedInputConfig.OffenseToleranceHalfWidth, TimedInputConfig.OffenseBaseWindowPercent,
+                // Offensive action command (Combat_Directive Part 4): a timed press boosts this
+                // attack's damage. Good/Perfect bands mirror Defend's own Dodge/Parry tolerances
+                // exactly (2026-08-11, user-directed — see DECISIONS.md -> [Combat]), scaled by
+                // the attacker's own Instinct + bond.
+                float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                    TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+                    attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+                float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                    TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
                     attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
 
                 // Launches the projectile now, concurrently with the ring below — see
@@ -732,15 +755,22 @@ public class BattleManager : MonoBehaviour
                 float sweepDuration = BattleHUDController.Instance.LaunchSyncedProjectile(
                     attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), holdForOutcome: false);
                 yield return StartCoroutine(BattleHUDController.Instance.RunTimedInput(
-                    $"YOUR ATTACK — {attacker.DisplayName}", toleranceHalfWidth, sweepDuration));
-                float attackMultiplier = BattleHUDController.Instance.LastTimedInputSuccess
-                    ? TimedInputConfig.SuccessDamageMultiplier
-                    : 1f;
+                    $"YOUR ATTACK — {attacker.DisplayName}", goodToleranceHalfWidth, perfectToleranceHalfWidth, sweepDuration));
+
+                // TODO: pending design — Perfect currently only grants bonus damage; see
+                // ResolveSkillAction's identical TODO for why a bonus-status reward is deferred.
+                float attackMultiplier = BattleHUDController.Instance.LastOffenseOutcome switch
+                {
+                    BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
+                    BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
+                    _ => TimedInputConfig.MissDamageMultiplier
+                };
                 if (BattleHUDController.Instance.LastTimedInputSuccess) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
 
                 // Real formula (Step 3): (AttackerStat / DefenderStat) x skillPower x
                 // primalTypeMultiplier. Basic Attack is treated as Physical (Force/Guard) — real
                 // skill categories arrive with the skill tree framework (Step 4).
+                int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
                 int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
                 float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
 
@@ -748,7 +778,7 @@ public class BattleManager : MonoBehaviour
                 List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
                 AccumulateDamageDealt(results);
                 BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-                LogResults(results, typeMultiplier, BattleHUDController.Instance.LastTimedInputSuccess);
+                LogResults(results, pureBaseDamage, baseDamage, typeMultiplier, BattleHUDController.Instance.LastOffenseOutcome);
 
                 // "Skill use" fill always applies; a successful offense timing adds the extra
                 // "timed input" fill on top — both are GDD §9.3's locked fill sources.
@@ -983,6 +1013,7 @@ public class BattleManager : MonoBehaviour
 
         DamageCategory category = isNamedTreeSkill ? PlaceholderSkillResolver.Resolve(skillOrNull).Category : DamageCategory.Physical;
         int power = isNamedTreeSkill ? BattleConfig.PlaceholderSkillPower : DamageCalculator.BasicAttackPower;
+        int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, category, power);
         int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, category, power);
         float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
 
@@ -999,12 +1030,8 @@ public class BattleManager : MonoBehaviour
         // Hit-flash and Dodge-dissolve for the held projectile launched above already fired
         // inside RunDefenseTimedInput itself, the instant the outcome was determined (2026-08-11
         // fix — waiting until here added a real, playtest-confirmed delay). Parry's outline flash
-        // fired there too; only the deflect-and-counter projectile — which needs the
-        // counter-attacker's own Primal type, not known to BattleHUDController — still resolves
-        // here, and doubles as the counter-attack's own hit VFX below.
-        if (isParry) BattleHUDController.Instance.ResolveParryDeflect(GetPrimalTypeOrDefault(target));
-
-        LogDefenseResult(results, attacker, target, typeMultiplier, defended, isParry);
+        // fired there too.
+        LogDefenseResult(results, attacker, target, pureBaseDamage, baseDamage, typeMultiplier, defended, isParry);
         if (defended && wasPerfect) BattleHUDController.Instance.AppendBattleLog($"{target.DisplayName} restores Aura!");
 
         // "Taking hits" (GDD §9.3's third Evolution Burst fill source) — only when the hit
@@ -1012,26 +1039,49 @@ public class BattleManager : MonoBehaviour
         // shouldn't count as "taking a hit").
         if (!defended) AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken);
 
+        // Parry's reward half: a successful Parry triggers an automatic counter-attack against the
+        // now-vulnerable attacker. Resolved HERE, immediately — before the "defended!" message
+        // below, not after it — so the deflect projectile bounces back the instant Parry lands
+        // instead of sitting stuck, idle-pulsing at the player's position for the length of that
+        // message (2026-08-11, user-directed: "if I parry on success just have the attack bounce
+        // back" [right away] — a fixed-duration "how long it stays stuck" knob for different parry
+        // types is a nice future addition, tracked as a TODO below, but isn't needed for this).
+        // Damage still applies exactly when the projectile visually connects — ResolveParryDeflect
+        // returns its real travel duration so this can await it, same "await the travel time, then
+        // apply damage" pattern every other damage-application path in this file already uses. No
+        // timing check on the counter itself — it's a bonus for landing the harder input, not
+        // another QTE. The launch/await runs whenever isParry is true (not gated on
+        // attacker.IsAlive) so the held projectile is always resolved/released the moment Parry
+        // happens and never left stuck, even in the (currently unreachable) case the attacker
+        // somehow died first; the counter's actual damage still only applies if attacker.IsAlive.
+        if (isParry)
+        {
+            // TODO: pending design — a configurable "how long the projectile stays stuck before
+            // bouncing" per parry type/quality (e.g. a Perfect parry could hold longer for a bigger
+            // punish window) would go here. For now it always bounces immediately on any Parry.
+            float deflectTravelDuration = BattleHUDController.Instance.ResolveParryDeflect(GetPrimalTypeOrDefault(target));
+            if (deflectTravelDuration > 0f) yield return new WaitForSeconds(deflectTravelDuration);
+
+            if (attacker.IsAlive)
+            {
+                int counterPureBaseDamage = DamageCalculator.ComputeBaseDamage(target, attacker, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+                int counterDamage = DamageCalculator.ComputeDamage(target, attacker, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
+                float counterTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(target, attacker, _typeChart);
+
+                BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
+                List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
+                AccumulateDamageDealt(counterResults);
+                BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+                LogResults(counterResults, counterPureBaseDamage, counterDamage, counterTypeMultiplier, offenseOutcome: null);
+            }
+        }
+
         yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
             defended ? $"{target.DisplayName} defended!" : $"{target.DisplayName} was hit!",
             BattleConfig.AutoMessageDurationSeconds));
 
-        // Parry's reward half: a successful Parry triggers an automatic counter-attack against
-        // the now-vulnerable attacker. No timing check on the counter — it's a bonus for
-        // landing the harder input, not another QTE.
-        if (defended && isParry && attacker.IsAlive)
+        if (isParry && attacker.IsAlive)
         {
-            int counterDamage = DamageCalculator.ComputeDamage(target, attacker, _typeChart, DamageCategory.Physical, DamageCalculator.BasicAttackPower);
-            float counterTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(target, attacker, _typeChart);
-
-            BattleEngine.QueueBasicAttack(_state, target, attacker, damageMultiplier: 1f, counterDamage);
-            List<BattleActionResult> counterResults = BattleEngine.ResolveQueuedActions(_state);
-            AccumulateDamageDealt(counterResults);
-            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
-            // No separate projectile here — ResolveParryDeflect (above) already launched the
-            // visual return-fire this counter-attack's damage is resolving against.
-            LogResults(counterResults, counterTypeMultiplier, timedInputSuccess: false);
-
             yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
                 $"{target.DisplayName} counter-attacks!", BattleConfig.AutoMessageDurationSeconds));
         }
@@ -1118,22 +1168,22 @@ public class BattleManager : MonoBehaviour
             $"{attacker.DisplayName} uses {skill.SkillName}!", BattleConfig.AutoMessageDurationSeconds));
     }
 
-    /// <summary>Appends one battle log line per resolved offensive action — normally exactly one, since only a single attack is ever queued per call site.</summary>
-    private static void LogResults(List<BattleActionResult> results, float typeMultiplier, bool timedInputSuccess)
+    /// <summary>Appends one battle log line per resolved offensive action — normally exactly one, since only a single attack is ever queued per call site. offenseOutcome is null for the Parry counter-attack, which runs no timing check at all. pureBaseDamage/damageAfterType are the same for every entry in results (there's only ever one per call site) — passed through to FormatAttack's base/type/timing breakdown.</summary>
+    private static void LogResults(List<BattleActionResult> results, int pureBaseDamage, int damageAfterType, float typeMultiplier, BattleHUDController.OffenseOutcome? offenseOutcome)
     {
         foreach (BattleActionResult result in results)
         {
-            string line = BattleLogFormatter.FormatAttack(result.Attacker, result.Target, result.DamageApplied, typeMultiplier, timedInputSuccess);
+            string line = BattleLogFormatter.FormatAttack(result.Attacker, result.Target, pureBaseDamage, damageAfterType, result.DamageApplied, typeMultiplier, offenseOutcome);
             BattleHUDController.Instance.AppendBattleLog(line);
         }
     }
 
     /// <summary>Appends one battle log line per resolved defended action, via FormatDefenseOutcome instead of FormatAttack.</summary>
-    private static void LogDefenseResult(List<BattleActionResult> results, BattleParticipant attacker, BattleParticipant target, float typeMultiplier, bool defended, bool isParry)
+    private static void LogDefenseResult(List<BattleActionResult> results, BattleParticipant attacker, BattleParticipant target, int pureBaseDamage, int damageAfterType, float typeMultiplier, bool defended, bool isParry)
     {
         foreach (BattleActionResult result in results)
         {
-            string line = BattleLogFormatter.FormatDefenseOutcome(result.Attacker, result.Target, result.DamageApplied, typeMultiplier, defended, isParry);
+            string line = BattleLogFormatter.FormatDefenseOutcome(result.Attacker, result.Target, pureBaseDamage, damageAfterType, result.DamageApplied, typeMultiplier, defended, isParry);
             BattleHUDController.Instance.AppendBattleLog(line);
         }
     }

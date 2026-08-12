@@ -9,15 +9,33 @@
 /// </summary>
 public static class BattleLogFormatter
 {
-    /// <summary>Formats an offensive attack — the player's own swing, or an automatic Parry counter-attack.</summary>
-    public static string FormatAttack(BattleParticipant attacker, BattleParticipant target, int damage, float typeMultiplier, bool timedInputSuccess)
+    // Damage-breakdown colors (2026-08-11, user-directed — temporary "for visibility rn" aid, not
+    // permanent flavor). White matches BattleHUD.uss's ambient log text closely enough to read as
+    // "neutral"; green/red are the exact same hex values as BattleHUDController's own
+    // SuccessFlashColor/MissFlashColor, so an "increase" here reads the same color as a Good/Perfect
+    // ring flash, and a "decrease" reads the same as a Miss flash — one consistent color language.
+    private const string BaseDamageColor = "#FFFFFF";
+    private const string IncreaseColor = "#5AC864";
+    private const string DecreaseColor = "#DC3C3C";
+
+    /// <summary>
+    /// Formats an offensive attack — the player's own swing, or an automatic Parry counter-attack.
+    /// offenseOutcome is null for the Parry counter-attack (no timing check runs for it at all);
+    /// otherwise it's whichever of Miss/Good/Perfect the action-command ring landed on. Only the
+    /// two tiers that deviate from baseline get flavor text — Good is the new "standard" damage
+    /// (TimedInputConfig.GoodDamageMultiplier, 1.0x) and stays silent, same as a null outcome
+    /// (2026-08-11, second pass — see DECISIONS.md -> [Combat]).
+    /// </summary>
+    public static string FormatAttack(BattleParticipant attacker, BattleParticipant target, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, BattleHUDController.OffenseOutcome? offenseOutcome)
     {
-        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {damage} damage!";
+        int? timingDelta = offenseOutcome.HasValue ? finalDamage - damageAfterType : (int?)null;
+        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDelta)}!";
 
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
 
-        if (timedInputSuccess) line += $" {attacker.DisplayName}'s timing was perfect!";
+        if (offenseOutcome == BattleHUDController.OffenseOutcome.Perfect) line += $" {attacker.DisplayName}'s timing was perfect — critical hit!";
+        else if (offenseOutcome == BattleHUDController.OffenseOutcome.Miss) line += $" {attacker.DisplayName}'s timing was off, weakening the blow!";
 
         return line;
     }
@@ -26,9 +44,11 @@ public static class BattleLogFormatter
     /// Formats an enemy attack the target tried to Dodge or Parry (Combat_Directive Part 4,
     /// full-avoidance model). A successful defense fully avoids the hit — no damage line — while a
     /// failed one plays out exactly like a normal attack, same as a miss on offense: "reward, don't
-    /// punish," no extra penalty text for a failed Dodge/Parry attempt.
+    /// punish," no extra penalty text for a failed Dodge/Parry attempt. No timing-multiplier term in
+    /// the breakdown — an incoming hit that lands is always full (1x) damage, only Dodge/Parry's
+    /// full-avoidance is at stake, not a graduated bonus/penalty like the player's own timing.
     /// </summary>
-    public static string FormatDefenseOutcome(BattleParticipant attacker, BattleParticipant target, int damage, float typeMultiplier, bool avoided, bool attemptedParry)
+    public static string FormatDefenseOutcome(BattleParticipant attacker, BattleParticipant target, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, bool avoided, bool attemptedParry)
     {
         if (avoided)
         {
@@ -37,10 +57,39 @@ public static class BattleLogFormatter
                 : $"{target.DisplayName} dodges {attacker.DisplayName}'s attack!";
         }
 
-        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {damage} damage!";
+        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDeltaOrNull: null)}!";
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
         return line;
+    }
+
+    /// <summary>
+    /// Builds the "(N base + delta type [+ delta timing]) = N total damage" breakdown segment
+    /// (2026-08-11, user-directed: "show the (base damage + type advantage damage + timing bonus
+    /// damage)... base damage is white, decreased damage is red, and increased damage is green...
+    /// also show the total damage" — a temporary "for visibility rn" aid, not permanent flavor
+    /// text). typeDelta/timingDelta are always exactly consistent with finalDamage by construction
+    /// — each is defined as the difference between two already-resolved damage numbers, not
+    /// independently computed, so the three terms always sum to finalDamage regardless of how any
+    /// individual step rounded internally. timingDeltaOrNull is null when no timed-input check ran
+    /// at all (the Parry counter-attack, or any incoming enemy hit) — that term is omitted entirely
+    /// rather than shown as a meaningless "+0".
+    /// </summary>
+    private static string FormatDamageBreakdown(int pureBaseDamage, int damageAfterType, int finalDamage, int? timingDeltaOrNull)
+    {
+        int typeDelta = damageAfterType - pureBaseDamage;
+        string breakdown = $"(<color={BaseDamageColor}>{pureBaseDamage} base</color> {FormatDeltaTerm(typeDelta, "type")}";
+        if (timingDeltaOrNull.HasValue) breakdown += $" {FormatDeltaTerm(timingDeltaOrNull.Value, "timing")}";
+        breakdown += $") = {finalDamage} total damage";
+        return breakdown;
+    }
+
+    /// <summary>Formats one signed, colored term of the damage breakdown — green "+ N label" for an increase, red "- N label" for a decrease, white "+ 0 label" for no change.</summary>
+    private static string FormatDeltaTerm(int delta, string label)
+    {
+        if (delta > 0) return $"+ <color={IncreaseColor}>{delta} {label}</color>";
+        if (delta < 0) return $"- <color={DecreaseColor}>{-delta} {label}</color>";
+        return $"+ <color={BaseDamageColor}>0 {label}</color>";
     }
 
     /// <summary>Maps a Primal type multiplier to flavor text. Empty string for neutral (1.0x) — no note needed.</summary>
@@ -56,14 +105,21 @@ public static class BattleLogFormatter
     /// <summary>
     /// Formats a placeholder skill-ring attack (2026-08 session — Combo/Status/Chain/Mastery
     /// wiring, see DECISIONS.md -> [Combat]). Same shape as FormatAttack but names the skill used,
-    /// since a skill attack isn't the generic built-in "Attack" move.
+    /// since a skill attack isn't the generic built-in "Attack" move. Previously omitted the
+    /// action-command outcome entirely — fixed 2026-08-11 (see DECISIONS.md -> [Combat]) since
+    /// damage-dealing skills run the exact same timed-input check as the basic Attack and swing by
+    /// the same 0.5x-2.0x range; the log should explain why, same as FormatAttack now does.
     /// </summary>
-    public static string FormatSkillAttack(BattleParticipant attacker, BattleParticipant target, string skillName, int damage, float typeMultiplier)
+    public static string FormatSkillAttack(BattleParticipant attacker, BattleParticipant target, string skillName, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, BattleHUDController.OffenseOutcome offenseOutcome)
     {
-        string line = $"{attacker.DisplayName} uses {skillName} on {target.DisplayName} for {damage} damage!";
+        int timingDelta = finalDamage - damageAfterType;
+        string line = $"{attacker.DisplayName} uses {skillName} on {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDelta)}!";
 
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        if (offenseOutcome == BattleHUDController.OffenseOutcome.Perfect) line += $" {attacker.DisplayName}'s timing was perfect — critical hit!";
+        else if (offenseOutcome == BattleHUDController.OffenseOutcome.Miss) line += $" {attacker.DisplayName}'s timing was off, weakening the blow!";
 
         return line;
     }

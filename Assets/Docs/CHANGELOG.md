@@ -16,6 +16,244 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-11] Phase 3 follow-up — Battle log damage breakdown (base/type/timing, colored)
+- **Context:** User-directed: "show the (base damage + type advantage damage + timing bonus
+  damage) just for visibility rn" — a temporary debug-style breakdown of how each attack's final
+  damage number was actually built, with base white, decreases red, increases green, and the total
+  shown explicitly.
+- **Built:** `DamageCalculator.ComputeBaseDamage(attacker, target, category, skillPower)` — the same
+  stat-ratio formula `ComputeDamage` already uses, but with the Primal type multiplier fixed at
+  1.0x, so callers get the pure pre-type number on its own. Refactored `ComputeDamage`'s internals
+  into a shared private `ComputeStatRatio` helper so both methods stay in sync automatically;
+  `ComputeDamage`'s own return value and rounding are bit-for-bit unchanged.
+  `BattleLogFormatter.FormatAttack`/`FormatSkillAttack`/`FormatDefenseOutcome` now take
+  `pureBaseDamage`/`damageAfterType`/`finalDamage` (three already-resolved ints) instead of a single
+  `damage` int, and build a `"(N base + delta type [+ delta timing]) = N total damage"` segment via
+  a new private `FormatDamageBreakdown`/`FormatDeltaTerm` pair — using UI Toolkit's built-in rich-
+  text `<color=#RRGGBB>` tags (`TextElement.enableRichText` defaults `true`, confirmed via Unity
+  docs rather than assumed — no scene/USS changes needed). Colors: base `#FFFFFF` (white), increase
+  `#5AC864` (the exact same green as `BattleHUDController.SuccessFlashColor`), decrease `#DC3C3C`
+  (the exact same red as `MissFlashColor`) — deliberately reusing the ring-flash palette so "green
+  reads as good, red reads as bad" stays one consistent color language across the whole HUD, not two
+  competing ones.
+- **Decided:** typeDelta/timingDelta are defined as differences between already-rounded numbers
+  (`damageAfterType - pureBaseDamage`, `finalDamage - damageAfterType`), not independently computed
+  and re-rounded — guarantees the three terms always sum to exactly the shown total, regardless of
+  how any individual step rounded internally. The timing term is entirely omitted (not shown as
+  "+0") whenever no timed-input check actually ran — the Parry counter-attack, and any incoming
+  enemy hit that lands (those are always flat 1x, only Dodge/Parry's full-avoidance is at stake for
+  them, not a graduated bonus/penalty like the player's own attack timing).
+- **Changed:** All 4 damage-log call sites in `BattleManager` (`ResolveBuiltInMove`'s Attack case,
+  `ResolveSkillAction`'s damage branch, the Parry counter-attack block, `ResolveEnemyDamageAction`'s
+  incoming-hit log) now compute `pureBaseDamage` via the new method and pass all three numbers
+  through. `LogResults`/`LogDefenseResult` helper signatures updated to carry them.
+- **Verified:** 287/287 EditMode tests pass (7 new: `BattleLogFormatterTests` now directly asserts
+  the white/green/red color tags and sign behavior for both directions of type and timing deltas,
+  plus that the timing term is omitted entirely for a null/no-timing-check outcome).
+- **Next:** Live Play Mode confirmation the colors actually render in the real battle log (rich
+  text was verified as enabled by default via Unity's own docs, not by running the scene).
+
+---
+
+[2026-08-11] Phase 3 follow-up — Parry counter-attack's hit-flash now synced to its real damage
+- **Context:** User-reported: after a successful Parry, the counter-attack's damage wasn't showing
+  a hit-flash on the attacker, even though the visual system already had a flash wired up for it.
+- **Found:** `ResolveParryDeflect` (the return-fire deflect projectile, "doubling as the counter-
+  attack's own hit VFX" per its own doc comment) fires right when Parry is detected — well under a
+  second of projectile travel + a 0.2s flash. But the counter's actual damage doesn't apply until
+  much later: after a full `AutoMessageDurationSeconds` (1.5s) "defended!" message wait, plus all
+  the intervening logging/aura/burst-fill work. The flash was reliably finishing over a second
+  before the HP bar it was supposed to accompany ever moved, so it read as no animation at all.
+- **Fixed:** New `CombatVfxController.FlashStageElement`/`BattleHUDController.FlashStageCreatureHit`
+  — a direct, no-projectile flash by slot/side, independent of the held-projectile system. Called
+  explicitly in `BattleManager`'s counter-attack block right where the counter's damage is actually
+  applied (`ResolveEnemyDamageAction`), guaranteeing the flash and the HP-bar change land together
+  regardless of how the earlier deflect-projectile/message timings shake out. The original deflect
+  projectile is untouched — it still plays its own early "the parry connected" beat.
+- **Checked, not changed:** The other three damage-application paths (player basic Attack, player
+  skill attack, enemy attack via Dodge/Parry/Miss) all already await their projectile/ring before
+  applying damage (`RunTimedInput`/`RunDefenseTimedInput`'s sweepDuration is sized to the real
+  projectile travel time), so their flash and their damage land within the same beat by
+  construction — only the counter-attack skipped that awaited step, since it has no timing check
+  of its own to await.
+- **Verified:** 280/280 EditMode tests pass (no test coverage change — this is pure VFX timing, not
+  covered by the existing damage-multiplier/log-text EditMode suite).
+- **Next:** Live Play Mode confirmation that the counter-attack's flash now reads clearly against
+  the HP-bar drop.
+
+---
+
+[2026-08-11] Phase 3 follow-up — Parry counter-attack double-blink fix
+- **Context:** User-reported, immediately after the previous entry's fix went in: the counter-
+  attack's target now blinked TWICE instead of once.
+- **Found:** Self-inflicted by the previous fix. The new explicit `FlashStageCreatureHit` call was
+  added alongside the existing `ResolveParryDeflect` deflect-projectile flash, not in place of it —
+  so the attacker now got flashed once early (projectile arrival, on Parry detection) AND once more
+  on-time (the new call, at the counter's real damage). Both were individually correct in isolation;
+  together they double-fired for the same hit.
+- **Fixed:** `CombatVfxController.AnimateAndResolveImmediately` gained a `flashOnArrival` bool.
+  The normal offense call site (`LaunchProjectile`) still passes `true` — that flash is the ONLY
+  one for that hit and stays as-is. `ResolveHeldProjectileAsParryDeflect`'s call now passes `false`
+  — the deflect projectile still visually flies back on Parry (kept, it reads as "the parry
+  connected"), but no longer flashes on arrival, since `FlashStageCreatureHit` alone now owns the
+  attacker's flash for that counter-attack.
+- **Verified:** Clean compile (Play Mode was active in-Editor at fix time, blocking an EditMode
+  re-run — no logic/test-covered code changed, purely a flash-trigger wiring fix).
+- **Next:** Live Play Mode confirmation — exactly one blink on the counter-attack's target now.
+
+---
+
+[2026-08-11] Phase 3 follow-up — Parry counter-attack: real root-cause fix, damage now awaits the projectile
+- **Context:** User-directed, after the double-blink fix: "I need the damage to register the moment
+  the projectile hits the target." The two prior same-day fixes had been patching symptoms (missing
+  flash, then a duplicate flash) around the actual root cause without fixing it: the deflect
+  projectile's launch and the counter's damage application were never actually coupled in time —
+  they just happened to read as roughly-OK once the flash was moved to fire at the right moment.
+  What was still wrong: the projectile itself was launched way back on Parry detection and had
+  already finished flying (and, briefly, double-flashing) a full "defended!" message-wait BEFORE
+  the counter's damage/HP-bar update ever ran — so the projectile visually arrived, then nothing
+  happened on-screen for over a second, then the HP bar silently dropped with its own separate
+  flash. Never actually "the damage registers the moment the projectile hits."
+- **Reverted:** The additive `FlashStageElement`/`FlashStageCreatureHit` methods and
+  `AnimateAndResolveImmediately`'s `flashOnArrival` flag from the previous two fixes — both fully
+  removed, no longer needed once the real timing is fixed at the source.
+- **Fixed:** `CombatVfxController.ResolveHeldProjectileAsParryDeflect` (and
+  `BattleHUDController.ResolveParryDeflect`, pass-through) now returns the projectile's real travel
+  duration instead of `void`. The launch call itself moved out of its old early position (right on
+  detecting Parry) down into `BattleManager.ResolveEnemyDamageAction`'s counter-attack section,
+  immediately followed by `yield return new WaitForSeconds(deflectTravelDuration)` — the exact same
+  "await the travel time, then apply damage" pattern `RunTimedInput`/`RunDefenseTimedInput` already
+  use for every other damage-application path in this file. The projectile's own on-arrival flash
+  (unchanged, always fires) now lands inside that awaited window, so projectile-hits-target,
+  flash, and HP-bar-update are all the same beat, by construction, not by coincidence. The launch+
+  await sits in its own `if (isParry)` block ahead of the `attacker.IsAlive`-gated damage block, so
+  the held projectile is still always resolved/released the moment Parry happens, never left stuck
+  even in the (currently unreachable) case the attacker somehow died first.
+- **Verified:** 280/280 EditMode tests pass (Play Mode had since exited, ran clean).
+- **Next:** Live Play Mode confirmation that the projectile's arrival, its flash, and the counter's
+  HP-bar drop now genuinely happen together, with the "defended!"/"counter-attacks!" messages
+  bracketing that beat rather than swallowing it.
+
+---
+
+[2026-08-11] Phase 3 follow-up — Parry deflect projectile no longer sits "stuck" before bouncing back
+- **Context:** User-reported, immediately after the previous entry: awaiting the deflect
+  projectile's travel time right before applying the counter's damage was correct for SYNC, but the
+  launch call itself was still sitting in its post-"defended!"-message position — so the held
+  projectile now visibly sat idle-pulsing at the player's position for the full 1.5s
+  `AutoMessageDurationSeconds` "defended!" message before it finally started bouncing back at all.
+  User: "if I parry on success just have the attack bounce back" (immediately), plus a note that a
+  configurable "how long it stays stuck" timer per parry type would be nice later, but isn't needed
+  now.
+- **Fixed:** Moved the `ResolveParryDeflect` launch+await block in
+  `BattleManager.ResolveEnemyDamageAction` from after the "defended!" message to immediately after
+  `LogDefenseResult`/burst-fill — i.e. right when Parry is detected, same spot the original
+  pre-today code always launched it from. The counter-attack's damage computation/application moved
+  inside that same `if (isParry)` block (gated internally on `attacker.IsAlive`), so it still
+  applies synced to the projectile's real arrival (unchanged from the previous fix) — it just now
+  all happens BEFORE the "defended!"/"counter-attacks!" messages instead of being sandwiched between
+  them. `ShowTimedMessage` uses a single shared UI element (`_continuePrompt`), so the two messages
+  stay sequential/non-overlapping as before, just both moved to display after the actual bounce-and-
+  counter action instead of interleaved with it.
+- **Deferred, tracked:** A `// TODO: pending design` marker at the launch call notes the
+  configurable "stuck duration per parry type/quality" idea for later — not built now, no numbers
+  invented for it.
+- **Verified:** 280/280 EditMode tests pass.
+- **Next:** Live Play Mode confirmation — the deflect should bounce back the instant Parry lands,
+  with zero visible pause, while the counter's damage still lands exactly on arrival.
+
+---
+
+[2026-08-11] Docs — Attack Pattern Directive ingested; lane occupancy/movement-cost locked
+- **Context:** User delivered `combat_update.zip` (three files) with a new melee "Beat Sequence" /
+  telegraph-knob framework meant to guide Phase 5 skill authoring. Reviewed against live repo state
+  before merging: the delivered `Combat_Directive_v0_1_0.md` draft turned out to be based on a stale
+  pre-2026-08-05 snapshot, missing the AUD-008 errata, the AUD-005 pending note, and — critically —
+  this repo's already-locked Part 4 Dodge/Parry supersession. Replacing the file outright would have
+  regressed shipped mechanics, so only the genuinely new content was merged in.
+- **Built (docs):** Added `Assets/Docs/Attack_Pattern_Directive_v0_1_0.md` (telegraph knobs, ranged/
+  melee archetypes, Melee Beat Sequence system, Strike Points, lane movement/zone targeting — status:
+  design capture, nothing built yet) and its companion `Assets/Docs/melee_beat_sequence.mermaid`.
+- **Changed:** `Combat_Directive_v0_1_0.md` Part 3 gained two new locked paragraphs (Lane occupancy —
+  non-exclusive, in-lane spacing; Movement cost model — context-decided, cost-agnostic), sourced from
+  the delivered draft. The "Pending Design" list's "free action or costs an action" line was removed
+  now that the cost *model* is decided (exact per-type values remain pending calibration, unchanged).
+  Part 4, the AUD-008/AUD-005 notes, and everything else in the file were left untouched.
+- **Decided:** Per user direction — (1) the delivered draft's claim that removing Approach-interrupt
+  "overrides the earlier 'Approach is interruptible' decision" was factually wrong (no such prior
+  decision exists anywhere in DECISIONS.md/CHANGELOG.md); reworded in both the new `.md` and the
+  `.mermaid` note block to state it as a first decision, not a reversal. (2) Lane occupancy and the
+  movement-cost model are locked now, not left pending — see `DECISIONS.md` -> `[Combat]` (three new
+  entries: Lane occupancy, Lane movement cost, Melee Beat Sequences). Also updated `DOCUMENT_INDEX.md`
+  with a new Attack_Pattern_Directive row and a note on the Combat_Directive Part 3/Part 4 history.
+- **Blocked:** Nothing built — Attack_Pattern_Directive's own status line marks every system as
+  spec'd, not implemented. No `SkillData.cs`/`BattleManager.cs`/`BattleHUDController.cs` changes this
+  pass.
+- **Next:** Type E (Reaction) has no trigger point against melee sequences now that Approach isn't
+  interruptible — open gap, `Attack_Pattern_Directive_v0_1_0.md` Part 7/Part 10 item 1. Needs a
+  decision before Type E melee content can be authored. After that: extend `SkillData.cs` with the
+  Part 2 telegraph knobs (structural fields only, same pattern as the existing PlaceholderIndex/
+  GrantsComboRule/BuiltInMove fields — see that file's class doc comment), then build the Beat
+  Sequence state machine per Part 1's dependency chain.
+
+---
+
+[2026-08-11] Phase 3 follow-up — Battle log wired for Good/Perfect/Miss; Good lowered to baseline
+- **Context:** Second pass after live playtesting the Good/Perfect timing rework (below). Two gaps
+  found: the battle log text never actually distinguished the three tiers (it still said "timing
+  was perfect!" for a merely-Good hit, and skill attacks logged no timing info at all), and the
+  user re-described the intended value spread as "perfect = double, green = standard damage, red =
+  reduced" — clarified as wanting Good truly at baseline (1.0x) rather than the elevated 1.5x
+  chosen in the first pass, so only Perfect grants any bonus.
+- **Changed:** `TimedInputConfig.GoodDamageMultiplier` 1.5f -> 1.0f — Miss 0.5x / Good 1.0x /
+  Perfect 2.0x is now the full spread. `BattleLogFormatter.FormatAttack` and the previously
+  timing-blind `FormatSkillAttack` both now take a `BattleHUDController.OffenseOutcome?` (nullable
+  — null represents the Parry counter-attack, which runs no timing check at all) and only emit
+  flavor text for the two tiers that deviate from baseline: Perfect appends "timing was perfect —
+  critical hit!", Miss appends "timing was off, weakening the blow!", Good/null stay silent (the
+  new baseline needs no comment). `BattleManager.LogResults` and both offense call sites updated to
+  pass the real `LastOffenseOutcome` through instead of a bare success bool.
+- **Verified:** 280/280 EditMode tests pass (5 new: `BattleLogFormatterTests` now covers Perfect/
+  Miss/Good/null-outcome text explicitly, plus a skill-attack Perfect/Miss pair).
+- **Next:** Live Play Mode pass to confirm the log lines read naturally against the ring's own
+  flash color, now that Good is silent by design.
+
+---
+
+[2026-08-11] Phase 3 follow-up — Offense timing reworked to Good/Perfect tiers, Miss now punished
+- **Context:** User-directed follow-up to the Dodge/Parry precision-tier work earlier this session:
+  the player's own attack timing check had a "perfect" sub-tier since 2026-08-05 but it was purely
+  cosmetic (no bonus), and a missed attack carried zero penalty. User wanted offense to mirror
+  defense's two-tier structure exactly and finally punish misses, to "reward players for being
+  skilled" at the timing mechanic on both sides of combat.
+- **Built:** `BattleHUDController.RunTimedInput` now takes two tolerances instead of one
+  (`goodToleranceHalfWidth`, `perfectToleranceHalfWidth`) and classifies into a new
+  `OffenseOutcome { Miss, Good, Perfect }` enum. Good reuses `TimedInputConfig.
+  DodgeToleranceHalfWidth`/`DodgeBaseWindowPercent` (Defend's own values); Perfect reuses
+  `ParryToleranceHalfWidth`/`ParryBaseWindowPercent` (Parry's own values) — not new
+  offense-specific numbers, so the two sides stay identical by construction. `LastTimedInputSuccess`/
+  `LastTimedInputWasPerfect` are now computed properties over the new `LastOffenseOutcome`, so
+  every downstream consumer (EventBus success event, burst-fill gain, `TimedInputStreak` combo
+  tracking) needed no changes. `BattleManager`'s two offense call sites (`ResolveSkillAction`,
+  `ResolveBuiltInMove`'s Attack case) now compute both tolerances and pick the damage multiplier
+  from a 3-way switch: `TimedInputConfig.MissDamageMultiplier = 0.5f` (new) /
+  `GoodDamageMultiplier = 1.5f` (renamed from `SuccessDamageMultiplier`, same value) /
+  `PerfectDamageMultiplier = 2.0f` (new).
+- **Decided:** Perfect's reward is damage-only for this pass — see `DECISIONS.md` -> `[Combat]
+  Offense timing reworked...` for why a bonus-status reward on Perfect was deferred rather than
+  built (no damage-dealing skill has an inherent status payload yet). Removed
+  `OffenseToleranceHalfWidth`/`OffenseBaseWindowPercent` and the 2-arg `ComputeWindowPercent`
+  overload built on them — dead after this change, confirmed via grep before deleting.
+- **Changed:** Two existing EditMode tests referenced the removed/renamed symbols
+  (`TimedInputConfigTests`'s four `ComputeWindowPercent` calls, `BattleEngineTests`'s
+  `SuccessDamageMultiplier` references) — updated in place, not skipped.
+- **Verified:** 275/275 EditMode tests pass after the rename/removal. Confirmed via grep that no
+  other call site in `Assets/Scripts` or `Assets/Tests` still references the removed symbols.
+- **Next:** Live Play Mode pass to confirm the Perfect band feels as tight as Parry currently does
+  on defense, and that a Miss's reduced damage reads clearly against Good's boosted hit.
+
+---
+
 [2026-08-11] Phase 3 follow-up — Projectile pass-through, [UI-003] Attack orb dead-zone
 - **Context:** Fifth same-session round. Two more playtest items: the Dodge dissolve should read
   as the incoming attack passing through empty space where the creature used to be, not two

@@ -950,6 +950,42 @@ Issues that required significant investigation to resolve. Read before debugging
   file still needs the user to run the suggested command, or Claude to be granted a Bash
   permission rule first, per the tooling-limits note above.
 
+### [Tooling] Editor.log ballooned again (242MB), but from a single ~252MB line, not the same repeated-spam pattern as before
+- **Symptom:** User reported Editor loading/domain-reload feeling slow again, remembering the prior
+  `Editor.log` bloat issue (directly above). Checked before pushing a batch of combat script changes
+  that had involved many `refresh_unity(compile: request)` calls this session.
+- **Root cause:** `%LOCALAPPDATA%\Unity\Editor\Editor.log` was 242.33MB (normal for this project is
+  ~1MB) — confirmed abnormal, but NOT a repeat of the prior lock-assertion-spam mechanism (zero
+  occurrences of "Access version should be odd" found in the last 2000 lines). Instead, a single
+  line at line index 3 — right after Editor startup's "Checking for leaked weakptr" / MemoryLeaks
+  diagnostic, before the first "Licensing::Client" message — is ~252,868,565 characters long, i.e.
+  one line alone accounts for essentially the entire file's size. First 500 characters sampled as
+  pure whitespace; the line's true content/origin wasn't fully characterized (a full character-
+  composition scan over 252M chars was too slow to finish inline) but its position (immediately at
+  Editor launch, before any project code or MCP tool calls in this session had run) makes it very
+  unlikely to be caused by this session's combat-script work specifically — it reads as an Editor/
+  Licensing-boilerplate-adjacent anomaly rather than something `BattleManager`/`CombatVfxController`
+  etc. wrote.
+- **Why it matters:** Same downstream mechanism as the original lesson — Unity's Search
+  `LogProvider` reads the whole file via `ReadLine()`, so a single 252MB line still means
+  allocating one enormous string (UTF-16, so up to ~500MB in memory) on that read, which plausibly
+  explains sluggish reloads/Search operations even though the file hasn't reached the earlier
+  incident's 3.75GB OOM-crash territory yet.
+- **Fix:** Same remedy as before — close Unity fully (file is locked while running), archive or
+  delete `Editor.log` (`mv Editor.log Editor-2026-08-11-huge.log`), relaunch. Not yet done as of
+  this entry — flagged to the user rather than actioned automatically (file lives outside the
+  project directory; same tooling-limits note as the original entry applies).
+- **Not related to the pending git push:** `Editor.log` lives at `%LOCALAPPDATA%\Unity\Editor\`,
+  entirely outside this repo — it has no bearing on and isn't included in any commit/push of the
+  combat script changes. Confirmed so the user doesn't block the push on this cleanup.
+- **Date:** 2026-08-11
+- **Key rule:** A large `Editor.log` isn't always the SAME failure mode as a prior incident even in
+  the same project — check for repeat-spam patterns (`Select-String` on the known offending text)
+  AND check individual line lengths (`Measure-Object -Maximum` on line length), since a single
+  pathologically long line can dominate file size just as much as thousands of small repeated ones,
+  and the two call for the same fix (archive + restart) but point at different root causes worth
+  recording separately.
+
 ### [Tooling] A domain reload fired mid-Play-Mode and silently reset singletons (PartySystem.Instance, static handoff state), throwing a NullReferenceException in newly-loaded-scene code
 - **Symptom:** Playtesting `BattleManager`'s additive scene load (Roadmap_v2 Mo 5 Wk 1-2): first
   attempt, `BattleManager.Start()` never appeared to run at all — `_state` stayed null for

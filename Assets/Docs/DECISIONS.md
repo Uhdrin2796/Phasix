@@ -3754,3 +3754,220 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Date:** 2026-08-11
 - **Ref:** Session that built the timing-synced projectile/dissolve system this would extend
   (`CombatVfxController.cs`, `BattleHUDController.cs`, `CombatProjectileVisual.cs`).
+
+### [Combat] Offense timing reworked to Good/Perfect tiers mirroring Dodge/Parry, Miss now punished
+- **Decided:** The player's own attack timing check (`BattleHUDController.RunTimedInput`) no longer
+  uses its own single tolerance with a cosmetic-only "perfect" sub-flash. It now shares Defend's
+  own tolerance/window constants outright — `TimedInputConfig.DodgeToleranceHalfWidth`/
+  `DodgeBaseWindowPercent` for the new "Good" tier, `ParryToleranceHalfWidth`/
+  `ParryBaseWindowPercent` for the nested, tighter "Perfect" tier — rather than defining separate
+  offense-specific copies of those numbers. New `BattleHUDController.OffenseOutcome { Miss, Good,
+  Perfect }` enum (mirrors the existing `DefenseOutcome`) replaces the old
+  `LastTimedInputSuccess`/`LastTimedInputWasPerfect` mutable state; those two properties still
+  exist but are now computed read-only wrappers over `LastOffenseOutcome`; so `EventBus.
+  Raise_TimedInputSuccess`, `BattleParticipant.RecordTimedInputPerfect`, and burst-fill logic
+  needed no changes. Damage multiplier is now 3-tiered:
+  `TimedInputConfig.MissDamageMultiplier = 0.5f` / `GoodDamageMultiplier = 1.0f` / 
+  `PerfectDamageMultiplier = 2.0f`. A miss now applies a real damage penalty for the first time —
+  previously it was multiplier 1x, i.e. no penalty at all.
+  **Revised same day, second pass:** `GoodDamageMultiplier` was first set to 1.5f (renamed from
+  `SuccessDamageMultiplier`, value unchanged from the pre-rework baseline) but the user clarified,
+  after playtesting, that green/Good should read as genuinely "standard damage" — lowered to 1.0f
+  so ONLY Perfect ever grants a bonus; Good's only job is guaranteeing you avoid the Miss penalty.
+  Same pass also fixed `BattleLogFormatter.FormatAttack`/`FormatSkillAttack`, which had shipped
+  still only checking a binary success bool — a Good hit was misleadingly logged as "timing was
+  perfect!", and skill attacks logged no timing info at all. Both now take a
+  `BattleHUDController.OffenseOutcome?` (null = no timing check ran, i.e. the Parry counter-attack)
+  and only emit text for the two tiers that deviate from baseline (Perfect / Miss); Good and null
+  stay silent by design, matching the new "Good = standard, no comment needed" values.
+- **Why:** User-directed: "make the good same as the defend, and the perfect the same timing as
+  the parry... trying to reward perfects and punish being bad at the game... reward players for
+  being skilled." Reusing Dodge/Parry's own constants (rather than independently-tuned lookalikes)
+  guarantees the two sides of combat stay identical by construction, with no drift risk between
+  offense and defense difficulty. Punishing a Miss is a deliberate, explicit departure from
+  defense's established "reward, don't punish" rule (see the Defense model decision above) — the
+  user asked for offense specifically to punish poor timing, unlike defense.
+- **Alternatives rejected:** Also rewarding Perfect hits with a bonus status effect (the user's
+  "extra damage or extra status" phrasing left this open) — rejected for this pass because
+  damage-dealing skills have no inherent status payload today (`PlaceholderSkillResolver`'s
+  damage/status tree split is a hard 6-tree/12-tree divide with no damage-tree status field);
+  inventing one now would mean picking arbitrary per-attack status content ahead of the real skill
+  design pass. Left a `// TODO: pending design` marker at both `BattleManager` call sites instead
+  of building a placeholder.
+- **Date:** 2026-08-11
+- **Revisit if:** Real skill content design happens and a "Perfect grants bonus status" hook
+  becomes buildable without inventing content; or `NumericalCalibration.md` locks these multipliers
+  to different values during a calibration pass.
+- **Ref:** `TimedInputConfig.cs`, `BattleHUDController.cs` (`OffenseOutcome`, `RunTimedInput`),
+  `BattleManager.cs` (`ResolveSkillAction`, `ResolveBuiltInMove`'s `Attack` case).
+
+### [Combat] Parry counter-attack's damage now waits for the deflect projectile to actually land
+- **Superseded same day, twice, before landing here:** this entry originally shipped as an ADDITIVE
+  explicit flash call (`FlashStageElement`/`FlashStageCreatureHit`) placed next to the existing
+  deflect-projectile flash rather than replacing it — which fixed the "no flash at all" symptom but
+  caused a user-reported double-blink (both flashes fired for the same hit). A same-day patch then
+  suppressed the deflect projectile's own arrival flash (`flashOnArrival: false`) to stop the
+  double-blink, but that was still a patch on top of a patch: the projectile's launch and the
+  counter's damage application were never actually coupled in time, they'd just been arranged to
+  independently produce a single visible flash. User then asked directly for the real fix: "I need
+  the damage to register the moment the projectile hits the target." Both intermediate mechanisms
+  (`FlashStageElement`/`FlashStageCreatureHit`, `AnimateAndResolveImmediately`'s `flashOnArrival`
+  flag) were fully removed once this final version landed — see CHANGELOG.md's three same-day
+  entries for the blow-by-blow.
+- **Decided (final):** `CombatVfxController.ResolveHeldProjectileAsParryDeflect` (and
+  `BattleHUDController.ResolveParryDeflect`, pass-through) now returns the projectile's real travel
+  duration instead of `void`. Its launch call moved out of its old early position (fired right on
+  detecting Parry) down into `BattleManager.ResolveEnemyDamageAction`'s counter-attack section,
+  immediately followed by `yield return new WaitForSeconds(deflectTravelDuration)` — the same
+  "await the travel time, then apply damage" pattern `RunTimedInput`/`RunDefenseTimedInput` already
+  use for every other damage-application path in this file. The projectile's own on-arrival flash
+  is unchanged (always fires, no flag) and now lands inside that awaited window, so the projectile
+  visually hitting its target, the flash, and the counter's HP-bar update are the same beat by
+  construction, not by coincidence.
+- **Why:** Every other damage-application path in this file (player Attack, player skill, enemy
+  attack) awaits its own projectile/ring immediately before applying damage — the counter-attack
+  was the one exception, since it has no timing check of its own to await, so nothing forced its
+  visual and its damage into the same beat. This fix gives it the same awaited-duration treatment
+  everything else already gets, rather than working around the symptom with a second flash call.
+- **Leak-safety preserved:** the launch+await lives in its own `if (isParry)` block, ahead of (and
+  not nested inside) the `attacker.IsAlive`-gated damage block — so the held projectile is still
+  always resolved/released the instant Parry happens, regardless of whether the counter-attack
+  itself ends up running. Confirmed `attacker.IsAlive` cannot actually be false at this point in the
+  current single-enemy-battle flow (nothing between Parry detection and here can kill `attacker`),
+  so this is a belt-and-suspenders guard, not a load-bearing one.
+- **Date:** 2026-08-11
+- **Revisit if:** A future multi-enemy battle structure makes `attacker.IsAlive` genuinely reachable
+  as false at this point — re-check the leak-safety reasoning above still holds.
+- **Ref:** `CombatVfxController.cs` (`ResolveHeldProjectileAsParryDeflect`), `BattleHUDController.cs`
+  (`ResolveParryDeflect`), `BattleManager.cs` (`ResolveEnemyDamageAction`'s counter-attack block).
+- **Corrected same day, once more:** the launch+await block above was placed right after the
+  "defended!" `ShowTimedMessage` wait, which fixed the sync but meant the held projectile sat
+  visibly stuck, idle-pulsing at the player's position, for the entire 1.5s of that message before
+  it ever moved. User: "if I parry on success just have the attack bounce back" (immediately).
+  Moved the whole `if (isParry) { launch+await; if (attacker.IsAlive) { counter damage } }` block
+  back to right after `LogDefenseResult`/burst-fill — i.e. the moment Parry is detected, same spot
+  the very original pre-2026-08-11 code always launched it from — and moved BOTH `ShowTimedMessage`
+  calls ("defended!", "counter-attacks!") to after it instead of straddling it. `ShowTimedMessage`
+  shares one UI element across calls (`_continuePrompt`), so they can't run concurrently with the
+  action without corrupting each other's display — sequencing them strictly after was the only
+  option compatible with that constraint. Net effect: the deflect now bounces back with zero
+  perceptible delay, while the damage/flash sync from this entry's main decision is unchanged. A
+  configurable "how long the projectile stays stuck" duration per parry type/quality was raised as
+  a nice-to-have for later, not built now — flagged with a `// TODO: pending design` marker at the
+  launch call rather than inventing numbers for it.
+
+### [Combat] Battle log damage breakdown — base/type/timing, colored, temporary "for visibility" aid
+- **Decided:** Every damage-log line (`BattleLogFormatter.FormatAttack`/`FormatSkillAttack`/
+  `FormatDefenseOutcome`) now shows a `"(N base + delta type [+ delta timing]) = N total damage"`
+  breakdown instead of just the final number. `DamageCalculator.ComputeBaseDamage` (new) returns
+  the pre-type stat-ratio damage on its own; the type/timing deltas are computed as differences
+  between already-rounded numbers (never independently re-derived), so the three terms always sum
+  exactly to the shown total. Colors via UI Toolkit rich text (`TextElement.enableRichText` is on
+  by default — verified via Unity docs, not scene-tested first): base white (`#FFFFFF`), increases
+  green (`#5AC864`, same hex as `BattleHUDController.SuccessFlashColor`), decreases red (`#DC3C3C`,
+  same hex as `MissFlashColor`) — deliberately the same palette as the ring flashes elsewhere in
+  this HUD, not a new independent color choice.
+- **Why:** User-directed, explicitly framed as temporary ("just for visibility rn") — a debug-style
+  aid to see how the timing-multiplier rework's damage numbers are actually being built, not a
+  permanent flavor-text addition. Reusing the existing flash palette keeps it visually consistent
+  with the rest of combat feedback rather than introducing a third color meaning.
+- **Scope:** The timing term is omitted entirely (not shown as "+0") for any log line where no
+  timed-input check actually ran — the Parry counter-attack (no timing check on the counter itself)
+  and any incoming enemy hit that lands (always flat 1x; only Dodge/Parry's full-avoidance is at
+  stake for those, not a graduated multiplier like the player's own attack timing).
+- **Date:** 2026-08-11
+- **Revisit if:** This breakdown format needs to become permanent/polished UI rather than a
+  temporary visibility aid — worth a real design pass on presentation (icons instead of "type"/
+  "timing" text labels, etc.) at that point rather than extending this placeholder further.
+- **Ref:** `DamageCalculator.cs` (`ComputeBaseDamage`, `ComputeStatRatio`), `BattleLogFormatter.cs`
+  (`FormatDamageBreakdown`, `FormatDeltaTerm`), `BattleManager.cs` (all 4 damage-log call sites).
+
+### [Combat] Lane occupancy — non-exclusive, in-lane visual spacing
+- **Decided:** Multiple combatants may occupy the same lane simultaneously. When they do, they're
+  visually spaced apart along the lane so they read as distinct occupants in a line rather than
+  overlapping sprites. This is a rendering/layout rule only — targeting, movement, and collision
+  still resolve against the lane index alone, per the existing center-anchor model.
+- **Why:** Keeps the traversal/targeting model simple (still just 7 lane indices, no sub-lane slot
+  system) while letting the 3–5-per-side party size actually fit across 7 lanes without forcing
+  awkward one-combatant-per-lane placement rules. Adopted from `Attack_Pattern_Directive_v0_1_0.md`
+  Part 8, which depends on this being locked for its pre-battle placement and zone-targeting design.
+- **Alternatives rejected:** Exclusive occupancy (one combatant per lane) — would force an
+  8th/9th lane or placement restrictions neither directive nor the GDD asks for, purely to avoid a
+  visual-spacing problem that's cheaper to solve in layout code.
+- **Date:** 2026-08-11
+- **Revisit if:** Exact in-lane spacing values, once picked (NumericalCalibration.md), read as
+  cramped at 5-per-side density — may need a soft per-lane occupant cap.
+- **Ref:** `Combat_Directive_v0_1_0.md` Part 3, `Attack_Pattern_Directive_v0_1_0.md` Part 8.
+
+### [Combat] Lane movement cost — context-decided, cost-agnostic traversal system
+- **Decided:** No single fixed rule governs whether a lane-movement request costs an action turn.
+  The calling context decides: a player-initiated reposition, a skill's Approach beat, and a
+  reactive dodge can each carry a different cost. The traversal system itself stays cost-agnostic —
+  it executes a movement request without knowing or caring why it was triggered.
+- **Why:** A single fixed rule (e.g. "movement always costs an action") would be wrong for at least
+  one real use case already in scope — an authored Approach beat inside a melee Beat Sequence isn't
+  a separate player choice, so charging it as its own action doesn't make sense, while a player
+  choosing to reposition outside of any skill plausibly should cost something. Adopted from
+  `Attack_Pattern_Directive_v0_1_0.md` Part 8, which needs this settled to build Approach/
+  return-to-origin movement without also inventing action-economy rules it doesn't own.
+- **Alternatives rejected:** One fixed cost rule for all lane movement — simpler, but the Combat
+  Directive's own Part 5 (Action Economy) already treats actions as build-scaling resources, and a
+  flat movement tax doesn't compose cleanly with that.
+- **Date:** 2026-08-11
+- **Revisit if:** Exact per-movement-type cost values (pending numerical calibration) turn out to
+  need a shared baseline after all, once the beat-sequence runtime exists to playtest against.
+- **Ref:** `Combat_Directive_v0_1_0.md` Part 3, `Attack_Pattern_Directive_v0_1_0.md` Part 8.
+
+### [Combat] Melee Beat Sequences — fully committed once started, no interrupt (design capture only)
+- **Decided:** A melee attack's authored beat sequence (Approach/Windup-Real/Windup-Fake/Attack),
+  once its first beat begins, always plays to completion. There's no voluntary bail-out and no
+  external interrupt — Root/Stun on the attacker and Reaction (Type E) skills do not cut a sequence
+  short. A sequence's only two outcomes are: it runs its full authored beat list, or it never starts
+  (e.g. the attacker was already Stunned before its turn, an existing, separate mechanic under the
+  locked Status system). Automatic return-to-origin fires unconditionally after the final Attack
+  beat, returning to whatever lane was recorded once at sequence start — not the lane before the
+  most recent Approach.
+- **Why:** Simplifies the state machine to a linear/looping structure (no interrupt branch to model
+  or test) and makes sequence outcomes predictable for both the player reading tells and the
+  designer authoring beat lists. Captured in `Attack_Pattern_Directive_v0_1_0.md` Part 7 /
+  `melee_beat_sequence.mermaid` ahead of any runtime implementation — this is a design decision, the
+  beat-sequence system itself is not built yet.
+- **Alternatives rejected:** None recorded — no prior directive or DECISIONS.md entry ever
+  addressed melee-sequence interruptibility, so this is a first decision, not a reversal of one.
+- **Date:** 2026-08-11
+- **Revisit if:** Type E (Reaction) skill content needs a real trigger point before Phase 5 —
+  currently open (`Attack_Pattern_Directive_v0_1_0.md` Part 7's flagged gap / Part 10 item 1): with
+  Approach no longer interruptible, Reaction has no described moment to fire against a melee
+  sequence. Needs a decision before Type E melee content can be authored.
+- **Ref:** `Attack_Pattern_Directive_v0_1_0.md` Part 7 & Part 10, `melee_beat_sequence.mermaid`.
+
+### [Tweening] DOTween actually imported — March 2026 entry was aspirational, not real
+- **Decided:** The March 2026 `[Tweening]` entry above ("Decided: DOTween (free version)... Revisit
+  if: Never") was never actually acted on — confirmed via `Packages/manifest.json` and a full-project
+  grep for `DG.Tweening` returning zero `.cs` hits prior to this session. DOTween is now genuinely
+  imported (Demigiant, free — Asset Store listing title is "DOTween (HOTween v2)," HOTween v2 being
+  DOTween's own internal/legacy name, not a separate library), needed for the new melee Beat Sequence
+  animations (Approach/Windup/Attack/Return, see `Attack_Pattern_Directive_v0_1_0.md` Part 7).
+- **Why:** The battle stage is 100% UI Toolkit (`VisualElement.style`), not `Transform`/`SpriteRenderer`
+  — there was nothing for the old "aspirational" entry's intended `.DOMove()`/`.DOScale()` shortcuts to
+  ever act on, which may be part of why it was never followed up on. The actual import landed as a
+  precompiled `DOTween.dll` (not loose `.cs` source) at `Assets/Plugins/Demigiant/DOTween/`, with a
+  companion `DOTweenModuleUIToolkit.cs` helper module — directly relevant since tweens here target
+  `VisualElement.style` via the generic `DOTween.To(getter, setter, endValue, duration)` overload, not
+  the Transform-based one-liners.
+- **Verified:** No `.asmdef` was generated under `Assets/Plugins/Demigiant/`. No reference-array edit
+  was needed for `Phasix.Runtime.asmdef` — it has `"overrideReferences": false`, so Unity auto-includes
+  every precompiled DLL in the project automatically. `Phasix.Tests.EditMode.asmdef` DOES use
+  `"overrideReferences": true` with an explicit `precompiledReferences` allowlist (previously just
+  `nunit.framework.dll`) — `"DOTween.dll"` was added to that array this session so a future EditMode
+  test can reference `DG.Tweening` directly without hitting a confusing "type or namespace not found"
+  error. Confirmed via `read_console`: project compiles clean post-import (only pre-existing, unrelated
+  warnings).
+- **Alternatives rejected:** None re-litigated — DOTween itself was never in question, only whether it
+  was actually present, which it wasn't until now.
+- **Date:** 2026-08-11
+- **Revisit if:** A future tween needs a Transform/SpriteRenderer target instead of `VisualElement`
+  (e.g. if the battle stage ever moves off UI Toolkit) — the shortcut extension methods would become
+  usable directly at that point instead of the custom `.To()` wrapper.
+- **Ref:** `Assets/Plugins/Demigiant/DOTween/`, `Assets/Scripts/Phasix.Runtime.asmdef`,
+  `Assets/Tests/EditMode/Phasix.Tests.EditMode.asmdef`.

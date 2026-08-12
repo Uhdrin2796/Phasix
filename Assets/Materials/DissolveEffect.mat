@@ -27,7 +27,7 @@ Material:
     m_Floats:
     - _DissolveAmount: 0
     - _EdgeWidth: 0.08
-    - _NoiseScale: 18
+    - _NoiseScale: 12
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EdgeColor: {r: 1, g: 1, b: 1, a: 1}

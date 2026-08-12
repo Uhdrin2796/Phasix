@@ -186,7 +186,10 @@ damage = (attackerStat / defenderStat) × skillPower × primalTypeMultiplier × 
 ```
 Implemented `DamageCalculator.cs` / `TimedInputConfig.cs`, 2026-08-05 — **all values below are code
 defaults, not playtested/tuned balance numbers.**
-- `timedInputBonus` on success: 1.5× — **placeholder**, `TimedInputConfig.SuccessDamageMultiplier`
+- `timedInputBonus`, 3-tiered as of 2026-08-11 (see DECISIONS.md -> [Combat] "Offense timing
+  reworked..."): Miss 0.5× (`MissDamageMultiplier`), Good 1.0× baseline (`GoodDamageMultiplier`
+  — revised down from an initial 1.5×, same day, second pass: only Perfect grants a bonus now),
+  Perfect 2.0× (`PerfectDamageMultiplier`) — all **placeholder**, `TimedInputConfig`
 - Defense (superseded 2026-08-05, see DECISIONS.md -> [Combat]): no longer a damage-reduction
   multiplier — Dodge/Parry success is full avoidance (0× damage), fed into `BattleEngine` as a
   `damageMultiplier: 0f` on the queued attack, same mechanism as any other multiplier.
@@ -207,19 +210,23 @@ defaults, not playtested/tuned balance numbers.**
   starts at `RingMarkerStartRadius` 60 and shrinks to `RingMarkerMinRadius` 2 —
   `BattleHUDController`
 - Ratio tolerance half-width at 0 Instinct/bond (success = ratio within `[1-half, 1+half]` of the
-  target): Offense `OffenseToleranceHalfWidth` 0.25 (reuses Dodge's — no Parry-equivalent
-  precision mode), Dodge `DodgeToleranceHalfWidth` 0.25, Parry `ParryToleranceHalfWidth` 0.10 (the
-  user's own example numbers: Dodge "1.25 to 0.75", Parry "0.9 to 1.1") — `TimedInputConfig`
+  target), as of the 2026-08-11 retunes: Dodge `DodgeToleranceHalfWidth` 0.10, Parry
+  `ParryToleranceHalfWidth` 0.025 — `TimedInputConfig`. Offense's Good/Perfect tiers (added
+  2026-08-11 — see DECISIONS.md -> [Combat] "Offense timing reworked...") reuse these exact same
+  two values directly rather than defining offense-specific copies — Good = Dodge's tolerance,
+  Perfect = Parry's tolerance, guaranteed identical by construction.
 - Instinct/bond scaling: `ComputeToleranceHalfWidth` reuses `ComputeWindowPercent`'s existing
-  curve (`OffenseBaseWindowPercent 12% + Instinct×0.6% + bondBonus`, etc.) as a proportional scale
-  factor on the tolerance half-width — "higher Instinct = larger window" (CLAUDE.md) still holds,
-  just applied to a ratio instead of a bar-position window — **placeholder**
+  curve (`DodgeBaseWindowPercent 20% or ParryBaseWindowPercent 6%, + Instinct×0.6% + bondBonus`,
+  etc., depending which tier is being computed) as a proportional scale factor on the tolerance
+  half-width — "higher Instinct = larger window" (CLAUDE.md) still holds, just applied to a ratio
+  instead of a bar-position window — **placeholder**
 - Flash feedback colors on click resolution — reworked 2026-08-05 from per-move colors to
   per-OUTCOME-QUALITY colors shared by Dodge/Parry/offense alike (see DECISIONS.md -> [Combat]):
-  green = normal success, neon purple = "perfect" (innermost 20% of the tolerance,
-  `PerfectToleranceFraction`), red = any Miss — `BattleHUDController`, visual-only, not gameplay
-  values. "Perfect" is exposed (`LastTimedInputWasPerfect`/`LastDefenseWasPerfect`) but not wired
-  to any damage/avoidance bonus yet — visual feedback only for this pass.
+  green = normal success, neon purple = "perfect", red = any Miss — `BattleHUDController`,
+  visual-only, not gameplay values. On defense, `LastDefenseWasPerfect` is still visual feedback
+  only (no bonus beyond the existing Dodge/Parry avoidance + Aura restore). On offense, Perfect
+  (and Good, and Miss) now DO carry a real damage-multiplier payoff as of 2026-08-11 — see
+  "Offense action-command damage multipliers" below — this is no longer cosmetic-only.
 
 ### Aura costs (skill energy)
 - Basic Attack Aura cost: 2 — **placeholder**, `BattleConfig.AttackAuraCost` (2026-08-05, user-
@@ -375,7 +382,8 @@ DECISIONS.md -> [Combat]) — see `TimedInputConfig.cs`. **All placeholder, not 
 
 | Command Type | Timing Window | Sweep Duration | Notes |
 |---|---|---|---|
-| Offensive action command | `ComputeWindowPercent(attacker.Instinct, attacker.bondPercent)`, base 12% | 1.2s | Success = boosted outgoing damage (1.5×). Uses the *attacker's* stats. |
+| Offensive action command — Good tier | `ComputeWindowPercent(DodgeBaseWindowPercent, attacker.Instinct, attacker.bondPercent)`, base 20% | 1.2s | Success = standard/baseline outgoing damage (1.0×, revised down from 1.5× same-day second pass). Uses the *attacker's* stats. Reuses Dodge's own tolerance/window (2026-08-11). |
+| Offensive action command — Perfect tier | `ComputeWindowPercent(ParryBaseWindowPercent, attacker.Instinct, attacker.bondPercent)`, base 6%, nested inside Good | 1.2s | Success = bigger outgoing damage spike (2.0×). Uses the *attacker's* stats. Reuses Parry's own tolerance/window (2026-08-11). |
 | Dodge (defensive) | `ComputeWindowPercent(DodgeBaseWindowPercent, defender.Instinct, defender.bondPercent)`, base 20% | 1.2s | Success = fully avoids the hit. Uses the *defender's* stats. Wide/easy — the "safe" option. |
 | Parry (defensive) | `ComputeWindowPercent(ParryBaseWindowPercent, defender.Instinct, defender.bondPercent)`, base 6% | 0.7s | Success = fully avoids the hit AND triggers an automatic counter-attack. Uses the *defender's* stats. Narrow/hard, faster sweep — the "risky" option. |
 | Success threshold | Click the bar's button while the marker (sweeping over the mode's duration) is inside the randomly-positioned success zone | — | Zone width = the computed window %, position randomized each attempt |
@@ -383,11 +391,12 @@ DECISIONS.md -> [Combat]) — see `TimedInputConfig.cs`. **All placeholder, not 
 ### Action command damage modifiers
 | Result | Damage Modifier | Notes |
 |---|---|---|
-| Offensive success | 1.5× — **placeholder** | `TimedInputConfig.SuccessDamageMultiplier`, applied after base damage formula |
+| Offensive Perfect | 2.0× — **placeholder** | `TimedInputConfig.PerfectDamageMultiplier`, applied after base damage formula (added 2026-08-11) |
+| Offensive Good | 1.0× baseline — **placeholder** | `TimedInputConfig.GoodDamageMultiplier` (renamed from `SuccessDamageMultiplier`; revised 1.5×->1.0× same-day second pass so only Perfect grants a bonus), applied after base damage formula |
 | Dodge success | 0× (full avoidance) | No damage line in the battle log at all |
 | Parry success | 0× (full avoidance) + automatic counter-attack | Counter uses the same basic-attack damage formula, no timing check of its own |
-| Miss / no input (timeout) — offense | 1.0× baseline | No bonus, no penalty — matches Combat_Directive's "reward, don't punish" intent |
-| Miss / no input (timeout) — Dodge or Parry | 1.0× baseline (full hit) | Same "reward, don't punish": a failed Parry attempt costs nothing extra vs. a failed Dodge or a plain miss |
+| Miss / no input (timeout) — offense | 0.5× — **placeholder** | `TimedInputConfig.MissDamageMultiplier`. Changed 2026-08-11 (user-directed) — offense misses are now punished, unlike Combat_Directive's original "reward, don't punish" intent, which still applies to defense only. |
+| Miss / no input (timeout) — Dodge or Parry | 1.0× baseline (full hit) | Still "reward, don't punish" on defense: a failed Parry attempt costs nothing extra vs. a failed Dodge or a plain miss |
 
 ### Party size
 | Value | Amount | Notes |

@@ -21,7 +21,7 @@ using UnityEngine.UIElements;
 /// Layout is Sonny 2-style per user reference: top nameplate sidebar per side (radial HP/Aura/Evo
 /// gauge around a portrait, name above, wrapping buff row below — BuildNameplate), middle stage
 /// with staggered placeholder creature circles (player left, enemy right, same lane —
-/// ApplyStageCreatureStagger, 2026-08-06), bottom action bar — no visible lane lines
+/// ApplyLaneLayout, 2026-08-06, now real 7-lane depth per LaneMovementSystem), bottom action bar — no visible lane lines
 /// (Combat_Directive_v0_1_0.md stage art/lane visuals remain "pending art direction"; see
 /// BattleStageGizmos.cs for the Scene-view-only dev visualization instead). This is a flat
 /// screen-space overlay on top of the frozen overworld, not real diorama art.
@@ -41,6 +41,9 @@ public class BattleHUDController : MonoBehaviour
 {
     /// <summary>Result of RunDefenseTimedInput — which live click (if any) landed in its zone.</summary>
     public enum DefenseOutcome { Miss, Dodge, Parry }
+
+    /// <summary>Result of RunTimedInput — which of the two nested bands (if any) the click landed in. Miss now carries a real damage penalty (TimedInputConfig.MissDamageMultiplier), unlike DefenseOutcome.Miss (2026-08-11, user-directed — see DECISIONS.md -> [Combat]).</summary>
+    public enum OffenseOutcome { Miss, Good, Perfect }
 
 
     // Converging-ring sizing (px) — fixed reference target ring, and the marker ring's start/end
@@ -121,11 +124,14 @@ public class BattleHUDController : MonoBehaviour
     private ScrollView _battleLogScrollView;
     private VisualElement _battleLogContent;
 
-    /// <summary>Result of the most recently completed RunTimedInput call. Valid once that coroutine finishes.</summary>
-    public bool LastTimedInputSuccess { get; private set; }
+    /// <summary>Result of the most recently completed RunTimedInput call (Miss/Good/Perfect). Valid once that coroutine finishes. Source of truth for LastTimedInputSuccess/LastTimedInputWasPerfect below.</summary>
+    public OffenseOutcome LastOffenseOutcome { get; private set; }
 
-    /// <summary>True if the most recently completed RunTimedInput hit was a "perfect" (see PerfectToleranceFraction). Always false when LastTimedInputSuccess is false. Not wired to any bonus yet — visual feedback only for now.</summary>
-    public bool LastTimedInputWasPerfect { get; private set; }
+    /// <summary>True when LastOffenseOutcome is Good or Perfect (i.e. not a Miss). Kept as a computed convenience — EventBus.Raise_TimedInputSuccess, the burst-fill gain, and combo-streak tracking only ever cared about this binary signal, not which of the two success tiers it was.</summary>
+    public bool LastTimedInputSuccess => LastOffenseOutcome != OffenseOutcome.Miss;
+
+    /// <summary>True when LastOffenseOutcome is Perfect specifically. Drives BattleParticipant.RecordTimedInputPerfect / the TimedInputStreak combo rule.</summary>
+    public bool LastTimedInputWasPerfect => LastOffenseOutcome == OffenseOutcome.Perfect;
 
     /// <summary>Result of the most recently completed RunDefenseTimedInput call. Valid once that coroutine finishes.</summary>
     public DefenseOutcome LastDefenseOutcome { get; private set; }
@@ -135,6 +141,15 @@ public class BattleHUDController : MonoBehaviour
 
     private readonly VisualElement[] _playerStageCreatures = new VisualElement[BattleConfig.ActivePartySize];
     private VisualElement _playerStageArea;
+
+    /// <summary>
+    /// Cached LaneIndex per player stage slot, refreshed by GetPlayerSlotsGroupedByLane (called from
+    /// both LayoutPlayerStageCreaturesByLane and ApplyLaneLayout) and by UpdatePlayerStageCreatureLane
+    /// mid-battle. RestoreStageCreatureDepthOrder reads from this cache rather than needing a
+    /// BattleParticipant list at every call site — HideMoveSelection, for one, has no participant
+    /// reference at all.
+    /// </summary>
+    private readonly int[] _playerStageCreatureLaneIndex = new int[BattleConfig.ActivePartySize];
 
     /// <summary>
     /// Max nameplates the status sidebar supports per side (2026-08-06, user-directed — see
@@ -468,7 +483,7 @@ public class BattleHUDController : MonoBehaviour
         // pick ABOVE .stage so nameplate/burst-gauge clicks would win over .stage's own full-area
         // invisible backdrop. Side effect found live 2026-08-11 (user report): StatusHeader's own
         // bounds are broad enough (nearly the whole top of the screen) that for any stage-creature
-        // whose upward stagger (ApplyStageCreatureStagger) pushes a skill-ring orb up into that
+        // whose upward stagger (now ApplyLaneLayout's in-lane spacing) pushes a skill-ring orb up into that
         // overlap — confirmed live via IPanel.Pick(): the middle party slot's Attack orb, whose
         // top ~60% falls inside StatusHeader's y-range — StatusHeader itself now wins the pick
         // and silently swallows the click, even though the orb is what's visually on top there.
@@ -557,13 +572,12 @@ public class BattleHUDController : MonoBehaviour
             PositionSkillSlots(_playerSkillSlots[i]);
         }
 
-        // Staggered so each Phasix — and its own orb ring — has clear, unobstructed space (2026-
-        // 08-06, user-directed — see DECISIONS.md -> [Combat]: "they need to be offset/staggered
-        // so you can see the full character similar to sonny 2 or slay the spire 2"). A pure
-        // visual transform, applied AFTER each creature's own children (move options/skill slots)
-        // are already positioned relative to its untransformed 72x72 box — translate doesn't
-        // affect that inner math, it just shifts the whole already-laid-out cluster.
-        ApplyStageCreatureStagger(_playerStageCreatures);
+        // Depth-scale/in-lane-spacing (formerly a fixed 3-slot stagger, 2026-08-06 — see
+        // DECISIONS.md -> [Combat]) now depends on each BattleParticipant's real LaneIndex
+        // (Combat_Directive Part 2/3, LaneMovementSystem), which isn't known yet at this Awake-time
+        // point — moved to ApplyLaneLayout, called from Initialize once playerSide exists. Skill-ring
+        // slot positions (PositionSkillSlots, just above) are computed relative to each creature's
+        // own untransformed 72x72 box either way, so this ordering change doesn't affect them.
 
         // Radial nameplates (2026-08-06, user-directed — see DECISIONS.md -> [Combat]) — built
         // procedurally rather than hand-authored in UXML (see NameplateRefs' doc comment), one
@@ -858,7 +872,8 @@ public class BattleHUDController : MonoBehaviour
                 PopulateSkillRing(i, playerSide[i], skillDatabase);
             }
         }
-        LayoutPlayerStageCreatures(playerSide.Count);
+        LayoutPlayerStageCreaturesByLane(playerSide);
+        ApplyLaneLayout(playerSide);
 
         for (int i = 0; i < MaxNameplateSlots; i++)
         {
@@ -877,7 +892,11 @@ public class BattleHUDController : MonoBehaviour
         // enemy nameplates above; multi-enemy battles don't have stage creatures for each yet.
         bool hasEnemy = enemySide.Count > 0;
         _enemyStageCreature.style.display = hasEnemy ? DisplayStyle.Flex : DisplayStyle.None;
-        if (hasEnemy) SetStageCreatureColor(_enemyStageCreature, enemySide[0]);
+        if (hasEnemy)
+        {
+            SetStageCreatureColor(_enemyStageCreature, enemySide[0]);
+            ApplyEnemyLaneDepthScale(enemySide[0]);
+        }
 
         RefreshBars(playerSide, enemySide);
     }
@@ -928,8 +947,8 @@ public class BattleHUDController : MonoBehaviour
             DissolveVfxBridge.Instance?.PlayDefenderDissolve(_playerStageCreatures[defenderSlotIndex]);
     }
 
-    /// <summary>Resolves a held projectile (see LaunchSyncedProjectile) as a successful Parry — reverses it back toward the original attacker, re-tinted as counterColorType, doubling as the counter-attack's own hit VFX.</summary>
-    public void ResolveParryDeflect(PrimalType counterColorType) => _vfxController?.ResolveHeldProjectileAsParryDeflect(counterColorType);
+    /// <summary>Resolves a held projectile (see LaunchSyncedProjectile) as a successful Parry — reverses it back toward the original attacker, re-tinted as counterColorType, doubling as the counter-attack's own hit VFX. Returns the projectile's real travel duration (0f if nothing was launched) so the caller can await it before applying the counter's damage, keeping the projectile's arrival flash and the damage/HP-bar update in the same beat.</summary>
+    public float ResolveParryDeflect(PrimalType counterColorType) => _vfxController?.ResolveHeldProjectileAsParryDeflect(counterColorType) ?? 0f;
 
     /// <summary>Flashes the purple "you parried!" outline on the held projectile's defender WITHOUT resolving the projectile itself — called by RunDefenseTimedInput the instant Parry is detected, well before ResolveParryDeflect (which needs the counter-attacker's own type, not known at that point).</summary>
     public void FlashParryOutline() => _vfxController?.FlashHeldProjectileParryOutline();
@@ -1129,71 +1148,140 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Per-index vertical stagger, in px — index-matched to slot order, not sized to any
-    /// particular party count, so it applies equally to a future multi-slot EnemyStageArea (2026-
-    /// 08-06, user-directed — see DECISIONS.md -> [Combat]: "Each phasix needs to have its own
-    /// orb slots revolving around it, both enemy and player"). A simple front/back/front zigzag —
-    /// not a recreation of any specific reference game's exact formation, just enough spread that
-    /// 3 creatures in a row read as staggered rather than flat-aligned. Indices beyond this
-    /// array's length fall back to 0 (see ApplyStageCreatureStagger).
+    /// Groups visible player stage slots by BattleParticipant.LaneIndex, and refreshes
+    /// _playerStageCreatureLaneIndex for each — shared by LayoutPlayerStageCreaturesByLane (left
+    /// position) and ApplyLaneLayout (depth scale + in-lane spacing) so both derive from the same
+    /// grouping rather than recomputing it inconsistently. Combat_Directive's non-exclusive-
+    /// occupancy rule means a lane can hold more than one entry.
     /// </summary>
-    private static readonly float[] StageCreatureStaggerY = { 0f, -45f, 25f };
-
-    /// <summary>Column width in px for LayoutPlayerStageCreatures — 72 (.stage-creature width) + 28+28 (the old flex margin-left/right), preserved so the switch to absolute positioning didn't change the on-screen spacing.</summary>
-    private const float StageCreatureColumnWidth = 128f;
-    private const float StageCreatureEdgeGap = 28f;
+    private Dictionary<int, List<int>> GetPlayerSlotsGroupedByLane(List<BattleParticipant> playerSide)
+    {
+        var slotsByLane = new Dictionary<int, List<int>>();
+        for (int i = 0; i < playerSide.Count && i < _playerStageCreatures.Length; i++)
+        {
+            int lane = playerSide[i].LaneIndex;
+            if (!slotsByLane.TryGetValue(lane, out List<int> slots))
+            {
+                slots = new List<int>();
+                slotsByLane[lane] = slots;
+            }
+            slots.Add(i);
+            _playerStageCreatureLaneIndex[i] = lane;
+        }
+        return slotsByLane;
+    }
 
     /// <summary>
-    /// Places each player stage creature at an explicit `left`, compacted left-to-right over
-    /// however many are actually in the party this battle (party always fills from slot 0, so
-    /// "visible" is always a contiguous 0..visibleCount-1 range — no gap-skipping needed) — and
-    /// sizes PlayerStageArea to match, since `.stage-side-player`'s own `translate: -50% -50%`
-    /// centering depends on its box having a real size once its children are absolutely
-    /// positioned (2026-08-06 — see LayoutPlayerStageCreatures' sibling doc comment on
-    /// .stage-creature in BattleHUD.uss for why absolute over flex). Called once from Initialize,
-    /// after party size is known; each creature's own OWN internal box (skill slots —
-    /// PositionSkillSlots) is a completely separate coordinate space
-    /// and unaffected by this. Also the intended hook for a future "place this Phasix here"
-    /// formation/positioning feature — flagged as deferred in DECISIONS.md, this method is where
-    /// per-slot placement would stop being "always column i" and become player-chosen.
+    /// Places each player stage creature at its LaneMovementSystem.GetLaneScreenLeft position — real
+    /// 7-lane depth (Combat_Directive Part 2/3), not the old party-slot-index columns — and sizes
+    /// PlayerStageArea to the FULL lane range (LaneCount * LaneColumnWidthPx) rather than party
+    /// size, since any visible creature can sit as far back as Lane 7 regardless of how many party
+    /// members are present this battle; `.stage-side-player`'s own `translate: -50% -50%` centering
+    /// still depends on its box having a real size once children are absolutely positioned (2026-
+    /// 08-06 — see .stage-creature in BattleHUD.uss for why absolute over flex). Called once from
+    /// Initialize, after party size AND each participant's LaneIndex are known; each creature's own
+    /// internal box (skill slots — PositionSkillSlots) is a completely separate coordinate space and
+    /// unaffected by this. Also the intended hook for a future "place this Phasix here" formation
+    /// feature — flagged as deferred in DECISIONS.md, this is where per-slot lane would stop being
+    /// always LaneMovementSystem.DefaultStartingLane and become player-chosen.
     /// </summary>
-    private void LayoutPlayerStageCreatures(int visibleCount)
+    private void LayoutPlayerStageCreaturesByLane(List<BattleParticipant> playerSide)
     {
-        for (int i = 0; i < visibleCount && i < _playerStageCreatures.Length; i++)
-            _playerStageCreatures[i].style.left = i * StageCreatureColumnWidth + StageCreatureEdgeGap;
+        Dictionary<int, List<int>> slotsByLane = GetPlayerSlotsGroupedByLane(playerSide);
 
-        _playerStageArea.style.width = Mathf.Max(visibleCount, 1) * StageCreatureColumnWidth;
+        foreach (KeyValuePair<int, List<int>> entry in slotsByLane)
+        {
+            float left = LaneMovementSystem.GetLaneScreenLeft(entry.Key, isPlayerSide: true);
+            foreach (int slotIndex in entry.Value)
+                _playerStageCreatures[slotIndex].style.left = left;
+        }
+
+        _playerStageArea.style.width = BattleLaneLayout.LaneCount * LaneMovementSystem.LaneColumnWidthPx;
         _playerStageArea.style.height = 72f;
     }
 
     /// <summary>
-    /// Applies StageCreatureStaggerY as a `translate` — a pure rendering-time transform, not a
-    /// layout change, so it doesn't disturb LayoutPlayerStageCreatures' `left` positions and
-    /// doesn't affect PositionSkillSlots' math (already computed relative to each creature's own
-    /// untransformed 72x72 box before this runs). Also reorders the
-    /// siblings back-to-front by stagger offset (see below) — 2026-08-06, user caught the front
-    /// lane's skill orbs rendering behind a further-back lane's creature. Safe to reorder freely
-    /// now that .stage-creature is absolutely positioned (BringToFront no longer moves a creature
-    /// within a flex row — see BattleHUD.uss comment on .stage-creature for the bug this fixed).
+    /// Applies real per-lane depth scale (LaneMovementSystem.GetDepthScale) and, for any lane shared
+    /// by more than one occupant, symmetric in-lane spacing (GetInLaneSpacingOffsetPx) as a
+    /// `translate` — a pure rendering-time transform, not a layout change, so it doesn't disturb
+    /// LayoutPlayerStageCreaturesByLane's `left` positions and doesn't affect PositionSkillSlots'
+    /// math (already computed relative to each creature's own untransformed 72x72 box before this
+    /// runs). Formerly a fixed 3-slot cosmetic zigzag (StageCreatureStaggerY, 2026-08-06) — replaced
+    /// by real lane mechanics this session (see DECISIONS.md -> [Combat]). Also reorders the
+    /// siblings back-to-front by lane depth (see RestoreStageCreatureDepthOrder) — 2026-08-06, user
+    /// caught the front lane's skill orbs rendering behind a further-back lane's creature; still
+    /// applies once "further back" means a real LaneIndex instead of a fixed offset. Safe to reorder
+    /// freely now that .stage-creature is absolutely positioned (BringToFront no longer moves a
+    /// creature within a flex row — see BattleHUD.uss comment on .stage-creature for the bug this
+    /// fixed).
     /// </summary>
-    private void ApplyStageCreatureStagger(VisualElement[] creatures)
+    private void ApplyLaneLayout(List<BattleParticipant> playerSide)
     {
-        for (int i = 0; i < creatures.Length; i++)
+        Dictionary<int, List<int>> slotsByLane = GetPlayerSlotsGroupedByLane(playerSide);
+
+        foreach (KeyValuePair<int, List<int>> entry in slotsByLane)
         {
-            float offsetY = i < StageCreatureStaggerY.Length ? StageCreatureStaggerY[i] : 0f;
-            creatures[i].style.translate = new Translate(0, offsetY);
+            float scale = LaneMovementSystem.GetDepthScale(entry.Key);
+            for (int occupantIndex = 0; occupantIndex < entry.Value.Count; occupantIndex++)
+            {
+                int slotIndex = entry.Value[occupantIndex];
+                float spacingY = LaneMovementSystem.GetInLaneSpacingOffsetPx(occupantIndex, entry.Value.Count);
+                _playerStageCreatures[slotIndex].style.translate = new Translate(0, spacingY);
+                _playerStageCreatures[slotIndex].style.scale = new Scale(new Vector3(scale, scale, 1f));
+            }
         }
+
         RestoreStageCreatureDepthOrder();
     }
 
     /// <summary>
-    /// UI Toolkit draws siblings in document order (painter's algorithm) — the flex-row's fixed
-    /// 0,1,2 order doesn't match visual depth once stagger is applied, so a "further back"
-    /// creature (smaller/negative Y) could draw over a "front" creature's orb ring. BringToFront
-    /// in ascending-Y order rebuilds document order to match depth: furthest-back drawn first,
-    /// frontmost drawn last (on top). Called after stagger setup and again whenever a move wheel
-    /// closes, to undo the temporary override ShowMoveSelection/ShowMoveSelectionReadOnly apply
-    /// below.
+    /// Single-slot equivalent of ApplyLaneLayout for the lone enemy stage slot — no in-lane spacing
+    /// needed since multi-enemy battles don't have per-enemy stage creatures yet (see class doc
+    /// comment). Called from Initialize once the enemy side's lane index is known.
+    /// </summary>
+    private void ApplyEnemyLaneDepthScale(BattleParticipant enemyParticipant)
+    {
+        int lane = enemyParticipant.LaneIndex;
+        _enemyStageCreature.style.left = LaneMovementSystem.GetLaneScreenLeft(lane, isPlayerSide: false);
+        float scale = LaneMovementSystem.GetDepthScale(lane);
+        _enemyStageCreature.style.scale = new Scale(new Vector3(scale, scale, 1f));
+    }
+
+    /// <summary>
+    /// Accessor for beat-sequence code (BeatSequenceRunner) to animate a specific combatant's
+    /// element without reaching into this class's private arrays. Enemy side ignores slotIndex —
+    /// single stage slot only, see class doc comment.
+    /// </summary>
+    public VisualElement GetStageCreatureElement(int slotIndex, bool isPlayerSide)
+    {
+        return isPlayerSide ? _playerStageCreatures[slotIndex] : _enemyStageCreature;
+    }
+
+    /// <summary>
+    /// Updates the cached lane index for one player stage slot and re-sorts paint order — called by
+    /// BeatSequenceRunner as a melee Approach/Return moves a combatant between lanes mid-battle, so
+    /// depth order (RestoreStageCreatureDepthOrder) stays correct without needing a full
+    /// Initialize/ApplyLaneLayout pass. No enemy-side equivalent — RestoreStageCreatureDepthOrder
+    /// only ever reorders player-side slots (the enemy side is a single element, nothing to reorder
+    /// against); an enemy's own Approach/Return still moves its element (via GetStageCreatureElement)
+    /// and updates BattleParticipant.LaneIndex, it just never needs a paint-order re-sort.
+    /// </summary>
+    public void UpdatePlayerStageCreatureLane(int slotIndex, int laneIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _playerStageCreatureLaneIndex.Length) return;
+        _playerStageCreatureLaneIndex[slotIndex] = laneIndex;
+        RestoreStageCreatureDepthOrder();
+    }
+
+    /// <summary>
+    /// UI Toolkit draws siblings in document order (painter's algorithm) — the fixed 0,1,2 slot
+    /// order doesn't match visual depth once lane layout is applied, so a "further back" creature
+    /// (larger LaneIndex) could draw over a "front" creature's orb ring. BringToFront in
+    /// descending-LaneIndex order rebuilds document order to match depth: furthest-back (Lane 7)
+    /// drawn first, frontmost (Lane 1) drawn last (on top), tiebroken by slot index for determinism
+    /// among same-lane occupants. Called after lane layout is applied and again whenever a move
+    /// wheel closes, to undo the temporary override ShowMoveSelection/ShowMoveSelectionReadOnly
+    /// apply below, and by UpdatePlayerStageCreatureLane whenever a Beat Sequence moves a combatant.
     /// </summary>
     private void RestoreStageCreatureDepthOrder()
     {
@@ -1201,9 +1289,8 @@ public class BattleHUDController : MonoBehaviour
         for (int i = 0; i < depthOrder.Length; i++) depthOrder[i] = i;
         Array.Sort(depthOrder, (a, b) =>
         {
-            float ay = a < StageCreatureStaggerY.Length ? StageCreatureStaggerY[a] : 0f;
-            float by = b < StageCreatureStaggerY.Length ? StageCreatureStaggerY[b] : 0f;
-            return ay.CompareTo(by);
+            int laneCompare = _playerStageCreatureLaneIndex[b].CompareTo(_playerStageCreatureLaneIndex[a]);
+            return laneCompare != 0 ? laneCompare : a.CompareTo(b);
         });
         foreach (int index in depthOrder)
             _playerStageCreatures[index].BringToFront();
@@ -1598,18 +1685,22 @@ public class BattleHUDController : MonoBehaviour
     /// (user-directed, Sonny 2-referenced — see DECISIONS.md -> [Combat]) to mirror
     /// RunDefenseTimedInput's converging-ring visual, positioned above the TARGETED ENEMY (not
     /// the attacker): a fixed target ring plus a white marker ring that starts wider and shrinks
-    /// past it over sweepDuration. Left-clicking ANYWHERE succeeds if, at that instant, the
-    /// marker/target radius ratio is within toleranceHalfWidth of 1.0 — the marker flashes green
-    /// on a normal success, a brighter neon purple on a "perfect" (within the innermost
-    /// PerfectToleranceFraction of that tolerance), red on any miss (wrong moment or no click at
-    /// all). Sets LastTimedInputSuccess/LastTimedInputWasPerfect — read them right after this
-    /// coroutine completes. A miss by timeout (no click before the marker finishes converging)
-    /// always resolves as a failure, same as clicking at the wrong moment. Deliberately just one
-    /// window per call — a future multi-input attack/skill (some offensive actions may need more
-    /// than one beat) would call this coroutine multiple times in sequence rather than needing a
-    /// rewrite here.
+    /// past it over sweepDuration. Reworked again 2026-08-11 (user-directed — see DECISIONS.md ->
+    /// [Combat]) from a single tolerance with a cosmetic-only "perfect" sub-flash to two
+    /// independent, nested bands mirroring defense outright: goodToleranceHalfWidth is the same
+    /// value RunDefenseTimedInput uses for Dodge, perfectToleranceHalfWidth the same value it uses
+    /// for Parry. Left-clicking ANYWHERE resolves against whichever band the marker/target radius
+    /// ratio falls in at that instant: within perfectToleranceHalfWidth of 1.0 -> Perfect (brighter
+    /// neon purple flash); else within goodToleranceHalfWidth -> Good (green flash); otherwise ->
+    /// Miss (red flash) — including a timeout with no click before the marker finishes converging.
+    /// Unlike defense, a Miss here is NOT a free failure: TimedInputConfig.MissDamageMultiplier
+    /// applies a real damage penalty, matched against Good/Perfect's own multipliers by the caller.
+    /// Sets LastOffenseOutcome (and, via it, LastTimedInputSuccess/LastTimedInputWasPerfect) — read
+    /// them right after this coroutine completes. Deliberately just one window per call — a future
+    /// multi-input attack/skill (some offensive actions may need more than one beat) would call
+    /// this coroutine multiple times in sequence rather than needing a rewrite here.
     /// </summary>
-    public IEnumerator RunTimedInput(string label, float toleranceHalfWidth, float sweepDuration)
+    public IEnumerator RunTimedInput(string label, float goodToleranceHalfWidth, float perfectToleranceHalfWidth, float sweepDuration)
     {
         _actionAnnouncementLabel.text = label;
         _actionAnnouncement.EnableInClassList("action-announcement-offense", true);
@@ -1645,9 +1736,13 @@ public class BattleHUDController : MonoBehaviour
         _root.UnregisterCallback(onPointerDown);
 
         float deviation = Mathf.Abs(_timingRing.MarkerRadius / RingTargetRadius - 1f);
-        LastTimedInputSuccess = clicked && deviation <= toleranceHalfWidth;
-        LastTimedInputWasPerfect = LastTimedInputSuccess && deviation <= toleranceHalfWidth * PerfectToleranceFraction;
-        _timingRing.MarkerColor = !LastTimedInputSuccess ? MissFlashColor : LastTimedInputWasPerfect ? PerfectFlashColor : SuccessFlashColor;
+        LastOffenseOutcome = !clicked ? OffenseOutcome.Miss
+            : deviation <= perfectToleranceHalfWidth ? OffenseOutcome.Perfect
+            : deviation <= goodToleranceHalfWidth ? OffenseOutcome.Good
+            : OffenseOutcome.Miss;
+        _timingRing.MarkerColor = LastOffenseOutcome == OffenseOutcome.Miss ? MissFlashColor
+            : LastOffenseOutcome == OffenseOutcome.Perfect ? PerfectFlashColor
+            : SuccessFlashColor;
         _timingRing.Refresh();
 
         // Brief hold so the player can see the flash (or where the marker landed on a miss) before it hides.
