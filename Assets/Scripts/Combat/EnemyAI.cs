@@ -130,7 +130,9 @@ public static class EnemyAI
                     // Approach/Windup/Attack/Return at all). Every one of these skills deals damage,
                     // so bucket directly rather than deriving it from tree metadata that was never
                     // meant to answer this for a skill with its own resolution path.
-                    if (skill.StackingRhythm != StackingRhythmType.None || (skill.BeatSequence != null && skill.BeatSequence.Count > 0))
+                    if (skill.StackingRhythm != StackingRhythmType.None
+                        || (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
+                        || (skill.VolleyRingSequence != null && skill.VolleyRingSequence.Count > 0))
                     {
                         damageOptions.Add(skill);
                         break;

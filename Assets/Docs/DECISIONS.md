@@ -4795,3 +4795,58 @@ re-derive the reasoning from scratch before deciding whether to build these.
   filter), `SkillLoadoutSystem.cs` (`TryEquip`/`TryEquipAt` exemption), `GameManager.cs`
   (`ApplyDebugPlaytestLoadout`), the 4 new `Assets/Data/Skills/Ranged_*.asset` files +
   `Melee_Slash.asset` (retagged).
+
+### [Combat] Multi-Hit Volley — concurrent multi-ring FIFO click-routing, one shared session not one ring per call
+- **Decided:** Built a small `ObjectPool<RingVisual>` in `BattleHUDController` (mirroring
+  `CombatVfxController`'s existing projectile pool) rather than reusing the single shared
+  `_timingRing` every other archetype has used to date, since a Multi-Hit Volley cast can have
+  several rings open/animating concurrently around the target. Click resolution is FIFO — only the
+  OLDEST open ring listens for input at a time — via one session-scoped `PointerDownEvent` handler
+  (`BeginVolleyInputSession`/`EndVolleyInputSession`), not the existing per-call local-handler shape
+  `RunTimedInput`/`RunDefenseTimedInput` use, since clicks must always route to whichever ring is
+  oldest regardless of which ring's own coroutine happens to be running most recently. Each ring's
+  required click button is tied to its own sweep direction: a converging ring (today's existing
+  shrink-toward-target sweep, unchanged) requires left-click; a new expanding ring (grows from
+  center outward — the existing deviation-ratio scoring math needed zero changes, since it was
+  already direction-agnostic) requires right-click. For the first pattern ("Basic Count"), this
+  split is hits 1-4 converging/left, hits 5-8 expanding/right, DERIVED from the sequence's own
+  length at runtime rather than its own authored field, so a differently-sized future pattern needs
+  no code changes. Every hit resolves and deals damage independently (a miss on one hit doesn't
+  cancel the rest) — a deliberate departure from Metronome/Jitter's all-or-nothing combo gate,
+  matching Attack_Pattern_Directive Part 5's own framing of Multi-Hit Volley as testing "rhythm/
+  consistency" per-hit, not a single pass/fail gate. Damage applies the instant each hit's ring
+  resolves; battle-log lines are collected and flushed together in one batch only once every hit has
+  finished.
+- **Why:** User-directed across several messages: "8 positions around the target that have the ring
+  input... modular so for a skill you can choose which rings and timings to hit"; "the number of
+  rings shown should match the number of projectiles airborne. so multiple rings could be closing if
+  multiple projectiles are out"; on the click model specifically: "Lets do fifo but allow for
+  different inputs based on the ring. So for example if a ring starts on the outside then converges
+  in thats a left click input timing, if its a ring thats starts in the middle then expands out,
+  thats a right click... inputs still need to match the order of the rings... for this one lets make
+  it same pattern, but make the 1st 4 left click rings... last 4 click rings"; and on the log
+  timing: "let the damage calculate on ring input, then for the battle log just add them all at the
+  end. So damage can occur early but the battle log calculation can happen at the final step."
+- **Alternatives rejected:** Click resolution by screen-position hit-testing against whichever ring
+  is nearest the cursor (rejected by the user in favor of FIFO — simpler, no spatial math needed,
+  and the converging/expanding button-type split still makes each ring meaningfully distinct without
+  needing position-aware clicks). Reusing the single shared `_timingRing` (rejected — mechanically
+  can't represent more than one ring's state at once, and the user explicitly confirmed multiple
+  rings must be able to stay open simultaneously).
+- **Scope decision:** Offense only this pass. `CombatVfxController._held` is an explicit
+  single-slot field ("only one projectile is ever held at once") — a defense-side Volley needs
+  several concurrently-held projectiles, which isn't supported without turning `_held` into a
+  handle-keyed collection and updating every existing call site that resolves a held projectile.
+  The defense dispatch branch and `RunVolleyRingDefense` compile and route correctly (documented
+  stub) but aren't exercised live; don't equip this skill on any enemy loadout until that refactor
+  lands as its own follow-up.
+- **Date:** 2026-08-15
+- **Ref:** `CompassPoint.cs` (new), `SkillData.cs` (`VolleyRingSequence`/`VolleyRingDurationsSeconds`),
+  `BattleHUDController.cs` (`_volleyRingPool`, `ComputeCompassOffset`/`PositionVolleyRing`,
+  `VolleyRingOutcome`/`VolleySlot`, `BeginVolleyInputSession`/`EndVolleyInputSession`,
+  `RunVolleyRingOffense`/`RunVolleyRingDefense`, `DebugForceResolveVolleyFront`),
+  `BeatSequenceConfig.cs` (Volley constants), `BattleManager.cs`
+  (`ResolveMultiHitVolleyAttack`/`RunVolleyHit` + dispatch in `ResolveSkillAction`/
+  `ResolveEnemyDamageAction`), `EnemyAI.cs` (bucket-override extension),
+  `BattleLogFormatter.cs` (`FormatVolleyHit`), `Assets/Data/Skills/Ranged_MultiHitVolley.asset`,
+  `GameManager.cs` (`ApplyDebugPlaytestLoadout`).

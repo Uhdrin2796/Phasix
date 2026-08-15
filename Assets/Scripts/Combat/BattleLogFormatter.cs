@@ -201,4 +201,29 @@ public static class BattleLogFormatter
     {
         return $"{attacker.DisplayName}'s {skillName} breaks rhythm on beat {beatReached}/{beatsRequired} — the attack whiffs!";
     }
+
+    /// <summary>
+    /// Formats one hit of a Multi-Hit Volley (2026-08-14, BattleManager.RunVolleyHit) — same shape
+    /// as FormatSkillAttack but names which hit of the sequence this is, since (unlike a normal
+    /// skill, or Metronome/Jitter's single combined payoff) each Volley hit gets its own log line
+    /// and its own independent Miss/Good/Perfect outcome. Callers collect these into an array and
+    /// flush them to the battle log together once the whole cast resolves (user: "let the damage
+    /// calculate on ring input, then for the battle log just add them all at the end") rather than
+    /// appending as each hit completes — this method only builds the string, it doesn't log it.
+    /// </summary>
+    public static string FormatVolleyHit(BattleParticipant attacker, BattleParticipant target, string skillName,
+        int hitNumber, int hitCount, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier,
+        BattleHUDController.OffenseOutcome offenseOutcome)
+    {
+        (int, string) timingTerm = (finalDamage - damageAfterType, "timing");
+        string line = $"{attacker.DisplayName}'s {skillName} hit {hitNumber}/{hitCount} strikes {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingTerm)}!";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        if (offenseOutcome == BattleHUDController.OffenseOutcome.Perfect) line += " Perfect timing!";
+        else if (offenseOutcome == BattleHUDController.OffenseOutcome.Miss) line += " Timing was off.";
+
+        return line;
+    }
 }

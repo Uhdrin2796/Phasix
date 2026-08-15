@@ -194,6 +194,12 @@ public class GameManager : MonoBehaviour
     /// the new PreEmptive response-timing path without equipping them first. Brings the forced set to
     /// 11 (5 Standard + C1 + Slash + 4 new), still under the fallback starter's Tier-5 cap of 12
     /// (SkillSlotCapacity), so the "skip override if it doesn't fit" guard below won't trigger.
+    ///
+    /// 2026-08-14 follow-up (Multi-Hit Volley, Attack_Pattern_Directive Part 5 Group 2's first
+    /// archetype): "Volley" added the same way, same reasoning. This brings the forced set to
+    /// EXACTLY 12 of the Tier-5 cap's 12 slots — zero slack left. A second Volley pattern (already
+    /// planned as a follow-up) cannot be added to this same debug loadout without either raising
+    /// SkillSlotCapacity's Tier-5 cap or dropping an existing debug skill from this list.
     /// </summary>
     private void ApplyDebugPlaytestLoadout(PhasixRuntimeData runtime)
     {
@@ -216,7 +222,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Jitter" };
+        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Jitter", "Volley" };
         foreach (string name in desiredNames)
         {
             foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)

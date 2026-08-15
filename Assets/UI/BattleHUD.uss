@@ -607,6 +607,15 @@
     height: 140px;
 }
 
+/* Multi-Hit Volley (2026-08-14) — unlike .timing-ring above, position is set per-instance in C#
+   (BattleHUDController.PositionVolleyRing), since up to 8 of these can be open at once, each at a
+   different compass offset around the target. No top/left/translate here. */
+.timing-ring-volley {
+    position: absolute;
+    width: 140px;
+    height: 140px;
+}
+
 /* Bottom row: action panel (current turn/move/timing bar) fills the left half of the screen,
    battle log fills the right half — each panel is flex-grow:1/flex-basis:0 so the row's full
    width (left:0/right:0, edge-to-edge) splits exactly 50/50, with only a small gap-via-margin

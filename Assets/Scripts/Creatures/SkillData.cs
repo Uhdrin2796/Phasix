@@ -45,6 +45,19 @@ using UnityEngine;
 /// ± the given range each time it plays (the Jitter archetype) — still just data, no new balance
 /// numbers beyond the placeholder itself (pending NumericalCalibration.md, same as every other
 /// BeatSequenceConfig value).
+///
+/// 2026-08-14 session (Multi-Hit Volley — Attack_Pattern_Directive Part 5 Group 2's first
+/// archetype, "several small hits in sequence, each its own small window"): VolleyRingSequence and
+/// VolleyRingDurationsSeconds are a SEVENTH and EIGHTH structural field, same tier as BeatSequence/
+/// StackingRhythm. Empty (default, applied automatically to all existing assets) means "not a
+/// Volley skill" — zero risk to any pre-existing asset. A non-empty CompassPoint list tells
+/// BattleManager to run ResolveMultiHitVolleyAttack instead of BeatSequence/StackingRhythm/the
+/// placeholder path — bypasses all three entirely, same "own dedicated resolution path" pattern
+/// StackingRhythm already established. Per-hit click-type requirement (converging/left-click vs
+/// expanding/right-click, offense only — user: "make the 1st 4 left click rings... last 4 click
+/// rings") is deliberately NOT its own field — it's derived at runtime from each hit's position
+/// within VolleyRingSequence's own length (first half = converging, second half = expanding), so a
+/// differently-sized future volley pattern needs zero code changes, pure new-asset authoring.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -98,6 +111,18 @@ public class SkillData : ScriptableObject
              "comment for the full mechanic.")]
     [SerializeField] private StackingRhythmType _stackingRhythm = StackingRhythmType.None;
 
+    [Header("Multi-Hit Volley (Attack_Pattern_Directive Part 5 Group 2 — structural, not balance)")]
+    [Tooltip("Empty (default) = not a Multi-Hit Volley skill, resolves through the normal existing " +
+             "paths unchanged. A non-empty ordered CompassPoint list tells BattleManager to run " +
+             "ResolveMultiHitVolleyAttack instead — one hit per entry, in this exact order.")]
+    [SerializeField] private CompassPoint[] _volleyRingSequence = System.Array.Empty<CompassPoint>();
+
+    [Tooltip("Per-hit ring sweep duration (seconds), index-parallel to VolleyRingSequence — entry i " +
+             "is hit i+1's ring duration. Falls back to BeatSequenceConfig.VolleyDefaultRingDurationSeconds " +
+             "if shorter than the sequence (defensive only — author a full-length array). Ignored " +
+             "when VolleyRingSequence is empty.")]
+    [SerializeField] private float[] _volleyRingDurationsSeconds = System.Array.Empty<float>();
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -108,4 +133,6 @@ public class SkillData : ScriptableObject
     public ResponseTimingType ResponseTiming => _responseTiming;
     public float WindupJitterRangeSeconds => _windupJitterRangeSeconds;
     public StackingRhythmType StackingRhythm => _stackingRhythm;
+    public IReadOnlyList<CompassPoint> VolleyRingSequence => _volleyRingSequence;
+    public IReadOnlyList<float> VolleyRingDurationsSeconds => _volleyRingDurationsSeconds;
 }

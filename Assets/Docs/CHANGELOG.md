@@ -16,6 +16,101 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-15] Phase 3 follow-up — Multi-Hit Volley damage lowered
+- **Context:** User, after the first playtest of Volley: "lower the damage for the volley."
+- **Fixed:** Each Volley hit computed full damage from `BattleConfig.PlaceholderSkillPower` same as
+  any other skill, but with 8 independent hits per cast (vs. 1 for a normal attack), a full connect
+  dealt roughly 8x a single normal attack's damage — nothing previously scaled per-hit output down
+  to account for there being 8 of them. Added `BeatSequenceConfig.VolleyPerHitDamageMultiplier`
+  (0.3, placeholder) applied on top of the existing Miss/Good/Perfect multiplier in
+  `BattleManager.RunVolleyHit` — an all-Good 8-hit connect now totals ~2.4x a normal single hit
+  instead of ~8x; an all-Miss cast totals ~1.2x instead of ~4x.
+- **Verified:** Clean compile (`read_console`, no `error CS`).
+
+---
+
+[2026-08-15] Phase 3 — Attack Pattern Directive Group 2, item 1: Multi-Hit Volley ("Basic Count" pattern)
+- **Built:** The first Group 2 archetype (Attack_Pattern_Directive_v0_1_0.md Part 5: "several small
+  hits in sequence, each its own small window. Tests rhythm/consistency"), designed across several
+  rounds of user direction this session:
+  - **`CompassPoint`** (new enum, `Assets/Scripts/Combat/CompassPoint.cs`) — 8 positions (N, NE, E,
+    SE, S, SW, W, NW) arranged around the TARGET creature, one per hit.
+  - **`SkillData.VolleyRingSequence`/`VolleyRingDurationsSeconds`** (new fields) — a skill authors
+    which compass positions it uses, in what order, and each hit's own ring duration. Empty (default)
+    = not a Volley skill, zero risk to every existing asset. Non-empty routes through a wholly new
+    resolution path, bypassing BeatSequence/StackingRhythm entirely.
+  - **`BattleHUDController`**: a small `ObjectPool<RingVisual>` (mirrors `CombatVfxController`'s
+    existing projectile pool) since — user: "the number of rings shown should match the number of
+    projectiles airborne. so multiple rings could be closing if multiple projectiles are out" —
+    several rings can be open/animating concurrently around the target, unlike every prior archetype's
+    single shared `_timingRing`. A new compass-offset positioning method (`ComputeCompassOffset`/
+    `PositionVolleyRing`) is a direct structural clone of the existing 12-slot skill-wheel's
+    `PositionSkillSlots`. A new FIFO click-routing session (`BeginVolleyInputSession`/
+    `EndVolleyInputSession`/`RunVolleyRingOffense`/`RunVolleyRingDefense`) — user: "lets do fifo but
+    allow for different inputs based on the ring... its visual tracking, but then inputs still need
+    to match the order of the rings" — only the OLDEST open ring listens for clicks at a time, and
+    its required button is tied to its own sweep direction: a converging ring (today's existing
+    shrink-toward-target sweep) requires left-click, an expanding ring (new — grows from center
+    outward, reusing the existing deviation-ratio scoring math unchanged) requires right-click. For
+    this pattern, hits 1-4 are converging/left, hits 5-8 expanding/right — user: "make the 1st 4 left
+    click rings... last 4 click rings" — derived from the sequence's own length at runtime, not its
+    own authored field, so a differently-sized future pattern needs zero code changes.
+  - **`BattleManager.ResolveMultiHitVolleyAttack`/`RunVolleyHit`** — one warning hop, once (user:
+    "its one warning for player"), then per hit: a strictly-sequential, fast dash-forward/dash-back
+    (reusing Metronome/Jitter's own race-fixed cosmetic dash), with that hit's ring+projectile+damage
+    resolution started fire-and-forget rather than awaited — "this would happen fast bc the number of
+    projectile should be coming out in quick succession to feel like a volley." Every hit resolves
+    and deals damage INDEPENDENTLY (unlike Metronome/Jitter's all-or-nothing combo gate) — a miss on
+    one hit doesn't cancel the rest, and (matching this codebase's existing convention everywhere
+    else) still deals reduced, not zero, damage. Damage applies the instant each hit's own ring
+    resolves; battle-log lines are collected into an array and flushed together in one batch only
+    once every hit has finished (user: "let the damage calculate on ring input, then for the battle
+    log just add them all at the end").
+  - **`BattleLogFormatter.FormatVolleyHit`** — one line per hit, numbered ("hit 3/8"), reusing the
+    shared damage-breakdown helper every other formatter uses.
+  - New asset `Ranged_MultiHitVolley.asset` ("Volley"), `SkillTreeType.Testing`, sequence
+    `[N,NE,E,SE,S,SW,W,NW]`, all 8 ring durations 0.45s. Registered into `SkillDatabase`'s
+    `_allSkills`/GUID index (a manual Editor-side step this database requires for any new skill) and
+    added to `GameManager.ApplyDebugPlaytestLoadout`'s forced set.
+- **Decided (scope):** Offense only this pass. `CombatVfxController._held` is an explicit
+  single-slot field ("only one projectile is ever held at once") — a defense-side Volley (enemy
+  casts it at the player) needs several concurrently-held projectiles, which `_held` can't support
+  without becoming a handle-keyed collection. The defense dispatch branch and `RunVolleyRingDefense`
+  compile and route correctly but are a documented stub — don't equip this skill on any enemy
+  loadout until that refactor lands as its own follow-up (consistent with Group 2's own "one
+  dedicated pass each" framing).
+- **Blocked/flagged assumptions:** per-hit burst fill uses the full normal amount (×8 for a full
+  cast) — a real balance call for later, not confirmed with the user. Ring visual overlap at the
+  8-compass layout (140×140 boxes, ~95px radius around a 72×72 creature) is expected/placeholder,
+  not tuned for feel yet.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: a full 8-hit
+  cast (all hits resolving by natural timeout, no clicks) produced exactly 8 battle-log lines,
+  correctly numbered 1/8 through 8/8, each showing `(9 base + 5 type - 7 timing) = 7 total damage`
+  (Miss-tier, matching `TimedInputConfig.MissDamageMultiplier` — never zero) and correctly batched
+  together rather than interleaved; total HP loss (120 -> 64 = 56) matched 8 x 7 exactly. Directly
+  opened two `RunVolleyRingOffense` rings (one converging, one expanding) and confirmed via
+  reflection into `BattleHUDController._volleyQueue` that both coexist in the queue simultaneously —
+  the core "multiple rings open at once" requirement. Used the new `DebugForceResolveVolleyFront`
+  debug hook to resolve them in order and confirmed strict FIFO behavior: resolving the front ring
+  popped it and correctly promoted the next ring (confirmed its `RequiresLeftClick` flag matched the
+  expected converging/expanding split) to front; queue emptied to 0 after both resolved. No new
+  console errors throughout. The `_volleyPointerHandler`'s wrong-button-ignored gating wasn't
+  separately exercised via a simulated `PointerDownEvent` (the debug hook deliberately bypasses that
+  check, by design, for deterministic forced-outcome testing) — verified by code inspection instead;
+  the guard is two simple early-return checks.
+- **Note:** while testing, discovered the local save file's actual player party is Tier 1
+  (`SkillSlotCapacity` cap of 4), not the Tier-5 fallback starter `ApplyDebugPlaytestLoadout`'s own
+  doc comment assumes — its `desiredGuids.Count > maxSlots` guard silently skips the whole debug
+  override for this save. Not a regression from this session's work (pre-existing save-file state);
+  testing routed around it by invoking `ResolveMultiHitVolleyAttack` directly, the same pattern used
+  for every other archetype this session.
+- **Next:** the flagged `CombatVfxController._held` single-slot refactor (needed before Volley can be
+  given to an enemy), then the second Volley pattern the user wants to try (a different compass
+  order/timing feel — no code changes needed, pure new-asset authoring), then Group 2's second item
+  (Charge & Release + Sustained Pressure, sharing one new hold-input primitive).
+
+---
+
 [2026-08-14] Phase 3 follow-up #11 — Metronome/Jitter battle log now breaks out the stack-tier damage bonus
 - **Context:** User: "make sure that the battlelog updates the damage log on metronome and jitter. It
   shows the correct total value but i need to see the broken out values more clearly."

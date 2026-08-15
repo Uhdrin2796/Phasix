@@ -28,6 +28,17 @@ combo firing a stronger payoff shot. See CHANGELOG.md's matching entry for full 
 genuine mechanic addition, not something the original archetype descriptions anticipated. Not
 reflected in Part 5's archetype table below (left as historical design-intent record) — treat this
 errata as the authoritative current behavior for these two skills.
+**Errata (2026-08-15):** Group 2 started — Multi-Hit Volley built (first pattern, "Basic Count":
+8 hits cycling all 8 compass positions in order). Needed genuinely new infrastructure beyond
+"calls RunTimedInput multiple times in sequence" (Part 1's own framing): several rings can now be
+open/animating around the target concurrently (new `CompassPoint`-positioned ring pool in
+`BattleHUDController`, replacing the single shared `_timingRing` for this archetype), resolved via
+a FIFO click-routing session where only the oldest open ring listens for input, and each ring's
+required click button is tied to its own sweep direction (converging = left, expanding = right) —
+see `SkillData.VolleyRingSequence`/`BattleManager.ResolveMultiHitVolleyAttack`. Offense only this
+pass — defense (an enemy casting Volley) is dispatch-wired but blocked on `CombatVfxController._held`
+being a single-slot field; see CHANGELOG.md's matching entry for full detail. Not reflected in Part
+5's archetype table below (left as historical design-intent record).
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
 **Related:** Combat_Directive_v0_1_0.md (lane system, timed input system, lane occupancy — authoritative for those mechanics; this doc builds on top)
 
@@ -101,8 +112,14 @@ archetypes that need a wholly new input model or temporal structure.
    `BuiltInMoveType.Attack` case are both full Direct Projectile implementations). No build work.
 
 **Group 2 — one dedicated pass each (new input primitives):**
-5. **Multi-Hit Volley** — calls the existing `RunTimedInput` multiple times in sequence, which
-   `Combat_Directive` explicitly built it to support. Proves that extension point actually works.
+5. **Multi-Hit Volley** — **BUILT 2026-08-15** (offense only — see errata above and CHANGELOG.md's
+   matching entry) as `Ranged_MultiHitVolley` ("Volley"). Turned out to need more than "calls
+   `RunTimedInput` multiple times in sequence": each hit needed its own independently-timed ring at
+   its own position around the target, with several open concurrently — a genuinely new
+   `CompassPoint`-positioned ring-pool + FIFO click-routing system (`BattleHUDController`), not a
+   reuse of the existing single-ring primitive. A second pattern (different compass order/timing) is
+   planned as pure new-asset authoring, no code changes needed. Defense (an enemy using Volley)
+   is dispatch-wired but blocked on a `CombatVfxController` refactor — flagged as a follow-up.
 6. **Charge & Release** + **Sustained Pressure** — build these two *together*: both are "hold input"
    instead of "tap input," diverging only in scoring (release timing vs. duration matching). Share
    one new hold-input primitive.

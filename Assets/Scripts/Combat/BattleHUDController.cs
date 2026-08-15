@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Pool;
 using UnityEngine.UIElements;
 
 /// <summary>
@@ -487,6 +488,27 @@ public class BattleHUDController : MonoBehaviour
     // EnemyTurn don't run concurrently), so one shared instance is enough.
     private RingVisual _timingRing;
 
+    // Multi-Hit Volley (Attack_Pattern_Directive Part 5 Group 2, 2026-08-14, user: "the number of
+    // rings shown should match the number of projectiles airborne. so multiple rings could be
+    // closing if multiple projectiles are out") — UNLIKE _timingRing above, a Volley cast can have
+    // several rings open/animating concurrently (dash cadence is faster than any one ring's own
+    // sweep), so it needs its own small pool rather than reusing the single shared _timingRing.
+    // Mirrors CombatVfxController's existing ObjectPool<CombatProjectileVisual> pattern exactly.
+    private ObjectPool<RingVisual> _volleyRingPool;
+
+    /// <summary>Distance (px) from a target creature's center to each of its 8 Multi-Hit Volley compass ring positions — same tier/placeholder status as SkillSlotRadius, pending NumericalCalibration.md. 140x140 ring boxes at this radius against a 72x72 creature will visually overlap between adjacent compass points — expected (semi-transparent strokes), not a bug, a later art/feel pass's concern.</summary>
+    private const float VolleyRingRadius = 95f;
+
+    // FIFO queue for a Multi-Hit Volley's concurrently-open rings (2026-08-14, user: "lets do fifo
+    // but allow for different inputs based on the ring... its visual tracking, but then inputs
+    // still need to match the order of the rings") — the one deliberate deviation from
+    // RunTimedInput/RunDefenseTimedInput's own "register+unregister a local click handler per
+    // call" shape: a Volley cast registers ONE handler for its whole duration (BeginVolleyInputSession/
+    // EndVolleyInputSession), and every click always resolves against whichever ring is at index 0
+    // (the oldest still-open one) — never whichever ring happened to open most recently.
+    private readonly List<VolleySlot> _volleyQueue = new List<VolleySlot>();
+    private EventCallback<PointerDownEvent> _volleyPointerHandler;
+
     /// <summary>
     /// Shared runtime hover tooltip (2026-08 follow-up fix — the original skill-orb implementation
     /// used UI Toolkit's native VisualElement.tooltip, which only renders inside Editor-hosted UI
@@ -688,6 +710,24 @@ public class BattleHUDController : MonoBehaviour
         _timingRing = new RingVisual();
         _timingRing.AddToClassList("timing-ring");
         _timingRing.style.display = DisplayStyle.None;
+
+        _volleyRingPool = new ObjectPool<RingVisual>(
+            createFunc: () =>
+            {
+                var ring = new RingVisual();
+                ring.AddToClassList("timing-ring-volley");
+                return ring;
+            },
+            actionOnGet: ring => ring.style.display = DisplayStyle.Flex,
+            actionOnRelease: ring =>
+            {
+                ring.style.display = DisplayStyle.None;
+                ring.RemoveFromHierarchy();
+            },
+            actionOnDestroy: ring => ring.RemoveFromHierarchy(),
+            collectionCheck: false,
+            defaultCapacity: 4,
+            maxSize: 8); // covers this pass's max hit count (basic-count pattern = 8) with zero slack
 
         _actionAnnouncement.style.display = DisplayStyle.None;
         _continuePrompt.style.display = DisplayStyle.None;
@@ -1506,6 +1546,27 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
+    /// Angle math for a Multi-Hit Volley compass ring (2026-08-14) — direct sibling of
+    /// PositionSkillSlots' clock-face formula above, just re-based so index 0 (CompassPoint.N)
+    /// lands at exactly 90 degrees ("up") instead of that method's +1 clock-hour offset, and
+    /// stepping in 45-degree increments (8 points) instead of 30 (12 points).
+    /// </summary>
+    private static (float dx, float dy) ComputeCompassOffset(CompassPoint point, float radius)
+    {
+        float angleDegrees = 90f - 45f * (int)point;
+        float angleRadians = angleDegrees * Mathf.Deg2Rad;
+        return (Mathf.Cos(angleRadians) * radius, -Mathf.Sin(angleRadians) * radius);
+    }
+
+    /// <summary>Positions one Multi-Hit Volley ring (140x140, see .timing-ring-volley) at its compass offset relative to whichever creature element it's about to be parented into — same self-centering-offset math PositionSkillSlots already uses for its own (differently-sized) children.</summary>
+    private static void PositionVolleyRing(VisualElement ring, CompassPoint point)
+    {
+        (float dx, float dy) = ComputeCompassOffset(point, VolleyRingRadius);
+        ring.style.left = 36f - 70f + dx;
+        ring.style.top = 36f - 70f + dy;
+    }
+
+    /// <summary>
     /// Builds skill-orb tooltip text from the skill's own RESOLVED mechanical behavior (2026-08
     /// follow-up — user-directed: "use the values from each skill orb to generate your content"),
     /// not the shared placeholder SkillData.Description string (identical dev-facing disclaimer
@@ -2100,13 +2161,8 @@ public class BattleHUDController : MonoBehaviour
         _root.UnregisterCallback(onPointerDown);
 
         float deviation = Mathf.Abs(_timingRing.MarkerRadius / RingTargetRadius - 1f);
-        LastOffenseOutcome = !clicked ? OffenseOutcome.Miss
-            : deviation <= perfectToleranceHalfWidth ? OffenseOutcome.Perfect
-            : deviation <= goodToleranceHalfWidth ? OffenseOutcome.Good
-            : OffenseOutcome.Miss;
-        _timingRing.MarkerColor = LastOffenseOutcome == OffenseOutcome.Miss ? MissFlashColor
-            : LastOffenseOutcome == OffenseOutcome.Perfect ? PerfectFlashColor
-            : SuccessFlashColor;
+        LastOffenseOutcome = ClassifyOffenseOutcome(clicked, deviation, goodToleranceHalfWidth, perfectToleranceHalfWidth);
+        _timingRing.MarkerColor = FlashColorForOffenseOutcome(LastOffenseOutcome);
         _timingRing.Refresh();
 
         // Brief hold so the player can see the flash (or where the marker landed on a miss) before it hides.
@@ -2114,6 +2170,23 @@ public class BattleHUDController : MonoBehaviour
         _actionAnnouncement.style.display = DisplayStyle.None;
         _timingRing.style.display = DisplayStyle.None;
         _timingRing.RemoveFromHierarchy();
+    }
+
+    /// <summary>Shared Miss/Good/Perfect classification for a converging-or-expanding ring's final deviation — factored out of RunTimedInput (2026-08-14) so RunVolleyRingOffense can reuse the exact same rule instead of duplicating it.</summary>
+    private static OffenseOutcome ClassifyOffenseOutcome(bool clicked, float deviation, float goodToleranceHalfWidth, float perfectToleranceHalfWidth)
+    {
+        return !clicked ? OffenseOutcome.Miss
+            : deviation <= perfectToleranceHalfWidth ? OffenseOutcome.Perfect
+            : deviation <= goodToleranceHalfWidth ? OffenseOutcome.Good
+            : OffenseOutcome.Miss;
+    }
+
+    /// <summary>Shared flash-color lookup for an OffenseOutcome — factored out of RunTimedInput (2026-08-14) alongside ClassifyOffenseOutcome.</summary>
+    private static Color FlashColorForOffenseOutcome(OffenseOutcome outcome)
+    {
+        return outcome == OffenseOutcome.Miss ? MissFlashColor
+            : outcome == OffenseOutcome.Perfect ? PerfectFlashColor
+            : SuccessFlashColor;
     }
 
     /// <summary>
@@ -2230,6 +2303,211 @@ public class BattleHUDController : MonoBehaviour
         _actionAnnouncement.style.display = DisplayStyle.None;
         _timingRing.style.display = DisplayStyle.None;
         _timingRing.RemoveFromHierarchy();
+    }
+
+    /// <summary>One ring's resolution outcome, filled in by RunVolleyRingOffense/Defense as it runs (2026-08-14) — a plain mutable holder (not a return value) so BattleManager can read it after `yield return StartCoroutine(...)` completes, the same pattern CombatVfxController.HeldProjectile already uses.</summary>
+    public class VolleyRingOutcome
+    {
+        public bool WasClick;
+        public int ClickButton = -1;
+        public float FinalDeviation;
+
+        /// <summary>Miss/Good/Perfect classification — only meaningful for an offense-side outcome (RunVolleyRingOffense sets it); left at its default (Miss) for defense, where DefenseOutcome (Dodge/Parry/Miss) is the caller's own concern, not this class's.</summary>
+        public OffenseOutcome Quality;
+    }
+
+    /// <summary>One ring's entry in a Multi-Hit Volley's FIFO click queue (2026-08-14) — the shared _volleyPointerHandler only ever reads/writes the entry at index 0.</summary>
+    private class VolleySlot
+    {
+        public bool RequiresLeftClick;
+        public bool IsDefenseSlot;
+        public bool Clicked;
+        public int ClickButton = -1;
+    }
+
+    /// <summary>
+    /// Opens the shared click-routing session for a whole Multi-Hit Volley cast (2026-08-14,
+    /// Attack_Pattern_Directive Part 5 Group 2) — call once before the cast's per-hit loop, not
+    /// once per ring, since every click for the whole cast must always resolve against whichever
+    /// ring is currently oldest (_volleyQueue[0]), not whichever ring's own RunVolleyRingOffense/
+    /// Defense call happens to be running most recently. This is the one deliberate deviation from
+    /// RunTimedInput/RunDefenseTimedInput's own per-call local handler shape.
+    /// </summary>
+    public void BeginVolleyInputSession()
+    {
+        _volleyQueue.Clear();
+        _volleyPointerHandler = evt =>
+        {
+            if (evt.button != 0 && evt.button != 1) return;
+            if (_volleyQueue.Count == 0) return;
+
+            VolleySlot front = _volleyQueue[0];
+            if (front.Clicked) return; // already resolving this frame
+
+            if (!front.IsDefenseSlot)
+            {
+                // Offense only — a click must match the front ring's own required type (converging
+                // rings want left, expanding rings want right, user: "make the 1st 4 left click
+                // rings... last 4 click rings"). A wrong-type click is ignored outright, no effect,
+                // no consumption — it does NOT fall through to test against the next ring in queue.
+                bool wantsLeft = front.RequiresLeftClick;
+                if (wantsLeft && evt.button != 0) return;
+                if (!wantsLeft && evt.button != 1) return;
+            }
+
+            front.Clicked = true;
+            front.ClickButton = evt.button;
+        };
+        _root.RegisterCallback(_volleyPointerHandler);
+    }
+
+    /// <summary>Closes the click-routing session opened by BeginVolleyInputSession — call once after every hit in the cast has resolved.</summary>
+    public void EndVolleyInputSession()
+    {
+        if (_volleyPointerHandler != null) _root.UnregisterCallback(_volleyPointerHandler);
+        _volleyPointerHandler = null;
+        _volleyQueue.Clear(); // defensive — should already be empty if every ring resolved
+    }
+
+    /// <summary>
+    /// One ring in a Multi-Hit Volley's FIFO queue (offense side, 2026-08-14). Animates for its own
+    /// sweepDuration regardless of queue position (user: "multiple rings could be closing if
+    /// multiple projectiles are out") but only actually resolves — pops itself, computes an
+    /// outcome — once it is the front of the shared queue AND either clicked-correctly or its own
+    /// sweep has elapsed. isConverging picks the existing shrink-toward-target sweep (today's
+    /// RunTimedInput behavior, unchanged) vs. a new grow-toward-target sweep — the deviation-ratio
+    /// scoring math is already direction-agnostic (a plain |MarkerRadius/TargetRadius - 1| check),
+    /// so Good/Perfect/Miss tolerance checks need no changes for the expanding case.
+    /// Does NOT touch LastOffenseOutcome/LastTimedInputSuccess — those are single-slot properties
+    /// meant for one ring at a time; concurrently-open Volley rings write into their own
+    /// VolleyRingOutcome instead so they can never race each other.
+    /// </summary>
+    public IEnumerator RunVolleyRingOffense(VisualElement targetElement, CompassPoint point, bool isConverging,
+        float goodToleranceHalfWidth, float perfectToleranceHalfWidth, float sweepDuration, VolleyRingOutcome outcome)
+    {
+        RingVisual ring = _volleyRingPool.Get();
+        PositionVolleyRing(ring, point);
+        targetElement.Add(ring);
+        ring.TargetRadius = RingTargetRadius;
+        ring.MarkerColor = Color.white;
+        ring.MarkerRadius = isConverging ? RingMarkerStartRadius : RingMarkerMinRadius;
+        ring.Refresh();
+
+        var slot = new VolleySlot { RequiresLeftClick = isConverging };
+        _volleyQueue.Add(slot);
+
+        float elapsed = 0f;
+        while (true)
+        {
+            bool isFront = _volleyQueue.Count > 0 && _volleyQueue[0] == slot;
+
+            if (elapsed < sweepDuration)
+            {
+                elapsed += Time.deltaTime;
+                float progress = Mathf.Clamp01(elapsed / sweepDuration);
+                ring.MarkerRadius = isConverging
+                    ? Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress)
+                    : Mathf.Lerp(RingMarkerMinRadius, RingMarkerStartRadius, progress);
+                ring.Refresh();
+            }
+
+            if (isFront && (slot.Clicked || elapsed >= sweepDuration))
+            {
+                outcome.WasClick = slot.Clicked;
+                outcome.ClickButton = slot.ClickButton;
+                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / RingTargetRadius - 1f);
+                _volleyQueue.Remove(slot);
+                break;
+            }
+
+            yield return null;
+        }
+
+        outcome.Quality = ClassifyOffenseOutcome(outcome.WasClick, outcome.FinalDeviation, goodToleranceHalfWidth, perfectToleranceHalfWidth);
+        ring.MarkerColor = FlashColorForOffenseOutcome(outcome.Quality);
+        ring.Refresh();
+
+        // Shorter hold than RunTimedInput's 0.3s — Volley's own hits overlap, a full 0.3s hold per
+        // ring would visually clutter a fast sequence with several rings resolving close together.
+        yield return new WaitForSeconds(0.15f);
+        _volleyRingPool.Release(ring);
+    }
+
+    /// <summary>
+    /// Defense-side counterpart to RunVolleyRingOffense (2026-08-14) — scoped OUT of the
+    /// converging/expanding left/right-click split (that mechanic answers a question offense never
+    /// had an answer to before: "how good was this hit," since a miss there just deals less damage
+    /// rather than being fully avoided). Defense keeps today's existing Dodge(left)/Parry(right)
+    /// choice unchanged per ring — every ring in a defensive Volley accepts either button, exactly
+    /// like RunDefenseTimedInput already does, just gated to the FIFO queue's front like every
+    /// other Volley ring. NOT yet exercised live — see BattleManager.RunVolleyHit's own doc comment
+    /// for why the defense body is a documented stub this pass (CombatVfxController._held is a
+    /// single-slot field, blocking multiple concurrently-held defense projectiles).
+    /// </summary>
+    public IEnumerator RunVolleyRingDefense(VisualElement targetElement, CompassPoint point,
+        float dodgeToleranceHalfWidth, float parryToleranceHalfWidth, float sweepDuration, VolleyRingOutcome outcome)
+    {
+        RingVisual ring = _volleyRingPool.Get();
+        PositionVolleyRing(ring, point);
+        targetElement.Add(ring);
+        ring.TargetRadius = RingTargetRadius;
+        ring.MarkerColor = Color.white;
+        ring.MarkerRadius = RingMarkerStartRadius;
+        ring.Refresh();
+
+        var slot = new VolleySlot { IsDefenseSlot = true };
+        _volleyQueue.Add(slot);
+
+        float elapsed = 0f;
+        while (true)
+        {
+            bool isFront = _volleyQueue.Count > 0 && _volleyQueue[0] == slot;
+
+            if (elapsed < sweepDuration)
+            {
+                elapsed += Time.deltaTime;
+                float progress = Mathf.Clamp01(elapsed / sweepDuration);
+                ring.MarkerRadius = Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress);
+                ring.Refresh();
+            }
+
+            if (isFront && (slot.Clicked || elapsed >= sweepDuration))
+            {
+                outcome.WasClick = slot.Clicked;
+                outcome.ClickButton = slot.ClickButton;
+                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / RingTargetRadius - 1f);
+                _volleyQueue.Remove(slot);
+                break;
+            }
+
+            yield return null;
+        }
+
+        DefenseOutcome quality;
+        if (!outcome.WasClick) quality = DefenseOutcome.Miss;
+        else if (outcome.ClickButton == 0) quality = outcome.FinalDeviation <= dodgeToleranceHalfWidth ? DefenseOutcome.Dodge : DefenseOutcome.Miss;
+        else quality = outcome.FinalDeviation <= parryToleranceHalfWidth ? DefenseOutcome.Parry : DefenseOutcome.Miss;
+
+        ring.MarkerColor = quality == DefenseOutcome.Miss ? MissFlashColor : SuccessFlashColor;
+        ring.Refresh();
+
+        yield return new WaitForSeconds(0.15f);
+        _volleyRingPool.Release(ring);
+    }
+
+    /// <summary>
+    /// TEMPORARY debug hook (2026-08-14) — deterministically resolves whichever Volley ring is
+    /// currently at the front of the FIFO queue, without simulating a real PointerDownEvent.
+    /// Reflecting into a private List&lt;VolleySlot&gt; from execute_code test scripts is fragile;
+    /// this gives live-testing a stable, public entry point instead. button: 0 = left, 1 = right.
+    /// No-op if the queue is empty. DELETE once Multi-Hit Volley no longer needs manual playtesting.
+    /// </summary>
+    internal void DebugForceResolveVolleyFront(int button)
+    {
+        if (_volleyQueue.Count == 0) return;
+        VolleySlot front = _volleyQueue[0];
+        front.Clicked = true;
+        front.ClickButton = button;
     }
 
     /// <summary>

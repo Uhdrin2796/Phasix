@@ -661,6 +661,12 @@ public class BattleManager : MonoBehaviour
             yield return StartCoroutine(ResolveStackingRhythmAttack(attacker, attackerSlotIndex, true, target, stackingTargetSlotIndex, false, skill));
             timedInputHappened = true;
         }
+        else if (skill.VolleyRingSequence != null && skill.VolleyRingSequence.Count > 0)
+        {
+            int volleyTargetSlotIndex = _state.EnemySide.IndexOf(target);
+            yield return StartCoroutine(ResolveMultiHitVolleyAttack(attacker, attackerSlotIndex, true, target, volleyTargetSlotIndex, false, skill));
+            timedInputHappened = true;
+        }
         else if (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
         {
             int meleeTargetSlotIndex = _state.EnemySide.IndexOf(target);
@@ -1413,6 +1419,170 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Owns the ENTIRE resolution for a Multi-Hit Volley skill (SkillData.VolleyRingSequence
+    /// non-empty, Attack_Pattern_Directive Part 5 Group 2, 2026-08-14) — bypasses BeatSequence/
+    /// StackingRhythm entirely, same "own dedicated resolution path" shape as
+    /// ResolveStackingRhythmAttack, but structurally different in one key way: EVERY hit resolves
+    /// and deals damage independently (a miss on hit 3 doesn't cancel hits 4-8 — Part 5: "several
+    /// small hits in sequence, each its own small window. Tests rhythm/consistency"), unlike
+    /// Metronome/Jitter's all-or-nothing combo gate.
+    ///
+    /// Flow: (1) one warning hop, once, not per-hit (user: "its one warning for player"); (2) for
+    /// each hit in VolleyRingSequence, in order: a STRICTLY SEQUENTIAL small dash-forward (awaited,
+    /// same race-fixed VisualElementTweening.TweenTranslateX-backed dash Metronome/Jitter already
+    /// use), then that hit's own ring+projectile+damage resolution (RunVolleyHit) is started
+    /// FIRE-AND-FORGET — NOT awaited — before a strictly sequential dash-back plays and the loop
+    /// moves on to the next hit's dash-forward (user: "dash shoot, return to position, dash shoot,
+    /// return to position... this would happen fast bc the number of projectile should be coming
+    /// out in quick succession to feel like a volley"). Because the dash cadence
+    /// (BeatSequenceConfig.VolleyDashLegDurationSeconds x2 per hit) is faster than any one hit's own
+    /// ring sweep, several hits' rings end up open/animating around the target concurrently (user:
+    /// "the number of rings shown should match the number of projectiles airborne"); (3) once every
+    /// hit has fired its dash, wait for every hit's fire-and-forget resolution to actually finish
+    /// before returning; (4) flush every hit's battle-log line in one batch, in order (user: "let
+    /// the damage calculate on ring input, then for the battle log just add them all at the end" —
+    /// damage itself already applied per-hit, in real time, inside RunVolleyHit; only the LOG lines
+    /// are deferred to this final step).
+    /// </summary>
+    private IEnumerator ResolveMultiHitVolleyAttack(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, SkillData skill)
+    {
+        UnityEngine.UIElements.VisualElement attackerElement = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        UnityEngine.UIElements.VisualElement targetElement = BattleHUDController.Instance.GetStageCreatureElement(targetSlotIndex, targetIsPlayerSide);
+
+        yield return StartCoroutine(BeatSequenceRunner.RunWarningHop(attacker, attackerSlotIndex, attackerIsPlayerSide));
+
+        IReadOnlyList<CompassPoint> sequence = skill.VolleyRingSequence;
+        int hitCount = sequence.Count;
+        var hitLogLines = new string[hitCount];
+        var pendingHits = new List<Coroutine>(hitCount);
+
+        BattleHUDController.Instance.BeginVolleyInputSession();
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            CompassPoint point = sequence[i];
+            float ringDuration = i < skill.VolleyRingDurationsSeconds.Count
+                ? skill.VolleyRingDurationsSeconds[i]
+                : BeatSequenceConfig.VolleyDefaultRingDurationSeconds;
+            bool isConverging = i < hitCount / 2; // derived split — first half converging/left, second half expanding/right
+
+            yield return StartCoroutine(BeatSequenceRunner.RunRhythmDash(
+                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: true, BeatSequenceConfig.VolleyDashOffsetPx, BeatSequenceConfig.VolleyDashLegDurationSeconds));
+
+            int hitNumber = i + 1;
+            int hitIndex = i;
+            pendingHits.Add(StartCoroutine(RunVolleyHit(
+                attacker, attackerSlotIndex, attackerIsPlayerSide, target, targetSlotIndex, targetIsPlayerSide,
+                targetElement, point, isConverging, ringDuration, skill, hitNumber, hitCount, hitLogLines, hitIndex)));
+
+            yield return StartCoroutine(BeatSequenceRunner.RunRhythmDash(
+                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: false, BeatSequenceConfig.VolleyDashOffsetPx, BeatSequenceConfig.VolleyDashLegDurationSeconds));
+        }
+
+        foreach (Coroutine pending in pendingHits) yield return pending;
+
+        BattleHUDController.Instance.EndVolleyInputSession();
+
+        foreach (string line in hitLogLines)
+        {
+            if (!string.IsNullOrEmpty(line)) BattleHUDController.Instance.AppendBattleLog(line);
+        }
+
+        VisualElementTweening.TweenTranslateX(attackerElement, 0f, BeatSequenceConfig.AttackLungeDurationSeconds);
+        yield return new WaitForSeconds(BeatSequenceConfig.AttackLungeDurationSeconds);
+    }
+
+    /// <summary>
+    /// Resolves ONE hit of a Multi-Hit Volley — fired fire-and-forget by ResolveMultiHitVolleyAttack's
+    /// own loop, so several of these can be running concurrently. Writes its formatted battle-log
+    /// line into hitLogLines[hitIndex] instead of appending it directly (the caller flushes the
+    /// whole array once every hit has resolved — user: "battle log calculation can happen at the
+    /// final step") — damage itself still applies immediately, right here, the instant this hit's
+    /// own ring resolves, not deferred with the log.
+    ///
+    /// Offense: launches the projectile immediately (holdForOutcome:false — Volley hits always
+    /// connect, same as every other offense ranged path; Good/Perfect/Miss only scale damage, same
+    /// as RunTimedInput elsewhere), opens this hit's own ring at its compass position, and once the
+    /// ring resolves, applies damage via the same DamageCalculator/BattleEngine.QueueBasicAttack
+    /// path every other offense attack in this file uses — a Miss still applies
+    /// TimedInputConfig.MissDamageMultiplier, never zero, matching that same existing convention.
+    ///
+    /// Defense: dispatch wiring only — a documented TODO stub. CombatVfxController._held is an
+    /// explicit single-slot field ("only one projectile is ever held at once"), so several
+    /// concurrently-held Volley projectiles aren't supported yet; giving this skill to an enemy
+    /// today would silently clobber one hit's held projectile with the next's. Scoped out of this
+    /// pass deliberately (see the plan's Context section) rather than bundled in — a dedicated
+    /// follow-up, consistent with Group 2's own "one dedicated pass each" framing.
+    /// </summary>
+    private IEnumerator RunVolleyHit(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, UnityEngine.UIElements.VisualElement targetElement,
+        CompassPoint point, bool isConverging, float ringDuration, SkillData skill, int hitNumber, int hitCount,
+        string[] hitLogLines, int hitIndex)
+    {
+        if (attackerIsPlayerSide)
+        {
+            float goodToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.DodgeBaseWindowPercent,
+                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+            float perfectToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
+                TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
+                attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
+
+            BattleHUDController.Instance.LaunchRangedBeatSequenceProjectile(
+                attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), ringDuration, holdForOutcome: false);
+
+            var outcome = new BattleHUDController.VolleyRingOutcome();
+            yield return StartCoroutine(BattleHUDController.Instance.RunVolleyRingOffense(
+                targetElement, point, isConverging, goodToleranceHalfWidth, perfectToleranceHalfWidth, ringDuration, outcome));
+
+            BattleHUDController.OffenseOutcome quality = outcome.Quality;
+            float attackMultiplier = quality switch
+            {
+                BattleHUDController.OffenseOutcome.Perfect => TimedInputConfig.PerfectDamageMultiplier,
+                BattleHUDController.OffenseOutcome.Good => TimedInputConfig.GoodDamageMultiplier,
+                _ => TimedInputConfig.MissDamageMultiplier
+            };
+            // 2026-08-15 (user: "lower the damage for the volley") — a normal Miss/Good/Perfect
+            // multiplier alone would let a full 8-hit connect deal ~8x a single normal attack's
+            // damage, since nothing else accounts for 8 independent hits vs 1. See this constant's
+            // own doc comment for the target ratios.
+            attackMultiplier *= BeatSequenceConfig.VolleyPerHitDamageMultiplier;
+
+            int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+            int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(results);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+            foreach (BattleActionResult result in results)
+            {
+                hitLogLines[hitIndex] = BattleLogFormatter.FormatVolleyHit(result.Attacker, result.Target, skill.SkillName, hitNumber, hitCount, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier, quality);
+            }
+
+            if (quality != BattleHUDController.OffenseOutcome.Miss) EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
+
+            // ASSUMPTION (flagged, not confirmed) — full per-hit burst fill, same amount as any
+            // other single skill use, so an 8-hit Volley builds burst substantially faster than one
+            // normal cast. A real balance call for later, easy to scale down if it proves too fast.
+            float hitBurstFill = BattleConfig.BurstFillPerSkillUse + (quality != BattleHUDController.OffenseOutcome.Miss ? BattleConfig.BurstFillPerTimedInputSuccess : 0f);
+            AddBurstFill(attacker, attackerSlotIndex, hitBurstFill);
+        }
+        else
+        {
+            // TODO: blocked on CombatVfxController._held becoming a handle-keyed collection instead
+            // of a single slot (see this method's own doc comment) — not safe to hold multiple
+            // concurrent projectiles yet, so this branch intentionally does not launch one.
+            var outcome = new BattleHUDController.VolleyRingOutcome();
+            yield return StartCoroutine(BattleHUDController.Instance.RunVolleyRingDefense(
+                targetElement, point, TimedInputConfig.DodgeToleranceHalfWidth, TimedInputConfig.ParryToleranceHalfWidth, ringDuration, outcome));
+        }
+    }
+
+    /// <summary>
     /// Runs one of the 5 built-in moves' own dedicated mechanics (2026-08 follow-up — relocated
     /// verbatim from PlayerTurn's old chosenOptionIndex-keyed if/else chain, now triggered by
     /// skill identity via ResolveSkillAction's dispatch instead of a fixed wheel-position index —
@@ -1853,6 +2023,18 @@ public class BattleManager : MonoBehaviour
         {
             int meleeAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
             yield return StartCoroutine(ResolveMeleeBeatSequence(attacker, meleeAttackerSlotIndex, false, target, targetSlotIndex, true, skillOrNull));
+            yield break;
+        }
+
+        // 2026-08-14: dispatches correctly, but the defense-side body inside ResolveMultiHitVolleyAttack/
+        // RunVolleyHit is a documented stub — CombatVfxController._held is a single-slot field, so
+        // multiple concurrently-held Volley projectiles aren't actually supported yet. Don't equip
+        // this skill on any enemy loadout until that follow-up lands (see RunVolleyHit's own doc
+        // comment).
+        if (skillOrNull != null && skillOrNull.VolleyRingSequence != null && skillOrNull.VolleyRingSequence.Count > 0)
+        {
+            int volleyAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
+            yield return StartCoroutine(ResolveMultiHitVolleyAttack(attacker, volleyAttackerSlotIndex, false, target, targetSlotIndex, true, skillOrNull));
             yield break;
         }
 

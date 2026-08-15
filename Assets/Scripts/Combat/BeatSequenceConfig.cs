@@ -93,4 +93,31 @@ public static class BeatSequenceConfig
 
     /// <summary>Damage multiplier added per stack tier above the first (tier 1 = 1.0x, tier 2 = 1.5x, tier 3 = 2.0x, ...) — "start at low damage, then ramp."</summary>
     public const float StackingRhythmTierDamageStep = 0.5f;
+
+    // --- 2026-08-14: Multi-Hit Volley (Attack_Pattern_Directive Part 5 Group 2's first archetype)
+    // (user: "one warning for player, then dash shoot, return to position, dash shoot, return to
+    // position, dash shoot, etc. But this would happen fast bc the number of projectile should be
+    // coming out in quick succession to feel like a volley"). All placeholder values, same "pending
+    // NumericalCalibration.md" status as every other constant in this class.
+
+    /// <summary>Seconds for ONE leg (forward or back) of a Volley hit's dash — much smaller than Metronome/Jitter's dash beats since this is "a small forward dash," not a full rhythm beat. A full forward+back cycle is 2x this value.</summary>
+    public const float VolleyDashLegDurationSeconds = 0.10f;
+
+    /// <summary>Pixel offset of a Volley hit's forward dash — small, per user: "small forward dash."</summary>
+    public const float VolleyDashOffsetPx = 20f;
+
+    /// <summary>Fallback ring sweep duration for a Volley hit whose skill-authored SkillData.VolleyRingDurationsSeconds array is shorter than its VolleyRingSequence — defensive only, every real asset should author a full-length array.</summary>
+    public const float VolleyDefaultRingDurationSeconds = 0.45f;
+
+    /// <summary>
+    /// Extra per-hit damage multiplier applied on top of the normal Miss/Good/Perfect multiplier
+    /// (2026-08-15, user: "lower the damage for the volley") — each Volley hit computes full damage
+    /// from BattleConfig.PlaceholderSkillPower same as any other skill, but a full 8-hit cast landing
+    /// every ring would otherwise deal roughly 8x a single normal attack's damage, since nothing
+    /// scaled per-hit output down to account for there being 8 independent hits instead of 1. At
+    /// 0.3, an all-Good 8-hit connect totals ~2.4x a normal single hit (a strong payoff for landing
+    /// the whole sequence) rather than 8x; an all-Miss cast totals ~1.2x rather than ~4x. Placeholder,
+    /// pending NumericalCalibration.md like every other value in this class.
+    /// </summary>
+    public const float VolleyPerHitDamageMultiplier = 0.3f;
 }
