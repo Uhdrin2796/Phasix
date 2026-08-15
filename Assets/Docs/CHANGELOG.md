@@ -16,6 +16,549 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-14] Phase 3 follow-up #11 — Metronome/Jitter battle log now breaks out the stack-tier damage bonus
+- **Context:** User: "make sure that the battlelog updates the damage log on metronome and jitter. It
+  shows the correct total value but i need to see the broken out values more clearly."
+- **Fixed:** `BattleLogFormatter.FormatStackingRhythmAttack` passed `null` for the shared damage-
+  breakdown helper's third term, so the log only ever showed `(X base + Y type) = Z total damage` —
+  once a stack tier above 1 applied its multiplier, `Z` (the real final damage) stopped equaling
+  `X + Y`, with nothing in the line accounting for the gap. Generalized
+  `BattleLogFormatter.FormatDamageBreakdown`'s third term from a hardcoded "timing" label to any
+  caller-supplied `(delta, label)` pair (updated all 4 call sites — `FormatAttack`, `FormatSkillAttack`,
+  `FormatDefenseOutcome`, `FormatStackingRhythmAttack` — to match), then had
+  `FormatStackingRhythmAttack` compute the tier's own contribution (`finalDamage - damageAfterType`,
+  the same delta-of-two-already-resolved-numbers pattern the "timing" term already used) and pass it
+  through labeled "stack". A Tier-3 Metronome hit now reads e.g. `(12 base + 6 type + 18 stack) = 36
+  total damage` instead of silently dropping the 18.
+- **Verified:** Live via `execute_code` — called `FormatStackingRhythmAttack` directly (a pure static
+  formatter, no coroutine/timing simulation needed) with realistic numbers matching
+  `ResolveStackingRhythmAttack`'s actual computation shape. Tier-3/2.0x case (12 base, 18 after type,
+  36 final) produced `(12 base + 6 type + 18 stack) = 36 total damage` — all three terms correctly
+  sum to the shown total. Tier-1/1.0x case (no bonus) correctly showed `+ 0 stack` in the neutral
+  white rather than a colored delta. Also confirmed via grep that `result.DamageApplied` (the
+  `finalDamage` argument) really does reflect the tier multiplier — `BattleManager` queues it via
+  `BattleEngine.QueueBasicAttack(_state, attacker, target, tierMultiplier, baseDamage)`, same pattern
+  every other damage-multiplier path in the file already uses. `read_console` clean, no compile
+  errors.
+
+---
+
+[2026-08-14] Phase 3 follow-up #10 — Metronome/Jitter beat-stack badge now persists across other skill uses
+- **Context:** User, after confirming follow-up #9's parry-visual and badge fixes: "okay overall looks
+  good. I notice that the counter for each jitter and metronome seems to disappear when using antoehr
+  skill. foruntately the skill counter remains for each skill but the counter on the skill itself
+  seems to disappear. i want that to be persistent even when switching skills between turns."
+- **Fixed:** `RefreshComboCounterBadges` badged only `justUsedSkill` for the stacking-rhythm case, but
+  `ClearAllSkillComboCounters` at the top of the method wipes every badge on every call (it's called
+  after EVERY player skill use, not just stacking-rhythm ones) — so the moment the player used any
+  OTHER skill, Metronome/Jitter's badge got cleared with nothing to re-set it, since neither was
+  `justUsedSkill` that turn. Each skill's own tier is already persisted per-battle
+  (`BattleParticipant._stackingRhythmTiers`), so the fix stops keying off `justUsedSkill` entirely for
+  this case: now loops every skill in `attacker.RuntimeData.equippedSkillGuids`, and any with
+  `StackingRhythm != None` gets re-badged with its own current tier — regardless of which skill was
+  actually used that turn. Every refresh now reconstructs every stacking-rhythm badge from persisted
+  state, so a skill's badge survives switching to and using others.
+- **Verified:** Live via `execute_code` — advanced a player's Metronome tier to 2 and refreshed
+  (badge showed "3"), then simulated refreshing again as if `Standard_Attack` (a completely different,
+  non-stacking skill) had been used instead — Metronome's badge still read "3" and stayed visible.
+  Confirmed Jitter's own badge (never used, tier 0) independently showed "1" the whole time,
+  unaffected by Metronome's refresh — both skills' badges coexist and persist independently.
+  `read_console` clean.
+
+---
+
+[2026-08-14] Phase 3 follow-up #9 — Melee Parry counter got its missing visual; Metronome/Jitter beat-stack badge added to the skill wheel
+- **Context:** User, after confirming follow-up #8's ordering fix: "okay so the parry works now and
+  the battle log says it, but i didnt see a projectile go out." Then: "for metronome and jitter
+  please add a counter for that skill similar to like the skills that get better with using over and
+  over again. so that the player knows what beat counter they are on."
+- **Fixed — melee Parry counter had no visual at all:** `ResolveMeleeAttackBeatDefense`'s `isParry`
+  counter-attack block computed and applied counter damage directly with zero visual — the doc
+  comment above it used to justify this as "nothing to bounce back when attacker and defender are
+  already adjacent (melee)," which is true for a deflect-style projectile but left the counter itself
+  invisible. Added an `else` branch alongside the existing ranged deflect case: for melee, the
+  DEFENDER (the player, who just parried) now plays the same `RunMeleeLungeAndFlash` every other
+  melee hit uses, roles reversed — target lunges into the now-vulnerable attacker — before the
+  counter damage applies. Ranged is untouched (still bounces the held projectile via
+  `ResolveParryDeflect`, unchanged).
+- **Built — Metronome/Jitter beat-stack badge:** Reused the existing skill-wheel combo-streak badge
+  system (`BattleHUDController.SetSkillComboCounter`/`ClearAllSkillComboCounters`, the same "counter
+  next to the skill on the skill wheel" mechanism built earlier for `RepeatSameSkill`/
+  `TimedInputStreak` combos — see DECISIONS.md -> [Combat]) rather than a new UI element.
+  `BattleManager.RefreshComboCounterBadges` (already called after every player skill use) now also
+  checks `justUsedSkill.StackingRhythm != StackingRhythmType.None` and badges it with
+  `GetStackingRhythmTier() + 1` — one number that answers both "how many casts have you stacked" and
+  "how many ring beats will the next cast require" (`ResolveStackingRhythmAttack`'s own
+  `beatsRequired = tier + 1`). Unlike the other combo badges (which only show once streak length >=
+  2), this one shows from the very first use (badge "1") since the beat count is core timing
+  information, not a bonus streak indicator. A miss leaves the tier (and therefore the badge)
+  unchanged, matching the "stay at the existing counter" spec from follow-up #7's clarifying answers.
+- **Verified — Parry counter visual:** Live via `execute_code`, forced Parry against `Melee_Slash`
+  and sampled the player's own stage element position: `left` held flat at 488 through t=450ms, then
+  at t=600ms read 512 (488 + the standard 24px `AttackLungeOffsetPx`, confirming the lunge fired) and
+  was back to 488 by t=800ms with enemy HP dropped 120 -> 102 in the same window — the counter now
+  visibly lunges before its damage lands. `read_console` clean.
+- **Verified — beat-stack badge:** Live via `execute_code`. Direct `SetSkillComboCounter` call
+  confirmed the badge widget itself renders correctly. Then exercised the real integration: advanced
+  a player's Metronome tier to 2 (simulating 2 successful casts) and called
+  `RefreshComboCounterBadges` — badge showed "3". Separately, on a never-used Jitter skill (tier 0),
+  the same call showed badge "1", and confirmed the stale Metronome badge from the prior slot
+  correctly disappeared (the method's existing clear-all-then-set-active pattern). Both skills
+  confirmed equipped on the debug loadout's slot 0, rings 4/5. `read_console` clean throughout.
+
+---
+
+[2026-08-14] Phase 3 follow-up #8 — Metronome dash race condition (odd beat counts) fixed; Parry counter now waits for the enemy's return-hop
+- **Context:** User playtesting follow-up #7's translateX rewrite: "okay for the metronome one turn 1
+  and 3 its not returning back to its original position. its shifting to the next slot over. Also i
+  noticed when parrying the slash attack from the enemy the parry animation comes out first before the
+  enemy jumps back to its original position. Have it bounce back after attack then shoot the parry
+  animation."
+- **Fixed — Metronome/Jitter still drifting on odd beat counts:** Follow-up #7's `TweenTranslateX`
+  rewrite made every beat target an absolute value (0 or ±offsetPx), which should have made drift
+  impossible — but none of `VisualElementTweening`'s wrapper methods ever call DOTween's `SetTarget`,
+  so DOTween has no way to recognize two `TweenTranslateX` calls on the same element as "the same
+  logical animation" and won't auto-kill the older one. On an odd beat count, a beat's own
+  fire-and-forget dash tween and `ResolveStackingRhythmAttack`'s final reset-to-0 tween could both end
+  up actively driving `translateX` at once for a frame, each write racing the other's — landing
+  wherever they happened to disagree last, not exactly 0. Fixed in `VisualElementTweening
+  .TweenTranslateX` by tracking the last active tween per-element (`Dictionary<VisualElement, Tween>`)
+  and force-completing (`.Complete(true)`) it before starting a new one, so every call now starts from
+  a known, settled value — no race possible regardless of beat parity. Scoped to its own dictionary
+  (not shared with `TweenTranslateY`/`TweenLeft`/etc.) so killing a stale translateX tween can never
+  disturb an unrelated concurrent tween on the same element.
+- **Fixed — Parry counter firing before the enemy's return-hop:** `ResolveMeleeBeatSequence` called
+  `BeatSequenceRunner.RunReturn` unconditionally in its own tail, AFTER the entire Attack beat —
+  including `ResolveMeleeAttackBeatDefense`'s `isParry` counter-attack block — had already fully
+  resolved (damage applied, battle log written). So a parried enemy's counter-attack visually and
+  mechanically landed before the enemy had hopped back to its resting lane position. Moved
+  return-to-origin responsibility into `ResolveMeleeAttackBeatOffense`/`ResolveMeleeAttackBeatDefense`
+  themselves (each now takes `restingLeft`/`restingTop` params from the caller instead of relying on
+  the outer method's tail); Defense specifically now calls `RunReturn` right after its own attack
+  visual/damage/log resolves and BEFORE the `isParry` block, so the enemy is back at rest before the
+  counter fires. Offense's `RunReturn` call moved the same way for symmetry, same net timing as
+  before. Ranged skills still skip it entirely (unchanged from follow-up #6's fix), and
+  `ResolveMeleeBeatSequence`'s own tail no longer calls `RunReturn` at all.
+- **Verified — Metronome fix:** Live via `execute_code`, both a 1-beat ("turn 1") and 3-beat ("turn 3")
+  stacking-rhythm attack, sampling `resolvedStyle.left`/`resolvedStyle.translate.x` throughout each:
+  `left` stayed constant the entire time in both cases, and `translateX` settled to exactly 0 at the
+  end of both. `read_console` clean.
+- **Verified — Parry-reorder fix:** Live via `execute_code`, forced a Parry directly against
+  `Melee_Slash` from an artificially displaced starting `left` (simulating what an Approach beat
+  would have left behind), sampling the enemy stage element every 40-460ms. `left` climbed smoothly
+  and monotonically back to the true resting value (70 -> 87 -> 102 -> 120 -> 135 -> 147 -> 150) while
+  HP stayed flat; only after `left` had fully settled at 150 did HP drop (84 -> 66) and the "parries...
+  opening for a counter!" / "attacks... for 18 total damage" log lines appear — confirming the return
+  hop now completes before the counter fires. `read_console` clean throughout.
+
+---
+
+[2026-08-13] Phase 3 follow-up #7 — Metronome/Jitter dash redesigned as a pure visual (no more real position drift); duration shortened
+- **Context:** User: "for the metronome move it looks correct but its actually shifting the player
+  over 1 full spot and not returning back to the original locaiton. the dash should just be a visual
+  thing and timing for the ring but should not actually change the players position. Also the speed
+  is a little slow, distance is good but make it a bit faster."
+- **Fixed — dash no longer touches real position:** `BeatSequenceRunner.RunRhythmDash` previously
+  tweened `style.left` (the real, authoritative lane position, the same property `RunApproach`/
+  `RunMeleeLungeAndFlash` use) — a multi-beat combo's net displacement only fully cancelled on an
+  EVEN beat count, and `ResolveStackingRhythmAttack`'s own `RunReturn` tail was supposed to fix the
+  rest but evidently wasn't landing correctly at the tripled 150px distance. Rebuilt on
+  `VisualElementTweening.TweenTranslateX` (new — mirrors the existing `TweenTranslateY` used for the
+  warning hop/Return arc), a purely cosmetic `transform`-level offset layered ON TOP of `style.left`
+  without ever touching it. Each beat now dashes independently between translateX 0 (rest) and
+  ±offsetPx (forward toward the opponent) rather than accumulating relative deltas — "forward" always
+  targets the same absolute offset, "back" always returns to exactly 0, so there is no drift to
+  correct regardless of beat count or parity. `ResolveStackingRhythmAttack`'s tail no longer calls
+  `RunReturn` at all (nothing left to restore) — replaced with a quick unconditional
+  `TweenTranslateX(0)` safety reset, for the case where a combo breaks mid-sequence on a "forward"
+  beat. Also sidesteps reintroducing the "extra hop" bug just fixed for Instant Strike, since
+  `RunReturn`'s vertical arc-hop flourish is no longer invoked here either.
+- **Tuned — faster, same distance:** Third round of tuning (distance was correct, only duration
+  needed to drop): `MetronomeBeatDurationSeconds` 2.7s -> 1.8s, `JitterBeatDurationsSeconds`
+  {3.3,1.5,1.5}s -> {2.2,1.0,1.0}s. `MetronomeDashOffsetPx`/`JitterBeatDashOffsetsPx` unchanged
+  (150px / {210,96,96}px).
+- **Verified:** Clean compile. Live via `execute_code`: forced a player to stack-tier 2 (a 3-beat
+  combo, exercising forward/back/forward) and sampled the stage element's `resolvedStyle.left` and
+  `resolvedStyle.translate.x` throughout — `left` stayed at exactly 488 for the ENTIRE sequence (zero
+  samples showed any drift), while `translateX` correctly animated 0 -> ~150 (beat 1, forward) -> 0
+  (beat 2, back) and finished the whole sequence back at exactly 0. `read_console` clean throughout.
+
+---
+
+[2026-08-13] Phase 3 follow-up #6 — Fixed extra post-attack hop on ranged skills; Metronome/Jitter tuned slower (2 rounds); investigated an aura report (not reproduced)
+- **Context:** User playtesting the previous session's resequencing: "instant strike- the attack
+  sequening looks good, but theres an additional hop that occurs after the attack. We dont need that.
+  instant strike the warning on both strikes happen after the projectile lands, instead of before.
+  for metronome, make the dash a bigger size which should also result in a slower ring. its currently
+  too fast. Same thing for the jitter mechanic. also when the enemy does a slash attack and i block it
+  on good timing, it consumes the players aura instead of regenerating it." Followed shortly by "for
+  the metronome and jitter triple the distance which means 1/3 the ring rate so that its easier to
+  time" (a second tuning pass on top of the first).
+- **Fixed — extra hop / "warning after the shot":** Root cause of both reports at once:
+  `ResolveMeleeBeatSequence` unconditionally called `BeatSequenceRunner.RunReturn` at the very end —
+  RunReturn's own arc-hop (`TweenTranslateY`) uses the SAME vertical-bounce visual language as the new
+  `RunWarningHop`, and for a ranged skill (no Approach, and the Attack beat's projectile never touches
+  the attacker's own element) there's nothing to actually "return" from, so it was playing a pointless
+  bounce-in-place AFTER the shot that read as a second, misplaced warning. `RunReturn` is now skipped
+  entirely for ranged skills; melee (Slash) and Metronome/Jitter's own dash sequence (which DOES move
+  the attacker) still call it as before.
+- **Tuned — Metronome/Jitter slower, two rounds:** `BeatSequenceConfig.MetronomeBeatDurationSeconds`/
+  `MetronomeDashOffsetPx`: 0.5s/28px -> 0.9s/50px (round 1) -> 2.7s/150px (round 2, "triple the
+  distance... 1/3 the ring rate"). `JitterBeatDurationsSeconds`/`JitterBeatDashOffsetsPx`: {0.75,0.3,
+  0.3}s/{44,20,20}px -> {1.1,0.5,0.5}s/{70,32,32}px -> {3.3,1.5,1.5}s/{210,96,96}px, ratio preserved
+  across both rounds.
+- **Investigated — "blocking a Slash on good timing consumes the player's aura":** Could not reproduce.
+  Read every Aura-touching call site in `BattleManager.cs` — the only Aura effect on a successful
+  defense anywhere in the file is `if (defended && wasPerfect) target.RestoreAura(...)`, present
+  identically in both the Beat Sequence melee path (`ResolveMeleeAttackBeatDefense`) and the classic
+  ranged path (`ResolveEnemyDamageAction`'s own defense block) — no code path spends the DEFENDER's
+  Aura anywhere; every `SpendAura` call in the file targets the ATTACKER (the one using a skill), never
+  the target of a defense. Live-verified directly via `execute_code` against `Melee_Slash`, bypassing
+  the ring/click-timing entirely via the `preEmptive`/`preEmptiveOutcome` parameter path (forcing a
+  Good, i.e. non-Perfect, outcome): both a forced Dodge and a forced Parry left the player's Aura
+  exactly unchanged (20 -> 20 both times), matching the by-design "only Perfect restores, Good is
+  neutral" rule — no consumption observed. Real click-timing simulation was attempted first (multiple
+  rounds, including polling the ring's live `MarkerRadius`/`TargetRadius` fields to time a synthetic
+  `PointerDownEvent`) but never reliably landed a non-Miss outcome — consistent with this project's
+  established "coroutine-timing races aren't reliably scriptable" limitation, not evidence either way.
+  Not marked fixed — flagged in `KNOWN_ISSUES.md` for the user to reproduce with more detail (Dodge vs
+  Parry, whether it's the literal "Good" tier, and whether the drop is immediate or shows up on a
+  later turn).
+- **Verified:** Clean compile after each change. Live via `execute_code`: sampled the player stage
+  element's `translateY`/`left` through a full offense Instant Strike sequence — hop fires once near
+  the start (brief non-zero `translateY` at t=100ms), stays flat at 0 for the entire rest of the
+  sequence through t=1300ms, `left` never changes — confirms the extra post-attack hop is gone and
+  nothing else regressed. `read_console` clean throughout (only pre-existing unrelated warnings).
+
+---
+
+[2026-08-13] Phase 3 follow-up #5 — Instant Strike/Feint resequenced (hop -> tell -> shot); Metronome/Jitter rebuilt as a per-battle stacking rhythm combo
+- **Context:** User, after seeing the projectile in action: "the little hop for the warning that the
+  strike is coming happens when the projectile hits the phasix, i need when the skill is selected for
+  the hop to occur then after a brief delay then the projectile shoots. for the feint, do the fake
+  shoot, then do the hop for the warning, then do the actual strike. for metronome everytime you use
+  the skill in one fight i need a stack counter on it... shoot the warning, then show the timing on
+  the player, only after a success then shoot the projectile... on next cast have it do 2 ring inputs
+  back to back... jitter will follow a similar pattern... but instead has a different beat... update
+  battle log to include new scaling number... sync it with a indicator movement on the player." Asked
+  3 clarifying questions first (ring-timing placement, combo-miss handling, stack-on-miss behavior);
+  user answered all three plus specified the alternating dash pattern and worked Metronome/Jitter
+  examples in detail.
+- **Built — Instant Strike/Feint resequenced:**
+  - `BeatSequenceRunner.RunWarningHop` (new) — an in-place vertical bounce, no position change,
+    distinct from the existing squash-based Windup tell and from `RunReturn`'s own arc-hop.
+  - `ResolveMeleeBeatSequence`'s PreEmptive Windup case: the hop now plays FIRST and is awaited, then
+    the squash tween + ring open together exactly as before (their shared duration is the "brief
+    delay") — the projectile no longer launches here at all. Feint's `WindupFake` beat is now a
+    standalone quick fake-shoot with NO hop and NO ring (nothing to react to, since no tell precedes
+    it) — real strike still gets the full hop -> tell -> ring treatment as its own beat right after.
+  - `RunResolvedRangedProjectileOffense`/`Defense` (new) — the real strike's projectile now fires at
+    the Attack beat, decoupled from the (already-resolved) ring. Offense auto-hits on arrival, same
+    as the classic ranged pattern. Defense explicitly dispatches against the already-known outcome
+    (Hit/Dodge/Parry) since `RunDefenseTimedInput`'s own auto-dispatch already fired earlier during
+    Windup with nothing held — a Parry's deflect-counter now also gets a real bounce-back wait for
+    ranged skills (previously only melee's immediate-counter path existed).
+- **Built — Metronome/Jitter rebuilt as a stacking rhythm combo, bypassing the generic Beat Sequence
+  engine entirely (new `StackingRhythmType` field, `BattleManager.ResolveStackingRhythmAttack`):**
+  - `BattleParticipant.GetStackingRhythmTier`/`AdvanceStackingRhythmTier` — per-skill, per-battle use
+    counter (`Dictionary<SkillData,int>`, keyed by reference). Advances by one ONLY on a fully
+    successful cast; stays exactly where it was on a miss (user: "on miss you should stay at the
+    existing counter that you're at").
+  - `ResolveStackingRhythmAttack`: warning hop, then N = tier+1 alternating dash-forward/dash-back
+    beats (`BeatSequenceRunner.RunRhythmDash`, each dash timed to arrive exactly when its own ring
+    closes). Metronome uses one fixed duration/dash-distance for every beat (`MetronomeBeatDurationSeconds`
+    /`MetronomeDashOffsetPx` — the "1..2..3..4" feel); Jitter cycles a repeating [long, short, short]
+    duration/dash pattern (`JitterBeatDurationsSeconds`/`JitterBeatDashOffsetsPx` — "1...2.3.4," user:
+    "not after turn 5 it just repeats"). The first failed beat stops the sequence immediately — whole
+    attack whiffs, no damage, stack unchanged. Every beat succeeding fires the scaled payoff
+    projectile (`StackingRhythmTierDamageStep` per tier above the first — "start at low damage, then
+    ramp") and advances the stack. "Beat succeeds" is inverted between offense/defense (both matching
+    this file's existing "the responding side doing well continues the encounter" shape): offense =
+    attacker's own good timing; defense = the enemy's rhythm only continues if the PLAYER FAILS to
+    Dodge/Parry that beat — a successful player defense on any beat breaks the enemy's combo
+    immediately. Unconditional return-to-origin at the end regardless of outcome.
+  - `BattleLogFormatter.FormatStackingRhythmAttack`/`FormatStackingRhythmWhiff` (new) — the requested
+    "scaling number" in the log: `(Tier N — N beats cleared, Xx)` alongside the normal damage
+    breakdown, or a distinct whiff line naming which beat broke the combo.
+  - `ResolveSkillAction`/`ResolveEnemyDamageAction` both check `skill.StackingRhythm != None` first,
+    routing to the new method before the generic BeatSequence check. `EnemyAI.ChooseSkill`'s existing
+    BeatSequence damage-classification bypass (see the prior EnemyAI-misclassification fix) extended
+    to also cover `StackingRhythm != None`.
+  - `Ranged_Metronome.asset`/`Ranged_Jitter.asset` — `_stackingRhythm` set to Metronome/Jitter;
+    descriptions rewritten (Metronome's old "mechanically identical to Instant Strike" description is
+    no longer true at all). `BeatSequence`/`ResponseTiming` left populated but vestigial — the new
+    dispatch bypasses them entirely; kept only so `HasApproachBeat` still reads these as ranged.
+- **Verified:** Clean compile throughout (checked after each of the ~7 incremental edits, not just at
+  the end). Live via `execute_code` against a clean single-battle instance (destroyed stray
+  `WildEncounterCreature`s first — the now-familiar self-inflicted duplicate-scene artifact from
+  manually calling `StartWildBattle`, not a real bug): pure-logic check confirmed independent per-
+  skill tiers (Metronome and Jitter track separately) and correct advance-on-success behavior. Full
+  live runs, no exceptions, `read_console` clean throughout: (1) offense Metronome, 1 beat, no click
+  simulated — whiffed correctly, tier stayed 0, correct log line. (2) defense Metronome, 1 beat, no
+  click (player fails to defend) — enemy's beat succeeded as designed, tier 0->1, real damage applied
+  (110 HP -> 100 HP) matching the logged "10 total damage," log showed "Tier 1 — 1 beat cleared,
+  1.0x." (3) defense Metronome, tier 1->2 (now 2 beats) — both beats resolved, no exceptions, damage
+  scaled to 15 (1.5x, matching the ramp), log showed "Tier 2 — 2 beats cleared, 1.5x," attacker's
+  stage position correctly returned to its pre-sequence resting `left` after the 2-beat dash sequence.
+  (4) defense Jitter, 1 beat — same shape, confirmed the cycling-pattern code path also runs clean,
+  correct log line. (5) offense Feint — fake-shoot -> hop -> ring -> real shoot ran end-to-end with a
+  correctly-formatted damage line and "timing was off" flavor text (no click simulated, as expected).
+  Did NOT force a real ring success (Good/Perfect) via simulated clicks — same established limitation
+  as prior sessions ("coroutine-timing races/precise click timing aren't reliably scriptable"); the
+  success path was validated by direct code review plus the pure-logic tier-advance check above,
+  not a live successful click. Also did not live-test the visual "dash timed to end exactly with the
+  ring" claim frame-by-frame — trusted by construction (both use the exact same `duration`/StartCoroutine-
+  then-await pattern already proven correct for the Windup tween + ring sync earlier this session).
+- **Next:** User should confirm live (with real clicks) that a successful Metronome/Jitter beat
+  actually continues the combo, and that the dash distance/timing "feel" matches intent — all
+  numeric values (hop/beat durations, dash distances, tier damage step) are explicitly placeholder,
+  pending `NumericalCalibration.md` like everything else in `BeatSequenceConfig`.
+
+---
+
+[2026-08-12] Phase 3 follow-up #4 — Ranged Group 1 skills now show a real projectile instead of a melee lunge
+- **Context:** User, after confirming Instant Strike/Feint/Metronome/Jitter are ranged by design: "if
+  they're ranged how come i dont see a projectile? I think i would like to see some projectile or
+  animation that would be a better indicator or representation of what the action does." Correct
+  observation — these skills still reused `RunMeleeLungeAndFlash` (a small 24px lunge) at the Attack
+  beat, a melee-flavored visual that made no sense for an attacker that's never adjacent.
+- **Built:**
+  - `BattleHUDController.LaunchRangedBeatSequenceProjectile(...)` — a thin wrapper around
+    `CombatVfxController.LaunchProjectile` that takes an EXPLICIT travel duration instead of deriving
+    one from real screen distance (`LaunchSyncedProjectile`'s own `ComputeTravelDuration`). Inverted
+    from the classic ranged pattern on purpose: there, projectile travel time drives the ring's
+    duration; here, the Windup beat's own authored duration (`BeatSequenceRunner.
+    ComputeWindupDuration`, jitter included) IS the design-authored value, so the projectile is sized
+    to match it instead.
+  - `BattleManager.HasApproachBeat(skill)` — true for melee (Slash), false for the four ranged Group 1
+    skills. Drives two branches: (1) `ResolveMeleeBeatSequence`'s PreEmptive Windup beat now ALSO
+    launches a real projectile (concurrently with the tween and the ring, all three sized to the same
+    `duration`) when `ranged` — offense (`holdForOutcome:false`) auto-resolves its own hit-flash on
+    arrival; defense (`holdForOutcome:true`) holds, and needs NO new resolution code at all —
+    `RunDefenseTimedInput`'s own existing Miss/Dodge/Parry switch (unchanged) already resolves
+    whatever projectile is currently held the instant the ring itself closes. Fires for `WindupFake`
+    too, identically to `WindupReal` (Part 7: "same shape, only duration differs" applies to this
+    visual as much as the squash tween). (2) `ResolveMeleeAttackBeatOffense`/`Defense` now skip
+    `RunMeleeLungeAndFlash` entirely when `ranged && preEmptive` — the projectile already showed
+    (and, for defense, already resolved) during Windup, so there's nothing left to visualize at the
+    Attack beat. Melee, and any hypothetical future Reactive+ranged skill (none exist yet), are
+    unaffected — same lunge+flash as before.
+- **Verified:** Clean compile. Live via `execute_code`: confirmed a real `CombatProjectileVisual`
+  appears, its `_progress` field advances monotonically (0.44 -> 0.64 -> 0.84 sampled over time, not a
+  binary flicker), and it disappears once travel completes — for both the isolated
+  `LaunchRangedBeatSequenceProjectile` call and the full offense `ResolveMeleeBeatSequence(Instant
+  Strike)` path. Defense path: confirmed `RunDefenseTimedInput`'s existing outcome dispatch correctly
+  resolved the newly-held projectile with no new code needed (`LastDefenseOutcome` came back valid,
+  projectile released) — matches the documented early-exit-once-tolerance-is-unreachable behavior
+  already built into that method, so a fast automated resolve (no click simulated) is expected, not a
+  bug. `read_console` clean throughout (only pre-existing unrelated A* Pathfinding network warnings).
+  Did not chase down an apparent ~25-30% early-completion discrepancy between UI Toolkit's
+  `IVisualElementScheduledItem` scheduler (used for my own test sampling) and the projectile's
+  `Time.deltaTime`-driven travel coroutine — both the Windup tween, the ring, and the projectile all
+  derive their timing from the SAME `duration` value via the SAME coroutine clock, so they stay
+  internally synced with each other regardless of any mismatch against my own differently-clocked
+  test observation; not treated as a gameplay bug.
+
+---
+
+[2026-08-12] Phase 3 follow-up #3 — Fixed Dodge dissolving the defender's color permanently; enemy debug loadout now Attack+Slash
+- **Context:** User, playtesting the just-fixed enemy Slash: "when the enemy attacks it looks like
+  the color on the phasix disappears. It happens when i use the dodge mechanic. also the 4 new
+  attacks look like the same thing. Just at different speeds... They all look like they're following
+  the slash mechanic but without moving to the target. Are these all ranged attacks?" Also asked to
+  add the built-in Attack move alongside Slash on the debug-forced enemy loadout so both could be
+  compared side by side.
+- **Fixed — color-loss-on-Dodge bug:** Root cause: `BattleManager.RunMeleeLungeAndFlash` (the Attack
+  beat's shared lunge+hit-flash) called `FlashStageCreatureHit` **unconditionally**, even when the
+  defender successfully Dodged. On Dodge, `RunDefenseTimedInput` already fires
+  `DissolveVfxBridge.PlayDefenderDissolve` on the defender — a ~0.5s background-image swap + revert,
+  started via its own un-awaited `StartCoroutine`. `CombatVfxController.HitFlashRoutine` captures
+  `resolvedStyle.backgroundColor` as its own "resting color" to revert to when it's done — if that
+  capture happens to land while the dissolve is still mid-flight (background temporarily `Color.clear`
+  while it shows a RenderTexture instead), the hit-flash's own revert stomps the dissolve's correct
+  one, leaving the defender permanently colorless. Fixed by giving `RunMeleeLungeAndFlash` a
+  `showHitFlash` parameter and passing `!defended` from `ResolveMeleeAttackBeatDefense` — a Dodged or
+  Parried hit never lands, so it shouldn't show a hit-flash at all, which removes the conflicting
+  write rather than trying to time around it.
+- **Verified:** Clean compile. Live via `execute_code`: confirmed the dissolve genuinely does clear
+  `backgroundColor` mid-effect and that `HitFlashRoutine`'s capture timing in the real flow (~0.42s
+  after Dodge resolves) falls inside the dissolve's ~0.5s active window on paper. Could not force a
+  clean automated repro of the exact race window itself — sub-frame timing between two independently-
+  scheduled coroutines isn't reliably reproducible via scripted round-trips (same honest caveat this
+  project's `LESSONS_LEARNED.md`/prior CHANGELOG entries have hit before with coroutine timing). The
+  fix removes the conflicting write structurally rather than depending on timing, so it holds
+  regardless — flagged for the user to confirm resolved in their own live play.
+- **Answered — "are these all ranged?" and "they all look the same":** Confirmed both are expected,
+  not bugs. Yes, Instant Strike/Feint/Metronome/Jitter are all Part 5 "Reflex-based" **ranged**
+  archetypes (`BeatSequence` has no `Approach` beat) — that's exactly why they don't move to the
+  target, unlike melee Slash. And yes, they currently share the identical placeholder Windup-squash/
+  Attack-lunge tween shapes, differentiated only by timing (duration) — no distinct art yet, per
+  `Attack_Pattern_Directive_v0_1_0.md` Part 1's "Transform-tweening now, real animation later" design.
+- **Built — enemy debug loadout now Attack+Slash:** Generalized `WildSpawnSystem.
+  ApplyDebugSingleSkillOverride(runtime, db, skillName)` into `ApplyDebugSkillsOverride(runtime, db,
+  guids)` — takes a resolved GUID list instead of doing its own name-matching, so callers can force
+  any combination. `EncounterTrigger._debugForceSlashOnly` renamed to `_debugForceAttackAndSlash`;
+  `OnEnable` now resolves the built-in Attack move by `BuiltInMoveType` (its `SkillName` is the short
+  label `"A"`, not `"Attack"` — same lookup style `GameManager.ApplyDebugPlaytestLoadout` already uses
+  for the player side) plus Slash by name, and force-equips both together.
+- **Next:** Have the user confirm the Dodge color-loss fix live (a real click-timed Dodge, not a
+  scripted approximation). If it recurs, the same fix pattern (skip cosmetic effects that assume "hit
+  landed" whenever a Dodge/Parry avoided it) likely needs applying to any other flash/VFX call site
+  that isn't already gated on `defended`.
+
+---
+
+[2026-08-12] Phase 3 follow-up #2 — Fixed enemy Slash silently skipping its Beat Sequence (EnemyAI misclassification regression)
+- **Context:** User, live-playtesting right after the Testing-tree/skill-web session: "all the new
+  attacks look the same. and noticing the enemy doesnt have have the standard attack anymore and when
+  it uses slash it doesnt approach the player and do the same animation like what the players slash
+  does." Investigated live via `execute_code` against a real battle.
+- **Root cause found:** `EnemyAI.ChooseSkill` runs every non-built-in equipped skill through
+  `PlaceholderSkillResolver.Resolve`, which derives "deals damage" from
+  `SkillTreeCatalog.Get(skill.TreeType).PrimaryAttribute`. Retagging `Melee_Slash` from `Utility`
+  (`PrimaryAttribute: "Force/Resonance"` → correctly Damage) to the new `SkillTreeType.Testing`
+  (`PrimaryAttribute: "N/A"`) in the prior session silently flipped its AI classification to
+  `Debuff` — routing the enemy's turn into `ResolveEnemyDebuffAction` instead of
+  `ResolveEnemyDamageAction`, which never touches `ResolveMeleeBeatSequence` at all. No Approach, no
+  Windup, no Attack lunge, no Return — the enemy just silently applied a status with zero melee
+  visuals. Full root-cause trace and the "why this was invisible to tests/compile" analysis logged in
+  `LESSONS_LEARNED.md` -> [Combat].
+- **Fixed:** `EnemyAI.ChooseSkill`'s `BuiltInMoveType.None` branch now checks
+  `skill.BeatSequence.Count > 0` first and buckets straight into `damageOptions`, bypassing
+  `PlaceholderSkillResolver` entirely — the same exemption every other Beat Sequence dispatch site
+  already had, just missing here.
+- **Verified:** Live via `execute_code`, clean single-battle instance (had to work around a self-
+  inflicted duplicate-`BattleScene_Main` load caused by a leftover `WildEncounterCreature` racing my
+  manual `StartWildBattle` call — destroyed the stray instances, not a real game bug, noted in
+  `LESSONS_LEARNED.md`). Before fix: `EnemyAI.ChooseSkill` on a Slash-only enemy returned
+  `intent=Debuff`. After fix: `intent=Damage`. Drove the real `BattleManager.EnemyTurn()` coroutine
+  end-to-end with position sampling on the enemy's stage element: `left` held at 150 during the
+  announcement, moved to -724 during Approach, held through Windup/the defense ring, then continued to
+  -746 during the Attack lunge — confirmed visually matching the player-side Slash sequence.
+- **On "all the new attacks look the same":** Confirmed this is expected placeholder-art behavior, not
+  a bug — Instant Strike/Feint/Metronome/Jitter all reuse the identical Windup-squash/Attack-lunge
+  tween shapes (Attack_Pattern_Directive Part 1's "Transform-tweening now, real animation later"),
+  differentiated only by timing (duration), which is hard to perceive without close attention. Already
+  verified programmatically this session that Jitter's duration actually varies and Metronome's stays
+  fixed — the mechanism works, it just has no distinct art yet.
+
+---
+
+[2026-08-12] Phase 3 follow-up — Testing tree made visible in the skill web + closed both flagged debug gaps
+- **Context:** User, after the Group 1 session: "fix those [the two flagged KNOWN_ISSUES] and i dont
+  see the skill tree for the test ones. Put it to the left of the skill tree that contains the
+  standard skill tree." The new `SkillTreeType.Testing` value was wired into the unlock/equip systems
+  but never added to the Party menu's skill web column list, so it silently never rendered anywhere.
+- **Built/Fixed:**
+  - `SkillTreeColor.DisplayOrder` — added `SkillTreeType.Testing` as the new first element (left of
+    `Standard`, which was previously first), since this array is the single source of truth for the
+    skill web's left-to-right column order (`OverworldMenuController`). `SkillTreeColor.Get`'s
+    `Array.IndexOf` fallback meant Testing never crashed, it just had no reserved column at all.
+  - `OverworldMenuController.cs` — both `DisplayOrder`-iterating call sites (`ApplyDefaultFraming`,
+    `RefreshSkillArea`) had their `== SkillTreeType.Standard` always-unlocked exemption extended to
+    also cover `SkillTreeType.Testing`, matching the exemption already applied in
+    `SkillTreeUnlockSystem`/`SkillLoadoutSystem`.
+  - `SkillTreeCatalog.cs` — added a defensive `Testing` entry (same pattern as the existing `Standard`
+    fallback) so a `SkillTreeCatalog.Get(SkillTreeType.Testing)` call — reachable in principle from
+    `PlaceholderSkillResolver` if a future Testing-tree skill ever has an empty `BeatSequence` — can't
+    throw `KeyNotFoundException`.
+  - **[DEBUG-001] fixed:** `EncounterTrigger.OnEnable` was missing the actual
+    `WildSpawnSystem.ApplyDebugSingleSkillOverride` call its `_debugForceSlashOnly` field's tooltip
+    claimed happened — added right after `CreateWildInstance`.
+  - **[DEBUG-002] fixed:** `Test_FireType.asset`'s `_evolutionTier` bumped from 3 back to 5 (matching
+    a prior session's stale comment describing this same intent), so `GameManager.
+    ApplyDebugPlaytestLoadout`'s now-11-skill forced set fits under the Tier-5 cap of 12 again.
+- **Verified:** Clean compile (`read_console`, no new `error CS`). Live via `execute_code`: opened the
+  real Party menu skill web (`OverworldMenuController.Open`/`ShowDetail` via reflection) and walked
+  the actual rendered `VisualElement` tree — confirmed a `left=40` column (Testing, 5 unlocked nodes:
+  Slash + the 4 new Group 1 skills) now renders immediately left of a `left=130` column (Standard, 6
+  unlocked nodes: the 5 built-in moves + Move). Re-triggered a real `EncounterTrigger`'s `OnEnable` in
+  Play Mode — spawned creature came back with exactly 1 learned + 1 equipped skill, confirming
+  [DEBUG-001]'s fix fires. Re-ran `WildSpawnSystem.CreateWildInstance` +
+  `GameManager.ApplyDebugPlaytestLoadout` against the corrected Tier-5 species — all 11 forced skills
+  equipped, confirming [DEBUG-002]'s fix. Both issues moved to KNOWN_ISSUES.md's Closed section.
+
+---
+
+[2026-08-12] Phase 3 — Attack Pattern Directive Group 1: pre-emptive response timing, Instant Strike/Feint/Metronome/Jitter, isolated Testing skill tree
+- **Context:** User asked to evaluate and plan `Attack_Pattern_Directive_v0_1_0.md`'s Group 1 build
+  order (Instant Strike, Feint, Metronome/Jitter, Direct Projectile) before implementing. Reading the
+  directive against the actual code surfaced that "near-free" undersold two of the four items: Direct
+  Projectile was already fully implemented (twice — `ResolveSkillAction`'s placeholder-damage branch
+  and `ResolveBuiltInMove`'s `BuiltInMoveType.Attack` case), but Instant Strike/Feint need a real
+  pre-emptive timed-input window during Windup that didn't exist (the only ring in the Beat Sequence
+  path fired on the Attack beat, after Windup already finished), and Metronome/Jitter need per-skill
+  windup-timing data beyond the existing global constants — though only Jitter actually needed new
+  plumbing, since every Beat Sequence skill already plays a fixed duration by default (that IS
+  Metronome's "steady, learnable" behavior). Asked the user to choose scope on both forks: build the
+  real pre-emptive window now (not a reactive placeholder), and include Metronome/Jitter in this pass.
+  User also asked that new skills be (a) equipped somewhere testable and (b) isolated into their own
+  tree so it's clear what's test content vs. real taxonomy content — `Melee_Slash` had been left at
+  `_treeType: 0` (Utility) with no such isolation, which this pass also retroactively fixes.
+- **Built:**
+  - `ResponseTimingType.cs` (new enum, `Reactive`/`PreEmptive`) — `SkillData` gained
+    `_responseTiming` (default `Reactive`, byte-for-byte unchanged behavior for every pre-existing
+    asset) and `_windupJitterRangeSeconds` (default 0, i.e. Metronome's fixed-duration behavior needs
+    no override at all).
+  - `BeatSequenceRunner.ComputeWindupDuration(isFake, jitterRangeSeconds)` — pure function, rolls
+    jitter ONCE so the visual tween and a PreEmptive skill's concurrent ring never desync.
+    `RunWindup` now takes an explicit `duration` parameter instead of deriving it internally from
+    `isFake`.
+  - `BattleManager.ResolveMeleeBeatSequence` — on a `PreEmptive` skill, a Windup beat starts its tween
+    without awaiting it, then awaits a `RunTimedInput`/`RunDefenseTimedInput` window sized to the same
+    duration (reusing the exact concurrency pattern `ResolveSkillAction`'s
+    `LaunchSyncedProjectile`+`RunTimedInput` pairing already established). `WindupReal`'s outcome is
+    stashed for the Attack beat to consume (skipping a second ring); `WindupFake`'s outcome is always
+    discarded. `ResolveMeleeAttackBeatOffense`/`Defense` both gained optional
+    `preEmptive`/`preEmptiveOutcome` parameters, defaulting to the unchanged Reactive behavior.
+  - `SkillTreeType.Testing` (new 20th value, same "non-GDD, always-available" precedent as `Standard`)
+    — excluded from `SkillTreeUnlockSystem.AllGddTrees` (so the "unlock all" debug toggle doesn't
+    present it as real content) and exempted in `SkillLoadoutSystem.TryEquip`/`TryEquipAt` (so it's
+    equippable like `Standard`). No species ever lists it in `AvailableTreeTypes`, so
+    `WildSpawnSystem.SeedInitialSkills` never auto-learns it for a normal creature — isolation is
+    automatic.
+  - 4 new `SkillData` assets in `Assets/Data/Skills/` (all `SkillTreeType.Testing`):
+    `Ranged_InstantStrike` (`[WindupReal, Attack]`, PreEmptive), `Ranged_Feint`
+    (`[WindupFake, WindupReal, Attack]`, PreEmptive), `Ranged_Metronome` (identical shape to Instant
+    Strike — exists to give the archetype its own content-catalog entry, not because it needs
+    different mechanics), `Ranged_Jitter` (`[WindupReal, Attack]`, PreEmptive,
+    `WindupJitterRangeSeconds = 0.15`, placeholder pending `NumericalCalibration.md`). `Melee_Slash`
+    retagged from Utility to Testing for consistency. All 5 registered in `SkillDatabase`
+    (`_allSkills`/`_guids`, 97 -> 101 entries).
+  - `GameManager.ApplyDebugPlaytestLoadout` extended with the 4 new skill names (by-`SkillName`
+    lookup, same pattern as the existing `"Slash"` entry) so they're force-equipped on the fallback
+    starter for immediate playtesting — forced set is now 11 (5 Standard + C1 + Slash + 4 new),
+    still under the Tier-5 cap of 12.
+- **Verified:** Clean compile (`read_console`, no new `error CS`). Pure-function checks via
+  `execute_code`: `ComputeWindupDuration(false, 0)` returns the exact fixed constant on every call
+  (Metronome); `ComputeWindupDuration(false, 0.15)` sampled 12x returned varying values all within
+  bounds (Jitter). `SkillDatabase.AllSkills` resolves all 4 new assets + retagged Slash with correct
+  `TreeType`/`ResponseTiming`/`WindupJitterRangeSeconds`/`BeatSequence`. Live end-to-end: started a
+  real battle (`BattleTransition.StartWildBattle`), reflectively invoked the real (private)
+  `ResolveMeleeBeatSequence` directly against live `BattleParticipant`s — offense (Instant Strike,
+  player attacking) and defense (Feint, enemy attacking) both ran to completion with zero exceptions,
+  the timing ring correctly unparented/hidden afterward (single clean open/close cycle each, not a
+  doubled Windup+Attack ring), and resolved to `Miss` as expected with no simulated input. Did not
+  live-fire with actual simulated clicks (Perfect/Good outcomes) — same honest caveat as prior
+  sessions on coroutine-timing verification via scripted round-trips; left for the user's own live
+  test to confirm feel/tuning.
+- **Discovered, not fixed (flagged in `KNOWN_ISSUES.md`):** `EncounterTrigger._debugForceSlashOnly`
+  is dead — assigned but never read anywhere (confirmed via a pre-existing `CS0414` compiler warning),
+  so its tooltip's claimed behavior doesn't actually happen. Also: the `GameManager` scene's currently
+  assigned `_fallbackStarterSpecies` is Tier 3 (8 slots), not Tier 5 as a prior session's comment
+  described — `ApplyDebugPlaytestLoadout`'s 11-skill forced set exceeds that, so its capacity guard
+  silently skips the override for this fallback starter today (confirmed live: slot 0 came back with
+  the normal 8-skill round-robin seed, not the forced 11). Neither blocks this session's work (the
+  live validation pass equipped the new skills directly instead), but both should be resolved before
+  relying on the forced debug loadout for hands-on playtesting.
+- **Next:** Groups 2-4 + the "save for last" items in `Attack_Pattern_Directive_v0_1_0.md` Part 1's
+  build order (Multi-Hit Volley; Charge & Release/Sustained Pressure; Zone/Positional/Split Attention;
+  Counter-Bait/Windup-Applies-Status; Multi-Turn Buildup; Lane Displacement Attack; Strike Points).
+  Also worth a hands-on pass with real clicks (Perfect/Good, not just Miss) once the two flagged debug
+  hooks are fixed.
+
+---
+
 [2026-08-12] Phase 3 follow-up — Playtest hooks: enemy Slash + live lane/row cycler
 - **Context:** User, after confirming the corrected vertical-row Approach looked right: "Can we give
   the enemy a slash to try out so i can see if it works the same way and i can block. Also is there a

@@ -35,10 +35,10 @@ public static class SkillTreeUnlockSystem
         if (!phasix.unlockedTreeTypes.Contains(treeType)) phasix.unlockedTreeTypes.Add(treeType);
     }
 
-    /// <summary>All 18 GDD taxonomy trees (every SkillTreeType value except Standard, which isn't part of the taxonomy — see that value's own doc comment), in enum-declaration order.</summary>
+    /// <summary>All 18 GDD taxonomy trees (every SkillTreeType value except Standard and Testing, neither of which is part of the taxonomy — see those values' own doc comments), in enum-declaration order.</summary>
     private static readonly SkillTreeType[] AllGddTrees = System.Enum.GetValues(typeof(SkillTreeType))
         .Cast<SkillTreeType>()
-        .Where(t => t != SkillTreeType.Standard)
+        .Where(t => t != SkillTreeType.Standard && t != SkillTreeType.Testing)
         .ToArray();
 
     /// <summary>
@@ -62,9 +62,9 @@ public static class SkillTreeUnlockSystem
     /// Neither debug branch reads or writes the real unlockedTreeTypes list, so both are always
     /// safe to toggle repeatedly while debugging — nothing here can leak into persisted progression.
     ///
-    /// SkillTreeType.Standard is intentionally never included/checked here — it isn't one of the
-    /// 18 GDD taxonomy trees (see SkillTreeType.Standard's own doc comment) and is always available
-    /// regardless of tier or unlock state; callers must not gate Standard against this list.
+    /// SkillTreeType.Standard/Testing are intentionally never included/checked here — neither is one
+    /// of the 18 GDD taxonomy trees (see their own doc comments) and both are always available
+    /// regardless of tier or unlock state; callers must not gate Standard/Testing against this list.
     /// </summary>
     public static IReadOnlyList<SkillTreeType> GetEffectiveUnlockedTrees(PhasixRuntimeData runtime)
     {

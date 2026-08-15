@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -67,5 +68,43 @@ public static class VisualElementTweening
             () => ((Vector3)element.resolvedStyle.translate).y,
             y => element.style.translate = new Translate(fixedX, y),
             endY, duration);
+    }
+
+    /// <summary>Per-element tracking for TweenTranslateX's own force-complete-before-restart guard — see that method's doc comment. Not used by any other wrapper here; scoped narrowly so killing a stale translateX tween can never reach in and disturb an unrelated concurrent scale/hop/position tween on the same element.</summary>
+    private static readonly Dictionary<VisualElement, Tween> _activeTranslateXTweens = new Dictionary<VisualElement, Tween>();
+
+    /// <summary>
+    /// Tweens the X component of VisualElement.style.translate to endX, preserving whatever Y the
+    /// element already had — the purely-cosmetic counterpart to TweenLeft (2026-08-13, user:
+    /// "the dash should just be a visual thing... should not actually change the players position").
+    /// Used by BeatSequenceRunner.RunRhythmDash so a Metronome/Jitter beat's dash-forward/dash-back
+    /// never touches style.left (the real, authoritative lane position) at all — it's a `transform`-
+    /// level offset layered on top.
+    ///
+    /// 2026-08-14 fix (user: "for metronome one turn 1 and 3 its not returning back to its original
+    /// position. its shifting to the next slot over") — none of these wrapper methods ever called
+    /// DOTween's SetTarget, so DOTween has no way to recognize two TweenTranslateX calls on the same
+    /// element as "the same logical animation" and won't auto-kill the older one; a beat's own dash
+    /// tween (started fire-and-forget, awaited only via a separately-timed ring/WaitForSeconds, not
+    /// the tween's own completion) and ResolveStackingRhythmAttack's final reset-to-0 tween could
+    /// both end up actively driving translateX at once, each frame's write racing the other's —
+    /// landing wherever they happened to disagree last, not exactly 0. Now force-completes (jumps
+    /// straight to its own end value, `SetTarget`-style semantics without touching unrelated tweens
+    /// on the same element) any translateX tween still active on this exact element before starting
+    /// a new one, so every call is guaranteed to start from a known, settled value — no race possible
+    /// regardless of timing.
+    /// </summary>
+    public static Tween TweenTranslateX(VisualElement element, float endX, float duration)
+    {
+        if (_activeTranslateXTweens.TryGetValue(element, out Tween existing) && existing.IsActive())
+            existing.Complete(true);
+
+        float fixedY = ((Vector3)element.resolvedStyle.translate).y;
+        Tween tween = DOTween.To(
+            () => ((Vector3)element.resolvedStyle.translate).x,
+            x => element.style.translate = new Translate(x, fixedY),
+            endX, duration);
+        _activeTranslateXTweens[element] = tween;
+        return tween;
     }
 }

@@ -990,6 +990,27 @@ public class BattleHUDController : MonoBehaviour
         return ComputeSweepDurationForTravelTime(travelDuration);
     }
 
+    /// <summary>
+    /// Launches a projectile using an EXPLICIT travel duration instead of deriving one from real
+    /// screen distance (LaunchSyncedProjectile's own ComputeTravelDuration) — for ranged Beat
+    /// Sequence skills (Attack_Pattern_Directive Group 1: Instant Strike, Feint, Metronome, Jitter,
+    /// 2026-08-12 follow-up, user: "I think i would like to see some projectile or animation that
+    /// would be a better indicator... of what the action does"). Those skills' pre-emptive
+    /// timed-input window is sized off the Windup beat's own authored duration (BeatSequenceRunner.
+    /// ComputeWindupDuration), not projectile-speed physics — inverted from the classic pattern
+    /// (there, travel time drives ring duration; here, Windup duration drives travel time, since
+    /// ring/tell timing is this archetype's actual design-authored value). holdForOutcome behaves
+    /// identically to LaunchSyncedProjectile: false auto-resolves (hit-flash) on arrival — used for
+    /// player offense, which always connects; true holds the projectile for
+    /// RunTimedInput/RunDefenseTimedInput's OWN existing Miss/Dodge/Parry dispatch to resolve once
+    /// the ring itself closes — no separate resolution call needed here, since that dispatch already
+    /// exists and already handles "hold" projectiles generically.
+    /// </summary>
+    public void LaunchRangedBeatSequenceProjectile(int attackerSlotIndex, bool attackerIsPlayerSide, int targetSlotIndex, bool targetIsPlayerSide, PrimalType colorType, float travelDuration, bool holdForOutcome)
+    {
+        _vfxController?.LaunchProjectile(attackerSlotIndex, attackerIsPlayerSide, targetSlotIndex, targetIsPlayerSide, colorType, travelDuration, holdForOutcome);
+    }
+
     /// <summary>Resolves a held projectile (see LaunchSyncedProjectile) as a landed hit.</summary>
     public void ResolveHitProjectile() => _vfxController?.ResolveHeldProjectileAsHit();
 

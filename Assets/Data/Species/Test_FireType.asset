@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PhasixData
   _speciesName: Test Fire Placeholder
   _emotionalType: 
-  _evolutionTier: 3
+  _evolutionTier: 5
   _primalType: 0
   _signalPool: 
   _tempoType: 0

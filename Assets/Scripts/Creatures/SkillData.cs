@@ -32,6 +32,19 @@ using UnityEngine;
 /// TIMING values (windup seconds, lunge distance, etc.) are deliberately NOT fields here — they're
 /// centralized in BeatSequenceConfig instead, so pending-calibration numbers live in one place
 /// rather than scattered across every hand-authored beat-sequence asset.
+///
+/// 2026-08-12 session (Group 1 archetypes — Instant Strike, Feint, Metronome, Jitter, see
+/// Attack_Pattern_Directive_v0_1_0.md Part 5/Part 1's build order): ResponseTiming and
+/// WindupJitterRangeSeconds are a FIFTH and SIXTH structural field, same tier as BeatSequence.
+/// ResponseTiming defaults to Reactive, which is byte-for-byte today's existing behavior (timed
+/// input on the Attack beat) — zero risk to Melee_Slash or any other existing asset. PreEmptive
+/// moves the timed-input window onto the WindupReal/WindupFake beat(s) instead, per Part 5's
+/// "reacted to pre-emptively" archetypes. WindupJitterRangeSeconds defaults to 0 (fixed duration,
+/// i.e. the Metronome archetype needs no override at all since every Beat Sequence skill already
+/// plays a fixed duration by default); a nonzero value randomizes that skill's Windup duration by
+/// ± the given range each time it plays (the Jitter archetype) — still just data, no new balance
+/// numbers beyond the placeholder itself (pending NumericalCalibration.md, same as every other
+/// BeatSequenceConfig value).
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -65,6 +78,26 @@ public class SkillData : ScriptableObject
              "instead. Authored by hand per-asset, same tier as GrantsComboRule.")]
     [SerializeField] private BeatType[] _beatSequence = System.Array.Empty<BeatType>();
 
+    [Tooltip("Reactive (default) = timed-input ring opens on the Attack beat, today's existing " +
+             "behavior. PreEmptive = the ring opens on the WindupReal/WindupFake beat(s) instead " +
+             "(Attack_Pattern_Directive Part 5's 'reacted to pre-emptively' archetypes — Instant " +
+             "Strike, Feint). Ignored when BeatSequence is empty.")]
+    [SerializeField] private ResponseTimingType _responseTiming = ResponseTimingType.Reactive;
+
+    [Tooltip("0 (default) = this skill's Windup duration is always the fixed BeatSequenceConfig " +
+             "value (the Metronome archetype — already the default behavior, needs no override). " +
+             ">0 = each time a Windup beat plays, its duration is randomized by +/- this many " +
+             "seconds (the Jitter archetype). Ignored when BeatSequence is empty.")]
+    [SerializeField] private float _windupJitterRangeSeconds;
+
+    [Tooltip("None (default) = not a stacking-rhythm skill, resolves through the normal Beat " +
+             "Sequence engine as usual. Metronome/Jitter = BattleManager.ResolveStackingRhythmAttack " +
+             "owns this skill's ENTIRE resolution instead (BeatSequence above is ignored) — a " +
+             "per-battle, per-skill use-count combo (BattleParticipant's stack tracking) that grows " +
+             "by one required ring-beat each successful cast. See StackingRhythmType's own doc " +
+             "comment for the full mechanic.")]
+    [SerializeField] private StackingRhythmType _stackingRhythm = StackingRhythmType.None;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -72,4 +105,7 @@ public class SkillData : ScriptableObject
     public ComboRuleType GrantsComboRule => _grantsComboRule;
     public BuiltInMoveType BuiltInMove => _builtInMove;
     public IReadOnlyList<BeatType> BeatSequence => _beatSequence;
+    public ResponseTimingType ResponseTiming => _responseTiming;
+    public float WindupJitterRangeSeconds => _windupJitterRangeSeconds;
+    public StackingRhythmType StackingRhythm => _stackingRhythm;
 }

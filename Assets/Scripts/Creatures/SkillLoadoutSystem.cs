@@ -14,7 +14,8 @@ using System.Linq;
 /// reject equipping from a tree that isn't unlocked (SkillTreeUnlockSystem.GetEffectiveUnlockedTrees)
 /// — previously this class never checked unlockedTreeTypes at all, so any learned skill could be
 /// equipped regardless of tree-lock state; the carousel UI just never happened to expose a way to
-/// try. SkillTreeType.Standard is exempt (always available, not one of the 18 GDD taxonomy trees).
+/// try. SkillTreeType.Standard/Testing are exempt (always available, neither is one of the 18 GDD
+/// taxonomy trees).
 ///
 /// 2026-08 follow-up #2 (user report — "when i add skills from the tree to the wheel it just adds
 /// it to the next open spot instead of where im dragging and dropping it to"): equippedSkillGuids
@@ -46,7 +47,7 @@ public static class SkillLoadoutSystem
         if (runtime == null || string.IsNullOrEmpty(skillGuid)) return false;
         if (!runtime.learnedSkillGuids.Contains(skillGuid)) return false;
         if (runtime.equippedSkillGuids.Contains(skillGuid)) return false;
-        if (treeType != SkillTreeType.Standard
+        if (treeType != SkillTreeType.Standard && treeType != SkillTreeType.Testing
             && !SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime).Contains(treeType)) return false;
 
         int maxSlots = SkillSlotCapacity.GetActiveSlotRange(evolutionTier).max;
@@ -95,7 +96,7 @@ public static class SkillLoadoutSystem
         if (runtime == null || string.IsNullOrEmpty(skillGuid)) return false;
         if (!runtime.learnedSkillGuids.Contains(skillGuid)) return false;
         if (runtime.equippedSkillGuids.Contains(skillGuid)) return false;
-        if (treeType != SkillTreeType.Standard
+        if (treeType != SkillTreeType.Standard && treeType != SkillTreeType.Testing
             && !SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime).Contains(treeType)) return false;
 
         int maxSlots = SkillSlotCapacity.GetActiveSlotRange(evolutionTier).max;

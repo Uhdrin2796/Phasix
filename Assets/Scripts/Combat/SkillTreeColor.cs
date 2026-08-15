@@ -18,9 +18,20 @@ using UnityEngine.UIElements;
 /// </summary>
 public static class SkillTreeColor
 {
-    /// <summary>Standard first (5 always-available built-in moves, never tier-gated), then the 18 GDD tree types in PhasixEnums.cs declaration order. Also the skill web's column display order (OverworldMenuController) — one canonical order for both layout and color.</summary>
+    /// <summary>
+    /// Testing first (2026-08-12 follow-up — Attack Pattern Directive proof-of-concept skills,
+    /// user: "put it to the left of the skill tree that contains the standard skill tree"), then
+    /// Standard (5 always-available built-in moves, never tier-gated), then the 18 GDD tree types in
+    /// PhasixEnums.cs declaration order. Also the skill web's column display order
+    /// (OverworldMenuController) — one canonical order for both layout and color. Both Testing and
+    /// Standard are non-GDD, always-unlocked columns — OverworldMenuController's two DisplayOrder
+    /// loops (ApplyDefaultFraming/RefreshSkillArea) both need their existing
+    /// `== SkillTreeType.Standard` unlock-exemption check extended to `|| == SkillTreeType.Testing`,
+    /// same as SkillTreeUnlockSystem/SkillLoadoutSystem already do.
+    /// </summary>
     public static readonly SkillTreeType[] DisplayOrder =
     {
+        SkillTreeType.Testing,
         SkillTreeType.Standard,
         SkillTreeType.Utility, SkillTreeType.Aura, SkillTreeType.Passive, SkillTreeType.Synergy,
         SkillTreeType.Reaction, SkillTreeType.Bond, SkillTreeType.Aspect, SkillTreeType.Resource,

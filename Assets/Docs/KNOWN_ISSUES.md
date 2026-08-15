@@ -7,11 +7,54 @@ Full issue history lives on GitHub Issues: https://github.com/Uhdrin2796/Phasix/
 
 ## Active Issues
 
-_(none currently open)_
+### [COMBAT-001] — Reported: blocking an enemy Slash on "good timing" consumes the player's Aura instead of regenerating it
+**Affects:** Possibly `Assets/Scripts/Combat/BattleManager.cs` (`ResolveMeleeAttackBeatDefense`) — unconfirmed
+**Description:** User report (2026-08-13): "when the enemy does a slash attack and i block it on good
+timing, it consumes the players aura instead of regenerating it." Investigated thoroughly, NOT
+reproduced: read every Aura-touching call site in `BattleManager.cs` — the only Aura effect on a
+successful defense anywhere in the file is `if (defended && wasPerfect) target.RestoreAura(...)`,
+identical in both the Beat Sequence melee path and the classic ranged defense path; no code path
+spends the DEFENDER's Aura anywhere, every `SpendAura` call targets the attacker. Live-verified via
+`execute_code` directly against `Melee_Slash`, forcing a Good (non-Perfect) outcome through the
+`preEmptive` parameter path to bypass ring/click-timing entirely — both a forced Dodge and a forced
+Parry left the player's Aura exactly unchanged (20 -> 20). Real click-timing simulation (including
+polling the ring's live `MarkerRadius`/`TargetRadius` to time a synthetic `PointerDownEvent`) never
+reliably landed a non-Miss outcome to cross-check against, so the live-forced test is the strongest
+evidence gathered, not a fully closed loop.
+**Next step:** Needs the user to reproduce with more detail — Dodge (left-click) or Parry (right-click)? Does the Aura bar visibly drop the instant the block resolves, or only show lower on a later turn (which could mean it's the PLAYER's own next attack spending Aura, not the block itself)? Is this specifically the "Good" tier, or does it also happen on a Perfect block?
 
 ---
 
 ## Closed Issues
+
+### [DEBUG-001] — `EncounterTrigger._debugForceSlashOnly` is dead — never wired to anything — CLOSED (fixed)
+**Status:** Closed — fixed same session, verified live: toggled a real `EncounterTrigger` (`Test_WildSpawnPoint_TopLeft`) off/on in Play Mode, spawned creature came back with exactly 1 learned + 1 equipped skill
+**Affects:** `Assets/Scripts/World/EncounterTrigger.cs`
+**Description:** Discovered via a pre-existing `CS0414` compiler warning ("assigned but its value is
+never used") while validating Group 1 skill archetypes. The field's tooltip claims checking it forces
+a spawned wild creature down to just the "Slash" skill via `WildSpawnSystem.ApplyDebugSingleSkillOverride`
+(mirroring `GameManager.ApplyDebugPlaytestLoadout`'s pattern), but `OnEnable` never actually reads
+`_debugForceSlashOnly` anywhere — the override call is simply missing. The Inspector checkbox exists
+and looks functional but silently does nothing either way.
+**Fix:** Added the missing `if (_debugForceSlashOnly) WildSpawnSystem.ApplyDebugSingleSkillOverride(runtimeData, _skillDatabase, "Slash");` call right after `CreateWildInstance` in `OnEnable`.
+**Verified:** Live via `execute_code`: re-triggered a real spawn point's `OnEnable` in Play Mode with `_debugForceSlashOnly` at its default `true` — the spawned `PhasixRuntimeData` came back with `learnedSkillGuids.Count == 1` and `equippedSkillGuids.Count == 1`, matching `ApplyDebugSingleSkillOverride`'s documented clear-then-set-one behavior.
+**Closed:** 2026-08-12, same session.
+
+### [DEBUG-002] — Fallback starter species is Tier 3, too small for `ApplyDebugPlaytestLoadout`'s forced set — CLOSED (fixed)
+**Status:** Closed — fixed same session, verified live via a fresh `WildSpawnSystem.CreateWildInstance` + `ApplyDebugPlaytestLoadout` reflection call against the corrected asset
+**Affects:** `Assets/Data/Species/Test_FireType.asset`
+**Description:** Discovered live while validating Group 1 skill archetypes. A prior session's comment
+on `ApplyDebugPlaytestLoadout` says "Test_FireType bumped to Tier 5 alongside this change," but the
+species currently assigned in `SampleScene.unity` was Tier 3 (`SkillSlotCapacity` caps Tier 3 at 8
+active slots). The forced debug loadout is now 11 skills (5 Standard + C1 + Slash + the 4 new Group 1
+archetypes), so `desiredGuids.Count > maxSlots` tripped every time and the method silently fell back to
+the normal round-robin seed instead — confirmed live: a fresh party slot 0 came back with 8 skills
+from the ordinary seeding path, not the forced 11. Not a code bug in `ApplyDebugPlaytestLoadout`
+itself (the guard was working as designed), just a data/Inspector mismatch that quietly defeated its
+purpose.
+**Fix:** Bumped `Test_FireType.asset`'s `_evolutionTier` from 3 to 5, matching the stale comment's original intent. No other species asset needed changing (`Test_SteamType` is Tier 1, used only by the debug "Add Party Member" button, which deliberately uses a different species than the fallback starter).
+**Verified:** Live via `execute_code`: a fresh `WildSpawnSystem.CreateWildInstance` against the now-Tier-5 species + `ApplyDebugPlaytestLoadout` (reflection) returned all 11 forced skills equipped (`A, C, H, R, K, C1, Slash, Instant Strike, Feint, Metronome, Jitter`) — the capacity guard no longer trips.
+**Closed:** 2026-08-12, same session.
 
 ### [SAVE-001] — Cold Editor "Play" press never auto-loads the save or seeds a fallback starter — CLOSED (fixed)
 **Status:** Closed — fixed same session, verified live via `manage_editor play` with zero `[GameManager]` console output before the fix and correct output after

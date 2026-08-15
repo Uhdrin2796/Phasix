@@ -610,17 +610,19 @@ public class OverworldMenuController : MonoBehaviour
             ApplyWorldTransform();
         }
 
-        // Default framing: centered on the currently-unlocked columns (Standard always counts),
-        // scaled down just enough to fit their span in the stage if it's wider than the viewport.
-        // Recomputed fresh each call (not cached) since which trees are unlocked can change live
-        // via the debug tier stepper.
+        // Default framing: centered on the currently-unlocked columns (Standard/Testing always
+        // count), scaled down just enough to fit their span in the stage if it's wider than the
+        // viewport. Recomputed fresh each call (not cached) since which trees are unlocked can
+        // change live via the debug tier stepper.
         void ApplyDefaultFraming()
         {
             IReadOnlyList<SkillTreeType> unlocked = SkillTreeUnlockSystem.GetEffectiveUnlockedTrees(runtime);
             int minCol = -1, maxCol = -1;
             for (int c = 0; c < SkillTreeColor.DisplayOrder.Length; c++)
             {
-                bool isUnlocked = SkillTreeColor.DisplayOrder[c] == SkillTreeType.Standard || unlocked.Contains(SkillTreeColor.DisplayOrder[c]);
+                bool isUnlocked = SkillTreeColor.DisplayOrder[c] == SkillTreeType.Standard
+                    || SkillTreeColor.DisplayOrder[c] == SkillTreeType.Testing
+                    || unlocked.Contains(SkillTreeColor.DisplayOrder[c]);
                 if (!isUnlocked) continue;
                 if (minCol < 0) minCol = c;
                 maxCol = c;
@@ -729,7 +731,8 @@ public class OverworldMenuController : MonoBehaviour
             for (int c = 0; c < SkillTreeColor.DisplayOrder.Length; c++)
             {
                 SkillTreeType treeType = SkillTreeColor.DisplayOrder[c];
-                bool unlocked = treeType == SkillTreeType.Standard || unlockedTrees.Contains(treeType);
+                bool unlocked = treeType == SkillTreeType.Standard || treeType == SkillTreeType.Testing
+                    || unlockedTrees.Contains(treeType);
                 Color treeColor = SkillTreeColor.GetByIndex(c);
 
                 byTree.TryGetValue(treeType, out var skillsInTree);

@@ -10,16 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
-  m_Name: Melee_Slash
+  m_Name: Ranged_InstantStrike
   m_EditorClassIdentifier: Phasix.Runtime::SkillData
-  _skillName: Slash
-  _description: Attack Pattern Directive Beat Sequence proof-of-concept (Approach,
-    Windup-Real, Attack, then automatic Return-to-origin). Physical damage, melee
-    range.
+  _skillName: Instant Strike
+  _description: Attack Pattern Directive Group 1 - Instant Strike/Read-the-Tell.
+    Ranged, no Approach beat, no travel time; PreEmptive response timing (react during
+    Windup, not Attack). Physical damage.
   _treeType: 19
   _placeholderIndex: 0
   _grantsComboRule: 0
   _builtInMove: 0
-  _beatSequence: 000000000100000003000000
-  _responseTiming: 0
+  _beatSequence: 0100000003000000
+  _responseTiming: 1
   _windupJitterRangeSeconds: 0

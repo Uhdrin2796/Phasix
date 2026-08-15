@@ -186,6 +186,14 @@ public class GameManager : MonoBehaviour
     /// equippable skill-ring orb entirely — it's now a dedicated always-present icon
     /// (BattleHUDController's Move-drag flow) unconditionally available to every player creature,
     /// so it needs no force-equip debug hook. See DECISIONS.md -> [Combat].
+    ///
+    /// 2026-08-12 follow-up #3 (Group 1 archetypes — Instant Strike, Feint, Metronome, Jitter, see
+    /// Attack_Pattern_Directive_v0_1_0.md Part 5/Part 1's build order): the four new SkillTreeType.
+    /// Testing assets (Ranged_InstantStrike/Feint/Metronome/Jitter) added to the same forced loadout,
+    /// same reasoning and same by-SkillName lookup pattern as Slash above — no in-game way to trigger
+    /// the new PreEmptive response-timing path without equipping them first. Brings the forced set to
+    /// 11 (5 Standard + C1 + Slash + 4 new), still under the fallback starter's Tier-5 cap of 12
+    /// (SkillSlotCapacity), so the "skip override if it doesn't fit" guard below won't trigger.
     /// </summary>
     private void ApplyDebugPlaytestLoadout(PhasixRuntimeData runtime)
     {
@@ -208,14 +216,13 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Jitter" };
+        foreach (string name in desiredNames)
         {
-            if (skill.SkillName == "C1") { desiredGuids.Add(guid); break; }
-        }
-
-        foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
-        {
-            if (skill.SkillName == "Slash") { desiredGuids.Add(guid); break; }
+            foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+            {
+                if (skill.SkillName == name) { desiredGuids.Add(guid); break; }
+            }
         }
 
         if (desiredGuids.Count > maxSlots)

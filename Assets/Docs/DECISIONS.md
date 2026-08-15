@@ -4737,3 +4737,61 @@ re-derive the reasoning from scratch before deciding whether to build these.
   session), `BattleHUDController.cs` (`_enemyStageCreature`, `_enemyNameplates[]`), `BattleState.cs`
   (`EnemySide`), `EnemyAI.cs` (Move exclusion), `LaneMovementSystem.cs`/`FormationSystem.cs` (the
   data-layer pieces that already generalize to both sides).
+
+### [Combat] Pre-emptive response timing — new Windup-beat timed-input window, Reactive stays the default
+- **Decided:** Added `ResponseTimingType` (`Reactive`/`PreEmptive`) to `SkillData`, defaulting to
+  `Reactive` — today's existing behavior, byte-for-byte unchanged: the timed-input ring opens on the
+  Attack beat, after Windup already finished playing. `PreEmptive` moves the ring onto the
+  `WindupReal`/`WindupFake` beat(s) instead, per `Attack_Pattern_Directive_v0_1_0.md` Part 5's Instant
+  Strike/Read-the-Tell ("reacted to pre-emptively... not tracked"). Implementation: the Windup beat's
+  tween starts via `StartCoroutine` WITHOUT being awaited, then `BattleManager.ResolveMeleeBeatSequence`
+  immediately awaits a `RunTimedInput`/`RunDefenseTimedInput` window sized to the same (possibly
+  jittered) duration — reusing the exact concurrency pattern `ResolveSkillAction`'s
+  `LaunchSyncedProjectile` + `RunTimedInput` pairing already established, rather than inventing new
+  concurrency. `WindupReal`'s resolved outcome is stashed in a local variable and handed to the Attack
+  beat (`ResolveMeleeAttackBeatOffense`/`Defense`, both gained optional
+  `preEmptive`/`preEmptiveOutcome` parameters), which skips opening a second ring when one is supplied.
+  `WindupFake`'s outcome is always discarded, regardless of side — Feint's whole mechanic is that
+  reacting to a fake tell has no effect either way this pass (no bonus, no penalty beyond having
+  reacted to nothing — a numeric penalty for a bad fake-read is a later balance concern).
+- **Why:** User chose "build the real pre-emptive window now" over a Reactive placeholder when asked
+  to scope Group 1 (see `Attack_Pattern_Directive`'s Part 1 build order) — Feint has zero mechanical
+  effect without a real reactable moment during Windup, so shipping Instant Strike as a reactive-only
+  placeholder would leave Feint permanently blocked on a follow-up.
+- **Alternatives rejected:** A Reactive-only placeholder for this pass (rejected — user wanted Feint's
+  actual fake-tell payoff now, not deferred); rolling jitter independently inside both the tween and
+  the ring (rejected — two independent `Random.Range` calls could desync the visual from the window
+  gating it; `BeatSequenceRunner.ComputeWindupDuration` is a pure function called once, its result
+  threaded through both).
+- **Date:** 2026-08-12
+- **Revisit if:** A future archetype needs a pre-emptive window on a beat other than Windup, or needs
+  the fake window's outcome to actually matter (a numeric penalty for reacting to a fake) rather than
+  being purely discarded.
+- **Ref:** `ResponseTimingType.cs` (new), `SkillData.cs` (`_responseTiming`,
+  `_windupJitterRangeSeconds`), `BeatSequenceRunner.cs` (`ComputeWindupDuration`, `RunWindup`'s new
+  `duration` parameter), `BattleManager.cs` (`ResolveMeleeBeatSequence`,
+  `ResolveMeleeAttackBeatOffense`/`Defense`), `Attack_Pattern_Directive_v0_1_0.md` Part 5/Part 7,
+  CHANGELOG.md's matching 2026-08-12 Group 1 entry.
+
+### [Combat] Isolated `SkillTreeType.Testing` for proof-of-concept skill content
+- **Decided:** Added `SkillTreeType.Testing` as a 20th, non-GDD value (same "always available, not one
+  of the 18 taxonomy trees" precedent as `Standard`) specifically so Attack Pattern Directive
+  proof-of-concept skills (the Group 1 archetypes, and retroactively `Melee_Slash`, previously left at
+  the unlabeled default `_treeType: 0`/Utility) are never mistaken for real tree content.
+  `SkillTreeUnlockSystem.AllGddTrees` and `SkillLoadoutSystem`'s equip-gate both explicitly
+  exclude/exempt it, mirroring `Standard`'s existing treatment exactly.
+- **Why:** User-directed, when asked to plan Group 1: "for testing skills lets put them into their own
+  tree. so it can be isolated from the full tree structure and treated as a testing tree so its clear
+  what is tested." Also asked that the new skills be equipped somewhere testable —
+  `GameManager.ApplyDebugPlaytestLoadout` extended with the 4 new skill names, same by-`SkillName`
+  lookup pattern as the existing `Melee_Slash` entry.
+- **Alternatives rejected:** Leaving new skills in an existing/arbitrary tree like `Melee_Slash`
+  originally was (rejected — exactly the ambiguity the user asked to avoid); a per-asset naming
+  convention instead of a real tree value (rejected — wouldn't isolate them from
+  `SkillTreeUnlockSystem`'s "unlock all" debug toggle or show up distinctly in the Party menu's skill
+  web).
+- **Date:** 2026-08-12
+- **Ref:** `PhasixEnums.cs` (`SkillTreeType.Testing`), `SkillTreeUnlockSystem.cs` (`AllGddTrees`
+  filter), `SkillLoadoutSystem.cs` (`TryEquip`/`TryEquipAt` exemption), `GameManager.cs`
+  (`ApplyDebugPlaytestLoadout`), the 4 new `Assets/Data/Skills/Ranged_*.asset` files +
+  `Melee_Slash.asset` (retagged).

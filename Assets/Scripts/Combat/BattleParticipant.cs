@@ -112,6 +112,24 @@ public class BattleParticipant
     /// <summary>Last chain result logged against this participant — lets BattleManager log only a *change*, not every subsequent turn the same pair of statuses stays active.</summary>
     public ChainResultType? ActiveChainResult { get; set; }
 
+    /// <summary>
+    /// Per-skill stacking-rhythm combo tier (2026-08-13, Metronome/Jitter — see StackingRhythmType,
+    /// BattleManager.ResolveStackingRhythmAttack), keyed by skill reference rather than a GUID lookup
+    /// since a SkillData asset reference is already stable for a battle's whole lifetime. Missing
+    /// entry = tier 0 (first cast, needs 1 beat). Advances by one ONLY on a fully successful cast; a
+    /// missed beat leaves it exactly where it was (user, 2026-08-13: "on miss you should stay at the
+    /// existing counter that you're at") — never regresses, never skips on a miss. Naturally resets
+    /// every battle since a fresh BattleParticipant is constructed per battle, same as every other
+    /// per-battle tracker on this class.
+    /// </summary>
+    private readonly Dictionary<SkillData, int> _stackingRhythmTiers = new Dictionary<SkillData, int>();
+
+    /// <summary>Current stacking-rhythm tier for `skill` — 0 if never cast this battle. Beats required for the NEXT cast = this value + 1.</summary>
+    public int GetStackingRhythmTier(SkillData skill) => _stackingRhythmTiers.TryGetValue(skill, out int tier) ? tier : 0;
+
+    /// <summary>Advances `skill`'s stacking-rhythm tier by one — call only after every beat in a cast succeeds.</summary>
+    public void AdvanceStackingRhythmTier(SkillData skill) => _stackingRhythmTiers[skill] = GetStackingRhythmTier(skill) + 1;
+
     /// <summary>Starts (or refreshes) a status — overwrite-not-stack on the same type, matching ApplyRegen's existing precedent (re-applying resets the countdown, no independent second timer).</summary>
     public void ApplyStatus(StatusEffectType type, int durationTurns)
     {

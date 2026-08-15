@@ -498,6 +498,50 @@ Issues that required significant investigation to resolve. Read before debugging
   resized to match — an unsized container is invisible in code review and in tests, only visible on
   screen.
 
+### [Combat] Retagging Slash to the new Testing tree silently broke enemy AI's damage/debuff classification
+- **Symptom:** User, live-playtesting right after the Group 1 session's `SkillTreeType.Testing`
+  follow-up: "the enemy doesn't have have the standard attack anymore and when it uses slash it
+  doesn't approach the player and do the same animation like what the players slash does." Live-
+  verified via `execute_code`: `EnemyAI.ChooseSkill` on a Slash-only-equipped enemy returned
+  `intent=Debuff` (not `Damage`), routing `BattleManager.EnemyTurn` into `ResolveEnemyDebuffAction`
+  instead of `ResolveEnemyDamageAction` — which never calls `ResolveMeleeBeatSequence` at all, so no
+  Approach/Windup/Attack-lunge/Return ever ran; the enemy just silently applied a status with zero
+  melee visuals. Clean compile and no console errors throughout — this was a pure classification-logic
+  bug, invisible to both.
+- **Root cause:** `EnemyAI.ChooseSkill`'s `case BuiltInMoveType.None:` branch runs EVERY non-built-in
+  equipped skill through `PlaceholderSkillResolver.Resolve(skill)` to bucket it into
+  Damage/SelfSupport/Debuff — that resolver derives "does this deal damage" from
+  `SkillTreeCatalog.Get(skill.TreeType).PrimaryAttribute` containing "Force"/"Guard"/"Resonance"/
+  "Ward". Slash was originally tagged `SkillTreeType.Utility` (`PrimaryAttribute: "Force/Resonance"`
+  → correctly classified Damage). Retagging it to the new `SkillTreeType.Testing`
+  (`PrimaryAttribute: "N/A"`, added as a defensive fallback matching `Standard`'s own placeholder
+  entry) silently flipped `IsDamageSkill` to false for every Beat Sequence skill on that tree — with
+  no compile error, no test failure, and no console warning, since `PlaceholderSkillResolver` was
+  never designed to be asked about Beat Sequence skills at all. `ResolveSkillAction`/
+  `ResolveEnemyDamageAction` both already skip `PlaceholderSkillResolver` entirely for any skill with
+  a non-empty `BeatSequence` — `EnemyAI.ChooseSkill` was the one call site that never got that same
+  exemption, because it predates the Beat Sequence system and was never revisited when it shipped.
+- **Fix:** Added the same `skill.BeatSequence.Count > 0` check `EnemyAI.ChooseSkill` was missing —
+  Beat Sequence skills bucket straight into `damageOptions` (every one built so far deals damage) and
+  never reach `PlaceholderSkillResolver.Resolve` at all, matching the exemption already used
+  everywhere else a Beat Sequence skill is dispatched.
+- **Date:** 2026-08-12
+- **Key rule:** When a skill (or any content asset) gains a NEW resolution path that bypasses an
+  existing generic system (here: Beat Sequence skills bypassing `PlaceholderSkillResolver` for damage
+  application), grep for *every* call site of the generic system before assuming the bypass is
+  complete — a new dispatch path added at the main resolution call sites can still leave a secondary
+  consumer (here, enemy AI's own independent classification pass) silently calling the old generic
+  path on data it was never designed to handle. Retagging a skill's `TreeType` for organizational
+  reasons (isolating test content into its own tree) is not purely cosmetic when any code derives
+  gameplay behavior FROM tree metadata — audit those call sites before assuming a tree reassignment is
+  safe.
+- **Also encountered, same investigation (testing artifact, not a game bug):** Manually calling
+  `BattleTransition.StartWildBattle` via `execute_code` while a leftover `WildEncounterCreature` was
+  still active in the overworld scene raced its own contact-trigger, loading `BattleScene_Main` twice
+  (the exact mechanism documented above under "Retiring a UI screen's 'IsVisible' guard..." — same
+  double-load, different trigger). Destroying stray `WildEncounterCreature` instances before manually
+  starting a test battle avoids it.
+
 ---
 
 ## A* Pathfinding Project

@@ -55,6 +55,14 @@ public static class SkillTreeCatalog
         // damage/status logic is the SkillData.BuiltInMove != None check, applied BEFORE any
         // SkillTreeCatalog/PlaceholderSkillResolver call site touches a built-in move's SkillData.
         { SkillTreeType.Standard, new Entry("N/A", "Built-in moves (Attack/Charge/Heal/Regen/Capture) — not a real skill tree, never resolved through this catalog's PrimaryAttribute derivation.") },
+
+        // Testing (2026-08-12 follow-up) — also NOT part of the GDD's 18-tree taxonomy; isolates
+        // Attack Pattern Directive proof-of-concept skills (Slash, the Group 1 ranged archetypes)
+        // from real tree content. Same defensive-fallback reasoning as Standard above — now reached
+        // for real, since SkillTreeColor.DisplayOrder/OverworldMenuController's skill web actually
+        // renders a Testing column (2026-08-12, user: "put it to the left of the skill tree that
+        // contains the standard skill tree").
+        { SkillTreeType.Testing, new Entry("N/A", "Attack Pattern Directive proof-of-concept skills — not a real skill tree, isolated from the 18-tree taxonomy so test content is never mistaken for real content.") },
     };
 
     public static Entry Get(SkillTreeType type) => Entries[type];

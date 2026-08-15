@@ -28,8 +28,8 @@ public static class BattleLogFormatter
     /// </summary>
     public static string FormatAttack(BattleParticipant attacker, BattleParticipant target, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, BattleHUDController.OffenseOutcome? offenseOutcome)
     {
-        int? timingDelta = offenseOutcome.HasValue ? finalDamage - damageAfterType : (int?)null;
-        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDelta)}!";
+        (int, string)? timingTerm = offenseOutcome.HasValue ? (finalDamage - damageAfterType, "timing") : ((int, string)?)null;
+        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingTerm)}!";
 
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
@@ -57,29 +57,37 @@ public static class BattleLogFormatter
                 : $"{target.DisplayName} dodges {attacker.DisplayName}'s attack!";
         }
 
-        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDeltaOrNull: null)}!";
+        string line = $"{attacker.DisplayName} attacks {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, extraTermOrNull: null)}!";
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
         return line;
     }
 
     /// <summary>
-    /// Builds the "(N base + delta type [+ delta timing]) = N total damage" breakdown segment
+    /// Builds the "(N base + delta type [+ delta &lt;label&gt;]) = N total damage" breakdown segment
     /// (2026-08-11, user-directed: "show the (base damage + type advantage damage + timing bonus
     /// damage)... base damage is white, decreased damage is red, and increased damage is green...
     /// also show the total damage" — a temporary "for visibility rn" aid, not permanent flavor
-    /// text). typeDelta/timingDelta are always exactly consistent with finalDamage by construction
-    /// — each is defined as the difference between two already-resolved damage numbers, not
-    /// independently computed, so the three terms always sum to finalDamage regardless of how any
-    /// individual step rounded internally. timingDeltaOrNull is null when no timed-input check ran
-    /// at all (the Parry counter-attack, or any incoming enemy hit) — that term is omitted entirely
-    /// rather than shown as a meaningless "+0".
+    /// text). typeDelta/the third term are always exactly consistent with finalDamage by
+    /// construction — each is defined as the difference between two already-resolved damage
+    /// numbers, not independently computed, so the terms always sum to finalDamage regardless of
+    /// how any individual step rounded internally. extraTermOrNull is null when there's no third
+    /// multiplier to explain at all (the Parry counter-attack, or any incoming enemy hit) — that
+    /// term is omitted entirely rather than shown as a meaningless "+0".
+    ///
+    /// 2026-08-14 follow-up (Metronome/Jitter beat-stack tier multiplier, user: "make sure that the
+    /// battlelog updates the damage log on metronome and jitter. It shows the correct total value
+    /// but i need to see the broken out values more clearly") — generalized the third term from a
+    /// hardcoded "timing" label to any caller-supplied (delta, label) pair, so the same breakdown
+    /// can explain either a timed-input bonus (offense/skill attacks) or a stacking-rhythm tier
+    /// bonus (FormatStackingRhythmAttack) instead of silently folding the tier multiplier into the
+    /// total with nothing accounting for it.
     /// </summary>
-    private static string FormatDamageBreakdown(int pureBaseDamage, int damageAfterType, int finalDamage, int? timingDeltaOrNull)
+    private static string FormatDamageBreakdown(int pureBaseDamage, int damageAfterType, int finalDamage, (int delta, string label)? extraTermOrNull)
     {
         int typeDelta = damageAfterType - pureBaseDamage;
         string breakdown = $"(<color={BaseDamageColor}>{pureBaseDamage} base</color> {FormatDeltaTerm(typeDelta, "type")}";
-        if (timingDeltaOrNull.HasValue) breakdown += $" {FormatDeltaTerm(timingDeltaOrNull.Value, "timing")}";
+        if (extraTermOrNull.HasValue) breakdown += $" {FormatDeltaTerm(extraTermOrNull.Value.delta, extraTermOrNull.Value.label)}";
         breakdown += $") = {finalDamage} total damage";
         return breakdown;
     }
@@ -112,8 +120,8 @@ public static class BattleLogFormatter
     /// </summary>
     public static string FormatSkillAttack(BattleParticipant attacker, BattleParticipant target, string skillName, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, BattleHUDController.OffenseOutcome offenseOutcome)
     {
-        int timingDelta = finalDamage - damageAfterType;
-        string line = $"{attacker.DisplayName} uses {skillName} on {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingDelta)}!";
+        (int, string) timingTerm = (finalDamage - damageAfterType, "timing");
+        string line = $"{attacker.DisplayName} uses {skillName} on {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingTerm)}!";
 
         string effectiveness = FormatEffectiveness(typeMultiplier);
         if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
@@ -157,5 +165,40 @@ public static class BattleLogFormatter
     public static string FormatMasteryBonusTriggered(BattleParticipant attacker, MasteryBonusType bonus)
     {
         return $"{attacker.DisplayName} achieves {bonus}! {MasteryBonusCatalog.GetTriggerDescription(bonus)} {MasteryBonusCatalog.GetEffectDescription(bonus)}";
+    }
+
+    /// <summary>
+    /// Formats a Metronome/Jitter stacking-rhythm attack that cleared every required beat (2026-08-13
+    /// — BattleManager.ResolveStackingRhythmAttack) — names the tier/beat count just cleared and the
+    /// resulting damage multiplier alongside the normal breakdown, so the ramping stack is visible in
+    /// the log, not just implied by a bigger number.
+    ///
+    /// 2026-08-14 fix (user: "make sure that the battlelog updates the damage log on metronome and
+    /// jitter. It shows the correct total value but i need to see the broken out values more
+    /// clearly") — this used to pass extraTermOrNull: null, so the breakdown only ever showed
+    /// "base + type" even though finalDamage also includes the tier multiplier's own contribution
+    /// (BattleManager applies damageMultiplier: tierMultiplier when queuing the hit) — the base+type
+    /// terms silently stopped summing to the shown total once a stack tier above 1 kicked in, with
+    /// nothing in the line explaining the gap. Now computes that gap explicitly (finalDamage minus
+    /// the pre-tier damageAfterType) and passes it as a labeled "stack" term, same mechanism
+    /// FormatAttack/FormatSkillAttack already use for their "timing" term — the three terms now
+    /// always sum to the displayed total.
+    /// </summary>
+    public static string FormatStackingRhythmAttack(BattleParticipant attacker, BattleParticipant target, string skillName, int beatsCleared, float damageMultiplier, int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier)
+    {
+        string beatWord = beatsCleared == 1 ? "beat" : "beats";
+        (int, string) stackTerm = (finalDamage - damageAfterType, "stack");
+        string line = $"{attacker.DisplayName}'s {skillName} lands (Tier {beatsCleared} — {beatsCleared} {beatWord} cleared, {damageMultiplier:0.0#}x) on {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, stackTerm)}!";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        return line;
+    }
+
+    /// <summary>Formats a Metronome/Jitter combo broken mid-sequence — no damage; the stack tier stays exactly where it was (BattleParticipant.AdvanceStackingRhythmTier is not called for this outcome).</summary>
+    public static string FormatStackingRhythmWhiff(BattleParticipant attacker, string skillName, int beatReached, int beatsRequired)
+    {
+        return $"{attacker.DisplayName}'s {skillName} breaks rhythm on beat {beatReached}/{beatsRequired} — the attack whiffs!";
     }
 }

@@ -117,6 +117,25 @@ public static class EnemyAI
                     break;
 
                 case BuiltInMoveType.None:
+                    // Beat Sequence skills (Attack_Pattern_Directive — Slash, the Group 1 ranged
+                    // archetypes) and stacking-rhythm skills (Metronome/Jitter, 2026-08-13) both have
+                    // their own dedicated resolution paths (BattleManager.ResolveMeleeBeatSequence /
+                    // ResolveStackingRhythmAttack via ResolveEnemyDamageAction), never
+                    // PlaceholderSkillResolver — running them through the tree-PrimaryAttribute
+                    // damage/status heuristic below is a category error (2026-08-12 bug: retagging
+                    // Slash to SkillTreeType.Testing, whose PrimaryAttribute is the inert "N/A"
+                    // placeholder value, made IsDamageSkill(Testing) false, so Slash silently
+                    // reclassified as a Debuff move — routing into ResolveEnemyDebuffAction instead
+                    // of ResolveEnemyDamageAction and skipping the Beat Sequence entirely, no
+                    // Approach/Windup/Attack/Return at all). Every one of these skills deals damage,
+                    // so bucket directly rather than deriving it from tree metadata that was never
+                    // meant to answer this for a skill with its own resolution path.
+                    if (skill.StackingRhythm != StackingRhythmType.None || (skill.BeatSequence != null && skill.BeatSequence.Count > 0))
+                    {
+                        damageOptions.Add(skill);
+                        break;
+                    }
+
                     PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
                     if (resolution.DealsDamage) damageOptions.Add(skill);
                     else if (resolution.SelfTargeted) selfSupportOptions.Add(skill);

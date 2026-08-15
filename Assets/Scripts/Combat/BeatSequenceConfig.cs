@@ -55,4 +55,42 @@ public static class BeatSequenceConfig
 
     /// <summary>Peak height (px, negative Y = up in VisualElement.style.translate space) of the Return hop's arc.</summary>
     public const float ReturnHopHeightPx = -30f;
+
+    // --- 2026-08-13 follow-up: warning hop + Metronome/Jitter stacking rhythm archetypes ---
+    // (user: "when the skill is selected [for] the hop to occur then after a brief delay then the
+    // projectile shoots"; "Metronome... shoot the warning, then show the timing on the player...
+    // Jitter will follow a similar pattern... but instead has a different beat"). All placeholder
+    // values, same "pending NumericalCalibration.md" status as every other constant in this class.
+
+    /// <summary>Seconds for the warning-hop bounce (BeatSequenceRunner.RunWarningHop) — a quick in-place vertical bounce, NOT a position change, played at the START of a ranged skill's Windup as the "something is coming" tell, distinct from the squash-based RunWindup tell.</summary>
+    public const float WarningHopDurationSeconds = 0.22f;
+
+    /// <summary>Peak height (px, negative = up) of the warning hop's bounce — smaller than ReturnHopHeightPx since it's a quick cue, not the full return journey.</summary>
+    public const float WarningHopHeightPx = -16f;
+
+    /// <summary>Metronome's fixed per-beat ring/dash duration — every beat identical, the "1..2..3..4" steady feel. 0.5s -> 0.9s -> 2.7s -> 1.8s (2026-08-13, three rounds of user feedback: "too fast" -> "triple the distance, 1/3 the ring rate" -> "distance is good but make it a bit faster" — this round only shortens duration, MetronomeDashOffsetPx is untouched).</summary>
+    public const float MetronomeBeatDurationSeconds = 1.8f;
+
+    /// <summary>Metronome's fixed per-beat dash distance (px) — constant across all beats, matching its steady timing. 28px -> 50px -> 150px (2026-08-13, first two rounds of feedback); left at 150px in the third round ("distance is good").</summary>
+    public const float MetronomeDashOffsetPx = 150f;
+
+    /// <summary>
+    /// Jitter's per-beat ring/dash duration pattern — cycles through these three values by beat
+    /// index ((beatIndex - 1) % 3), repeating indefinitely rather than needing a bespoke value per
+    /// stack tier (user: "given 1....2.3.4 timing... after turn 5 it just repeats"). Index 0 (long)
+    /// is beat 1's tell/dash-forward; indices 1-2 (short) are the quick follow-up beats. Three
+    /// rounds of 2026-08-13 user feedback ("too fast" -> "triple the distance, 1/3 the ring rate" ->
+    /// "distance is good but make it a bit faster") — long/short ratio kept the same throughout;
+    /// the third round only shortens duration, JitterBeatDashOffsetsPx is untouched.
+    /// </summary>
+    public static readonly float[] JitterBeatDurationsSeconds = { 2.2f, 1.0f, 1.0f };
+
+    /// <summary>Jitter's per-beat dash distance (px), parallel to JitterBeatDurationsSeconds — "length of dash match the offbeat timing," so the long beat gets the long dash. Left at these values in the third round of feedback ("distance is good").</summary>
+    public static readonly float[] JitterBeatDashOffsetsPx = { 210f, 96f, 96f };
+
+    /// <summary>Travel duration for a projectile that fires AFTER its ring has already resolved — Instant Strike/Feint's real strike (Attack beat, decoupled from the Windup ring per the "hop, then delay/ring, then shoot" reorder) and Metronome/Jitter's final payoff shot once every beat in the combo succeeds.</summary>
+    public const float ResolvedProjectileTravelSeconds = 0.35f;
+
+    /// <summary>Damage multiplier added per stack tier above the first (tier 1 = 1.0x, tier 2 = 1.5x, tier 3 = 2.0x, ...) — "start at low damage, then ramp."</summary>
+    public const float StackingRhythmTierDamageStep = 0.5f;
 }

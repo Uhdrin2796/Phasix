@@ -48,10 +48,18 @@ public enum Personality
 /// instead of hardcoded battle moves (user: "if theres not particular skill tree for them they
 /// can all be grouped in their own as standard"). Same "new, not GDD content" precedent as
 /// ComboRuleType/ChainResultType — see DECISIONS.md -> [Combat].
+///
+/// Testing (2026-08 follow-up #2) is a 20th, NON-GDD value — same "always available, not one of
+/// the 18 taxonomy trees" precedent as Standard, but for the opposite reason: it exists so
+/// Attack_Pattern_Directive proof-of-concept skills (e.g. Slash, the Group 1 ranged archetypes) are
+/// never mistaken for real tree content. No species' AvailableTreeTypes ever lists Testing, so
+/// WildSpawnSystem.SeedInitialSkills never auto-learns it for a normal creature — isolation is
+/// automatic. SkillTreeUnlockSystem.AllGddTrees and SkillLoadoutSystem's equip-gate both explicitly
+/// exclude/exempt it, same as Standard.
 /// </summary>
 public enum SkillTreeType
 {
     Utility, Aura, Passive, Synergy, Reaction, Bond, Aspect, Resource,
     Corruption, Mirror, Evolve, Territory, Memory, Fusion, Personality, Typing, Bastion, Phantom,
-    Standard
+    Standard, Testing
 }

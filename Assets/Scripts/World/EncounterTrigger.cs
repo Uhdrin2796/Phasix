@@ -26,8 +26,8 @@ public class EncounterTrigger : MonoBehaviour
     [SerializeField] private bool _overrideTintColor;
     [SerializeField] private Color _tintColorOverride = Color.white;
 
-    [Tooltip("DEBUG (2026-08-12): if checked, the spawned wild creature's entire loadout is replaced with just the 'Slash' skill, guaranteeing every enemy turn triggers the Melee Beat Sequence framework so it can be reliably playtested (including Dodge/Parry against it). See WildSpawnSystem.ApplyDebugSingleSkillOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
-    [SerializeField] private bool _debugForceSlashOnly = true;
+    [Tooltip("DEBUG (2026-08-12): if checked, the spawned wild creature's entire loadout is replaced with just the built-in Attack move + the 'Slash' skill, guaranteeing every enemy turn triggers either the old single-beat Dodge/Parry flow (Attack) or the Melee Beat Sequence framework (Slash) so both can be reliably playtested and compared side by side. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
+    [SerializeField] private bool _debugForceAttackAndSlash = true;
 
     private GameObject _activeInstance;
 
@@ -38,6 +38,24 @@ public class EncounterTrigger : MonoBehaviour
 
         PhasixData species = _possibleSpecies[Random.Range(0, _possibleSpecies.Length)];
         PhasixRuntimeData runtimeData = WildSpawnSystem.CreateWildInstance(species, _skillDatabase);
+
+        // KNOWN_ISSUES.md [DEBUG-001] fix (was missing entirely — the checkbox looked functional
+        // but silently did nothing): resolves Attack by BuiltInMoveType (its SkillName is the short
+        // label "A", not "Attack" — same lookup style GameManager.ApplyDebugPlaytestLoadout already
+        // uses for the player side) and Slash by SkillName, then force-equips both together.
+        if (_debugForceAttackAndSlash && _skillDatabase != null)
+        {
+            var guids = new System.Collections.Generic.List<string>();
+            foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+            {
+                if (skill.BuiltInMove == BuiltInMoveType.Attack) { guids.Add(guid); break; }
+            }
+            foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+            {
+                if (skill.SkillName == "Slash") { guids.Add(guid); break; }
+            }
+            WildSpawnSystem.ApplyDebugSkillsOverride(runtimeData, _skillDatabase, guids);
+        }
 
         // Parented to this spawn point (not scene-root) — this is what ties the spawned
         // creature to WorldChunkManager's SetActive chunk toggling. An unparented Instantiate

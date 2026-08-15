@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Ranged_Jitter
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Jitter
+  _description: Attack Pattern Directive Group 1 - Jitter/No Fixed Rhythm. Stacking-rhythm
+    combo (2026-08-13 redesign), same structure as Metronome but each beat cycles a
+    repeating long/short/short duration and dash-distance pattern instead of a fixed
+    one, for a distinct off-beat feel. BeatSequence/ResponseTiming/WindupJitterRangeSeconds
+    below are vestigial (StackingRhythm bypasses them entirely) - left populated only
+    so HasApproachBeat still reads this as ranged content.
+  _treeType: 19
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence: 0100000003000000
+  _responseTiming: 1
+  _windupJitterRangeSeconds: 0.15
+  _stackingRhythm: 2

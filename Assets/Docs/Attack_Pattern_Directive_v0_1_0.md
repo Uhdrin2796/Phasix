@@ -11,6 +11,23 @@ model change. Part 10 updated to match. Addition/refinement only — no version 
 **Errata (2026-08-12, later same session):** Part 1 gained a recommended build order for the
 still-unbuilt Part 5/6 archetypes, sequencing them by shared infrastructure vs. standalone lift —
 see the Status tracker's new subsection. Addition only — no version bump.
+**Errata (2026-08-12, later still):** Group 1 built — Instant Strike/Read-the-Tell, Feint,
+Metronome/Jitter, Direct Projectile (confirmed already-implemented). Required a new mechanic beyond
+what Part 1's "near-free" framing implied: a real pre-emptive timed-input window during Windup
+(`ResponseTimingType`, `SkillTreeType.Testing` for isolated test content) — see CHANGELOG.md's
+matching entry for full detail. Addition only — no version bump.
+**Errata (2026-08-13):** Playtesting Group 1 drove two follow-ups, both superseding this doc's
+original Metronome/Jitter framing ("not new systems, just windup-timing data patterns"): (1) Instant
+Strike/Feint's real strike resequenced to hop -> tell/ring -> projectile-shot (previously concurrent);
+Feint's fake beat lost its ring entirely (no tell precedes it, nothing to react to). (2) Metronome and
+Jitter are no longer thin variations of Instant Strike's shape at all — each is now a per-battle
+stacking rhythm combo (`StackingRhythmType`, `BattleManager.ResolveStackingRhythmAttack`) with its own
+dedicated resolution path that bypasses the Beat Sequence engine entirely: every cast in a battle
+requires one more ring beat than the last, alternating dash-forward/dash-back, only a fully-cleared
+combo firing a stronger payoff shot. See CHANGELOG.md's matching entry for full detail — this is a
+genuine mechanic addition, not something the original archetype descriptions anticipated. Not
+reflected in Part 5's archetype table below (left as historical design-intent record) — treat this
+errata as the authoritative current behavior for these two skills.
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
 **Related:** Combat_Directive_v0_1_0.md (lane system, timed input system, lane occupancy — authoritative for those mechanics; this doc builds on top)
 
@@ -60,17 +77,28 @@ new mechanical infrastructure each one needs — front-loading the cheap, infras
 validates "ranged doesn't need Approach" and the shared timing primitives before committing to the
 archetypes that need a wholly new input model or temporal structure.
 
-**Group 1 — build together (near-free extensions of what's already built):**
+**Group 1 — BUILT 2026-08-12 (see CHANGELOG.md's matching entry for full detail):**
 1. **Instant Strike / Read-the-Tell** — structurally almost identical to Slash's
    `Windup-Real → Attack`, just without the Approach beat (no lane-closing) and no travel time.
-   Cheapest possible ranged skill; proves ranged doesn't need Approach at all.
+   Cheapest possible ranged skill; proves ranged doesn't need Approach at all. **Built** as
+   `Ranged_InstantStrike` — this needed one genuinely new mechanic beyond what "near-free" implied: a
+   real pre-emptive timed-input window during Windup (new `ResponseTimingType`), since the only ring
+   in the Beat Sequence path previously fired on the Attack beat, after Windup already finished.
 2. **Feint** — `Windup-Fake` already exists from Slash; applying it to Instant Strike just proves the
-   fake/real read generalizes past melee. Build alongside #1, not as separate work.
+   fake/real read generalizes past melee. **Built** as `Ranged_Feint`; depended entirely on #1's
+   pre-emptive window (a fake windup with no reactable moment has no mechanical effect) — its
+   `WindupFake` beat opens the identical prompt shape but its outcome is always discarded.
 3. **Metronome/Learned Rhythm & Jitter/No Fixed Rhythm** — not new systems, just windup-timing data
-   patterns (fixed vs. randomized) applied to whatever skill from #1 already exists.
+   patterns (fixed vs. randomized) applied to whatever skill from #1 already exists. **Built** as
+   `Ranged_Metronome`/`Ranged_Jitter` — on closer read, Metronome needed zero new plumbing (every Beat
+   Sequence skill already plays a fixed duration by default, which already **is** the "steady,
+   learnable" archetype); only Jitter needed a new field (`SkillData.WindupJitterRangeSeconds`,
+   `BeatSequenceRunner.ComputeWindupDuration`).
 4. **Direct Projectile** — check first whether the existing `BuiltInMoveType.Attack` baseline already
    covers this (the Worked Examples table below calls it "current implemented pattern") before
-   spending build time on it — may already be effectively done.
+   spending build time on it — may already be effectively done. **Confirmed already done** — in fact
+   implemented twice (`ResolveSkillAction`'s placeholder-damage branch and `ResolveBuiltInMove`'s
+   `BuiltInMoveType.Attack` case are both full Direct Projectile implementations). No build work.
 
 **Group 2 — one dedicated pass each (new input primitives):**
 5. **Multi-Hit Volley** — calls the existing `RunTimedInput` multiple times in sequence, which

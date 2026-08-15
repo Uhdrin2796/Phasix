@@ -129,21 +129,44 @@ public static class BeatSequenceRunner
     }
 
     /// <summary>
+    /// Resolves the actual duration a Windup beat should play for — base
+    /// (BeatSequenceConfig.WindupRealDurationSeconds/WindupFakeDurationSeconds) unmodified when
+    /// jitterRangeSeconds is 0 (the default; this IS the Metronome archetype's "steady, learnable"
+    /// behavior, unchanged from before this method existed), or randomized by +/- jitterRangeSeconds
+    /// each call when positive (the Jitter archetype, SkillData.WindupJitterRangeSeconds).
+    ///
+    /// A pure function, deliberately NOT rolled inside RunWindup itself — 2026-08-12 session (Group 1
+    /// archetypes): callers that need a PreEmptive skill's concurrent timed-input window sized to
+    /// match the tween (BattleManager.ResolveMeleeBeatSequence) must compute the duration exactly
+    /// ONCE and pass the same value to both RunWindup and the timed-input call — rolling jitter twice
+    /// (once for the tween, once for the ring) would desync the visual from the window it's supposed
+    /// to gate.
+    /// </summary>
+    public static float ComputeWindupDuration(bool isFake, float jitterRangeSeconds)
+    {
+        float baseDuration = isFake ? BeatSequenceConfig.WindupFakeDurationSeconds : BeatSequenceConfig.WindupRealDurationSeconds;
+        if (jitterRangeSeconds <= 0f) return baseDuration;
+
+        float jittered = baseDuration + UnityEngine.Random.Range(-jitterRangeSeconds, jitterRangeSeconds);
+        return UnityEngine.Mathf.Max(0.05f, jittered);
+    }
+
+    /// <summary>
     /// Squash-and-hold tween on the attacker's CURRENT depth-scale (read live from the element, not
     /// re-derived from attacker.LaneIndex — 2026-08-12 fix: after a diagonal Approach the element's
     /// live scale reflects the TARGET's row, not the attacker's own canonical one, so re-deriving
     /// from attacker.LaneIndex would have snapped the squash's baseline to the wrong value the
     /// instant Windup started; reading the live value is correct whether or not an Approach ran
     /// before this, and whichever row the attacker visually ended up at) times
-    /// WindupSquashScaleDelta, held for the Real or Fake duration — same tween shape either way, only
-    /// the held duration differs (BeatSequenceConfig.WindupRealDurationSeconds vs
-    /// WindupFakeDurationSeconds), per Part 7's explicit intent that this differentiation itself is
-    /// the intended player-facing tell to read.
+    /// WindupSquashScaleDelta, held for the given duration — same tween shape regardless of Real vs
+    /// Fake vs jittered, per Part 7's explicit intent that duration alone (not shape) is the intended
+    /// player-facing tell to read. Duration is resolved by the caller via ComputeWindupDuration, not
+    /// derived here, so it can be shared with a concurrent PreEmptive timed-input window — see that
+    /// method's own doc comment.
     /// </summary>
-    public static IEnumerator RunWindup(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide, bool isFake)
+    public static IEnumerator RunWindup(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide, float duration)
     {
         VisualElement element = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
-        float duration = isFake ? BeatSequenceConfig.WindupFakeDurationSeconds : BeatSequenceConfig.WindupRealDurationSeconds;
         float baseScale = ((UnityEngine.Vector3)element.resolvedStyle.scale.value).x;
         float squashedScale = baseScale * BeatSequenceConfig.WindupSquashScaleDelta;
 
@@ -153,6 +176,50 @@ public static class BeatSequenceRunner
 
         VisualElementTweening.TweenUniformScale(element, baseScale, half);
         yield return new UnityEngine.WaitForSeconds(half);
+    }
+
+    /// <summary>
+    /// A quick in-place vertical bounce (up then back down) with NO position change — the "something
+    /// is coming" warning cue played at the very start of a ranged skill's Windup (2026-08-13, user:
+    /// "when the skill is selected [for] the hop to occur then after a brief delay then the projectile
+    /// shoots"), distinct from RunWindup's squash-based tell and from RunReturn's own arc-hop (which
+    /// this reuses the same TweenTranslateY language as, just smaller and never combined with a
+    /// left/top move). Callers should AWAIT this (not fire-and-forget) since it's meant to read as a
+    /// discrete first beat, not something layered under a concurrent tween.
+    /// </summary>
+    public static IEnumerator RunWarningHop(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide)
+    {
+        VisualElement element = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        float half = BeatSequenceConfig.WarningHopDurationSeconds / 2f;
+
+        VisualElementTweening.TweenTranslateY(element, BeatSequenceConfig.WarningHopHeightPx, half);
+        yield return new UnityEngine.WaitForSeconds(half);
+
+        VisualElementTweening.TweenTranslateY(element, 0f, half);
+        yield return new UnityEngine.WaitForSeconds(half);
+    }
+
+    /// <summary>
+    /// One beat of a Metronome/Jitter stacking-rhythm combo (2026-08-13, redesigned same day — user:
+    /// "the dash should just be a visual thing and timing for the ring but should not actually
+    /// change the players position") — a purely cosmetic `transform`-level offset
+    /// (VisualElementTweening.TweenTranslateX), NOT the real `style.left` (that's what TweenLeft/
+    /// RunApproach/RunMeleeLungeAndFlash use for actual position). "Forward" dashes out to offsetPx
+    /// toward the opponent (player = +X, enemy = -X, same direction convention as RunApproach's
+    /// closing lunge); "back" always returns to translateX 0, not a further negative overshoot — so
+    /// every beat is independently self-contained (0 -> offset -> 0 -> offset -> ...), and
+    /// ResolveStackingRhythmAttack's own final reset-to-0 is a no-op safety net rather than something
+    /// load-bearing. The dash's arrival is timed to coincide with the caller's own ring resolving
+    /// (both run concurrently over the same `duration`).
+    /// </summary>
+    public static IEnumerator RunRhythmDash(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide, bool forward, float offsetPx, float duration)
+    {
+        VisualElement element = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        float towardSign = attackerIsPlayerSide ? 1f : -1f;
+        float targetX = forward ? towardSign * offsetPx : 0f;
+
+        VisualElementTweening.TweenTranslateX(element, targetX, duration);
+        yield return new UnityEngine.WaitForSeconds(duration);
     }
 
     /// <summary>
