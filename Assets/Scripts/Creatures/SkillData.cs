@@ -58,6 +58,23 @@ using UnityEngine;
 /// rings") is deliberately NOT its own field — it's derived at runtime from each hit's position
 /// within VolleyRingSequence's own length (first half = converging, second half = expanding), so a
 /// differently-sized future volley pattern needs zero code changes, pure new-asset authoring.
+///
+/// 2026-08-15 follow-up (exploring alternate Volley "feels" — "Double Tap"/"Tracking Volley"):
+/// VolleyDashForwardDurationsSeconds and VolleyDashBackDurationsSeconds are a NINTH and TENTH
+/// structural field (originally one shared array, split in a same-day follow-up — see below).
+/// Empty (default) falls back to the flat global dash cadence every hit previously used
+/// unconditionally — zero risk to the original "Basic Count" asset. A non-empty array lets a skill
+/// pace WHEN each hit launches, independently of VolleyRingDurationsSeconds (which only controls
+/// how long a hit's ring stays open once it has already launched) — the missing knob needed for a
+/// real pause between groups of hits rather than one continuous rapid stream.
+///
+/// 2026-08-15, same-day follow-up (user, after trying "Double Tap": "the 2nd two seem to have a
+/// bigger delay than the 1st two attacks") — the original design used ONE shared value per hit for
+/// both its forward and back dash leg. That can't express "pause only before this hit" without also
+/// pausing after it (the same value drives both legs), so a single long entry meant to create one
+/// mid-sequence gap always produced two. Split into independent forward/back arrays so the pause
+/// can live entirely in one hit's forward leg while its own back leg — and therefore the gap after
+/// it — stays exactly as fast as every other hit's.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -123,6 +140,27 @@ public class SkillData : ScriptableObject
              "when VolleyRingSequence is empty.")]
     [SerializeField] private float[] _volleyRingDurationsSeconds = System.Array.Empty<float>();
 
+    [Tooltip("Per-hit dash-FORWARD leg duration (seconds), index-parallel to VolleyRingSequence — " +
+             "entry i is hit i+1's own approach, played BEFORE it fires. Paces how long the player " +
+             "waits for this hit to launch (unlike VolleyRingDurationsSeconds above, which only " +
+             "affects how long that hit's OWN ring stays open once launched). Empty (default) or " +
+             "shorter than the sequence falls back to the flat BeatSequenceConfig." +
+             "VolleyDashLegDurationSeconds for any missing entry — the original \"Basic Count\" " +
+             "pattern's continuous rapid cadence, unchanged.")]
+    [SerializeField] private float[] _volleyDashForwardDurationsSeconds = System.Array.Empty<float>();
+
+    [Tooltip("Per-hit dash-BACK leg duration (seconds), index-parallel to VolleyRingSequence — " +
+             "entry i is hit i+1's own return, played AFTER it fires and BEFORE the next hit's own " +
+             "forward leg begins. Deliberately a SEPARATE array from VolleyDashForwardDurationsSeconds " +
+             "(2026-08-15 fix, user: \"the 2nd two seem to have a bigger delay than the 1st two\") — " +
+             "a single shared forward+back value per hit can't express \"pause only before this hit\" " +
+             "without ALSO pausing after it, since that same value drives both legs; keeping a long " +
+             "forward value on the entry that should carry a real mid-sequence pause (e.g. \"Double " +
+             "Tap\"'s hit 3) while its OWN back value stays short is what actually produces a single, " +
+             "one-sided pause instead of doubling it. Same empty/short-falls-back-to-default rule as " +
+             "the forward array above.")]
+    [SerializeField] private float[] _volleyDashBackDurationsSeconds = System.Array.Empty<float>();
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -135,4 +173,6 @@ public class SkillData : ScriptableObject
     public StackingRhythmType StackingRhythm => _stackingRhythm;
     public IReadOnlyList<CompassPoint> VolleyRingSequence => _volleyRingSequence;
     public IReadOnlyList<float> VolleyRingDurationsSeconds => _volleyRingDurationsSeconds;
+    public IReadOnlyList<float> VolleyDashForwardDurationsSeconds => _volleyDashForwardDurationsSeconds;
+    public IReadOnlyList<float> VolleyDashBackDurationsSeconds => _volleyDashBackDurationsSeconds;
 }

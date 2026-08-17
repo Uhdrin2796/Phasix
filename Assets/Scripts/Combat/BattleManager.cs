@@ -1466,9 +1466,20 @@ public class BattleManager : MonoBehaviour
                 ? skill.VolleyRingDurationsSeconds[i]
                 : BeatSequenceConfig.VolleyDefaultRingDurationSeconds;
             bool isConverging = i < hitCount / 2; // derived split — first half converging/left, second half expanding/right
+            // 2026-08-15 fix (user: "the 2nd two seem to have a bigger delay than the 1st two
+            // attacks") — forward and back legs are looked up independently now, not one shared
+            // value for both, so a pause authored on one hit's forward leg doesn't also stretch its
+            // own return (which would otherwise create a second, unintended pause before the next
+            // hit — see SkillData.VolleyDashBackDurationsSeconds' own doc comment for the full math).
+            float dashForwardDuration = i < skill.VolleyDashForwardDurationsSeconds.Count
+                ? skill.VolleyDashForwardDurationsSeconds[i]
+                : BeatSequenceConfig.VolleyDashLegDurationSeconds;
+            float dashBackDuration = i < skill.VolleyDashBackDurationsSeconds.Count
+                ? skill.VolleyDashBackDurationsSeconds[i]
+                : BeatSequenceConfig.VolleyDashLegDurationSeconds;
 
             yield return StartCoroutine(BeatSequenceRunner.RunRhythmDash(
-                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: true, BeatSequenceConfig.VolleyDashOffsetPx, BeatSequenceConfig.VolleyDashLegDurationSeconds));
+                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: true, BeatSequenceConfig.VolleyDashOffsetPx, dashForwardDuration));
 
             int hitNumber = i + 1;
             int hitIndex = i;
@@ -1477,7 +1488,7 @@ public class BattleManager : MonoBehaviour
                 targetElement, point, isConverging, ringDuration, skill, hitNumber, hitCount, hitLogLines, hitIndex)));
 
             yield return StartCoroutine(BeatSequenceRunner.RunRhythmDash(
-                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: false, BeatSequenceConfig.VolleyDashOffsetPx, BeatSequenceConfig.VolleyDashLegDurationSeconds));
+                attacker, attackerSlotIndex, attackerIsPlayerSide, forward: false, BeatSequenceConfig.VolleyDashOffsetPx, dashBackDuration));
         }
 
         foreach (Coroutine pending in pendingHits) yield return pending;
@@ -1529,12 +1540,22 @@ public class BattleManager : MonoBehaviour
                 TimedInputConfig.ParryToleranceHalfWidth, TimedInputConfig.ParryBaseWindowPercent,
                 attacker.RuntimeData.EffectiveStat(StatType.Instinct), attacker.RuntimeData.bondPercent);
 
+            // 2026-08-15 fix (user: "the timing of the projectiles isnt sync up... i want to
+            // maintain the projectile speed as it is then adjust the release or showing of the ring
+            // accordingly") — the ring's own "perfect" instant does NOT land at the very end of its
+            // sweep (see ComputeVolleyRingSweepDuration's own doc comment), so displaying the ring
+            // with sweepDuration == ringDuration directly made its perfect moment land well before
+            // (converging) or after (expanding) the projectile actually arrived. The projectile keeps
+            // traveling for exactly ringDuration (the skill-authored, already-tuned value, untouched
+            // — "maintain the projectile speed as it is"); only the RING's own displayed sweep is
+            // stretched so its perfect instant coincides with that same arrival moment.
+            float ringSweepDuration = BattleHUDController.Instance.ComputeVolleyRingSweepDuration(ringDuration, isConverging);
             BattleHUDController.Instance.LaunchRangedBeatSequenceProjectile(
                 attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), ringDuration, holdForOutcome: false);
 
             var outcome = new BattleHUDController.VolleyRingOutcome();
             yield return StartCoroutine(BattleHUDController.Instance.RunVolleyRingOffense(
-                targetElement, point, isConverging, goodToleranceHalfWidth, perfectToleranceHalfWidth, ringDuration, outcome));
+                targetElement, point, isConverging, goodToleranceHalfWidth, perfectToleranceHalfWidth, ringSweepDuration, outcome));
 
             BattleHUDController.OffenseOutcome quality = outcome.Quality;
             float attackMultiplier = quality switch

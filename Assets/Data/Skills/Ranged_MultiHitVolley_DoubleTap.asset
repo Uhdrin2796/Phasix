@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Ranged_MultiHitVolley_DoubleTap
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Double Tap
+  _description: 'Attack Pattern Directive Group 2 - Multi-Hit Volley exploration
+    option #2 ("Paired Bursts"). 4 hits instead of 8: N, NE fire as a quick pair,
+    then a real pause (long dash-leg on hit 3) before S, SW fire as a second quick
+    pair. Hits 1-2 converging/left-click, hits 3-4 expanding/right-click. Tests whether
+    a shorter, punchier volley with a genuine breathing gap reads better than one
+    continuous 8-hit stream.'
+  _treeType: 19
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence: 
+  _responseTiming: 0
+  _windupJitterRangeSeconds: 0
+  _stackingRhythm: 0
+  _volleyRingSequence: 00000000010000000400000005000000
+  _volleyRingDurationsSeconds:
+  - 0.75
+  - 0.75
+  - 0.75
+  - 0.75
+  _volleyDashForwardDurationsSeconds:
+  - 0.16
+  - 0.16
+  - 0.8
+  - 0.16
+  _volleyDashBackDurationsSeconds:
+  - 0.16
+  - 0.16
+  - 0.16
+  - 0.16

@@ -124,6 +124,51 @@ archetypes that need a wholly new input model or temporal structure.
    instead of "tap input," diverging only in scoring (release timing vs. duration matching). Share
    one new hold-input primitive.
 
+### Multi-Hit Volley — tuning knobs reference (added 2026-08-15, updated same day)
+Before authoring another Volley pattern (after "Basic Count," "Double Tap," "Tracking Volley"),
+here's what each `SkillData` field actually controls — asked for explicitly so the next variant
+doesn't need this rediscovered from scratch. All are per-hit/per-skill, pure data — no code changes
+needed to try a new combination.
+
+| Knob | Field | What it changes |
+|---|---|---|
+| **Hit count** | `VolleyRingSequence`'s length | Overall length/commitment of the cast. Also sets where the converging/expanding (left-click/right-click) split falls — always "first half converging, second half expanding," so an 8-hit volley splits 4/4, a 4-hit splits 2/2, etc. |
+| **Per-hit projectile speed** | `VolleyRingDurationsSeconds[i]` | How urgent that specific hit feels — smaller is harder. Since the 2026-08-15 sync fix, this value **is** the projectile's real travel time; the ring's own displayed sweep is *derived* from it (stretched ~1.9-2.1x depending on converging/expanding — see `BattleHUDController.ComputeVolleyRingSweepDuration`), so this one number moves both the shot's speed and the ring's open-time together. They are not independently tunable right now (see "Sync fix tradeoffs" below). |
+| **Shot cadence / rhythm — approach** | `VolleyDashForwardDurationsSeconds[i]` | How long the player waits BEFORE hit i+1 launches. A pause belongs here, on the hit AFTER which the gap should appear. |
+| **Shot cadence / rhythm — return** | `VolleyDashBackDurationsSeconds[i]` | How long hit i+1's own return takes AFTER it fires, before the next hit's own approach can begin. **Deliberately a separate field from the forward one above** (2026-08-15, same-day fix — a single shared value for both legs can't express "pause only before this hit" without also pausing after it, since one number drove both; see "Double Tap gap fix" below). Keep this short/uniform unless you specifically want extra breathing room AFTER a hit too. Both arrays fall back independently to the flat global default (`BeatSequenceConfig.VolleyDashLegDurationSeconds`) when empty/short. |
+| **Position order** | `VolleyRingSequence`'s *values*, not just length | Purely spatial variety — nothing forces the compass-clockwise order every existing pattern uses. Jumping around (e.g. N, S, E, W, NE, SW, SE, NW) or repeating a position reads as more chaotic without changing difficulty or rhythm at all. |
+
+**Double Tap gap fix (2026-08-15, same day):** the cadence field used to be ONE shared value per hit
+for both its forward and back leg. Putting a long value on hit 3 (to create the pause before it)
+also stretched hit 3's OWN return leg by the same amount — creating a second, unintended pause
+before hit 4 too. Worked the math: with a single symmetric value per hit there's no combination that
+makes gap(1→2) equal gap(3→4) while keeping one real pause in the middle; negative durations would
+be required. Splitting into independent forward/back arrays fixed it — put the pause on the
+FORWARD leg of whichever hit should have a gap before it, keep every BACK leg uniform, and the gaps
+on either side of the pause come out symmetric. Double Tap's actual current values: forward
+`[0.16, 0.16, 0.8, 0.16]`, back `[0.16, 0.16, 0.16, 0.16]` — gap(1→2) = gap(3→4) = 0.32s, gap(2→3) =
+0.96s (the one real pause).
+
+**Sync fix tradeoffs (2026-08-15, see CHANGELOG.md and DECISIONS.md -> [Combat] for the full
+writeup):** the projectile-speed/ring-open-time coupling above was a deliberate choice, not the only
+option — three approaches were weighed:
+1. **Shrink the projectile to match the ring** (ring duration stays exactly as authored; projectile
+   speeds up/slows to land at the ring's natural perfect-instant). Keeps every authored ring number
+   literally true, but projectiles can look unnaturally fast relative to the "standard projectile"
+   feel the archetype was designed around.
+2. **Stretch the ring to match the projectile** (chosen) — projectile keeps its authored speed
+   exactly; the ring's displayed sweep is derived/stretched instead. Projectile feel stays correct
+   and consistent with the rest of the game's sync philosophy (`ComputeSweepDurationForTravelTime`),
+   at the cost of ring-open-time no longer being an independently tunable number.
+3. **Decouple start times instead of either duration** (not built) — launch the projectile earlier
+   relative to the ring opening, so both keep their exact authored speeds and only their *starting
+   offset* changes. Would preserve full independent control of both knobs, but is a real structural
+   change (`RunVolleyHit` currently launches both together) and risks the projectile visibly being
+   mid-flight before its own telegraph/ring appears — undercutting the "tell, then react" framing.
+
+If a future pattern needs ring-open-time and projectile-speed tuned independently, option 3 is the
+one to revisit — not a quick asset tweak, budget it as its own small pass.
+
 **Group 3 — one dedicated pass, builds directly on the 2026-08-12 formation grid work:**
 7. **Zone/Positional** — the Lane Selection input model (no timing, just picking lanes) plus a
    visible "marked lanes" tell. The defender's Evade/Tank response reuses the player position system

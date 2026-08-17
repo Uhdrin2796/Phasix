@@ -63,6 +63,17 @@ public class BattleHUDController : MonoBehaviour
     private static readonly Color PerfectFlashColor = new Color(176f / 255f, 38f / 255f, 255f / 255f);
     private static readonly Color MissFlashColor = new Color(220f / 255f, 60f / 255f, 60f / 255f);
 
+    /// <summary>
+    /// Multi-Hit Volley only (2026-08-15, user: "its hard to differentiate which ring is the main
+    /// ring i should be focusing on") — several rings can be open at once (see _volleyQueue), but
+    /// only the FIFO-front one actually listens for clicks. This dims every ring EXCEPT the front
+    /// one so it's visually obvious which is currently "live" — the front ring stays bright white
+    /// (RunVolleyRingOffense/Defense's existing unresolved color), every other queued ring uses
+    /// this muted gray instead, and the moment a ring is promoted to front (the previous one
+    /// resolved and popped), it switches from this to white on the very next frame.
+    /// </summary>
+    private static readonly Color VolleyWaitingRingColor = new Color(0.55f, 0.55f, 0.55f, 0.8f);
+
     /// <summary>A hit counts as "perfect" when the marker/target ratio deviation is within this fraction of the full tolerance half-width — e.g. 0.2 means the innermost 20% of the success window. Placeholder, not tuned.</summary>
     private const float PerfectToleranceFraction = 0.2f;
 
@@ -2106,6 +2117,28 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>
+    /// Multi-Hit Volley's own sync fix (2026-08-15, user: "the timing of the rings is better but i
+    /// noticed that the timing of the projectiles isnt sync up... i want to maintain the projectile
+    /// speed as it is then adjust the release or showing of the ring accordingly") — same geometry
+    /// as ComputeSweepDurationForTravelTime above (stretch the ring's sweep so its "perfect" instant
+    /// — MarkerRadius crossing RingTargetRadius — lands exactly when the projectile arrives), just
+    /// generalized to Volley's expanding-ring case too: a converging ring's perfect instant is
+    /// ~51.7% through an UNSTRETCHED sweep (RingMarkerStartRadius shrinking down to
+    /// RingMarkerMinRadius), an expanding ring's is ~48.3% (RingMarkerMinRadius growing up to
+    /// RingMarkerStartRadius) — so each needs its own perfect-fraction, unlike the single-ring path
+    /// above which only ever handles the converging case. The projectile keeps traveling for exactly
+    /// travelDurationSeconds (the skill-authored SkillData.VolleyRingDurationsSeconds value,
+    /// untouched); only the RING's own displayed sweepDuration is stretched to match it.
+    /// </summary>
+    public float ComputeVolleyRingSweepDuration(float travelDurationSeconds, bool isConverging)
+    {
+        float perfectFraction = isConverging
+            ? (RingMarkerStartRadius - RingTargetRadius) / (RingMarkerStartRadius - RingMarkerMinRadius)
+            : (RingTargetRadius - RingMarkerMinRadius) / (RingMarkerStartRadius - RingMarkerMinRadius);
+        return travelDurationSeconds / perfectFraction;
+    }
+
+    /// <summary>
     /// Offensive action-command check (Combat_Directive_v0_1_0.md Part 4), reworked 2026-08-05
     /// (user-directed, Sonny 2-referenced — see DECISIONS.md -> [Combat]) to mirror
     /// RunDefenseTimedInput's converging-ring visual, positioned above the TARGETED ENEMY (not
@@ -2408,8 +2441,14 @@ public class BattleHUDController : MonoBehaviour
                 ring.MarkerRadius = isConverging
                     ? Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress)
                     : Mathf.Lerp(RingMarkerMinRadius, RingMarkerStartRadius, progress);
-                ring.Refresh();
             }
+
+            // Color/Refresh live OUTSIDE the sweep-progress gate above — a ring whose own timer has
+            // already run out but is still waiting in queue (not yet front) needs to keep repainting
+            // every frame so it can flip from dimmed to bright the instant it's promoted, even though
+            // its radius itself has stopped animating.
+            ring.MarkerColor = isFront ? Color.white : VolleyWaitingRingColor;
+            ring.Refresh();
 
             if (isFront && (slot.Clicked || elapsed >= sweepDuration))
             {
@@ -2468,8 +2507,12 @@ public class BattleHUDController : MonoBehaviour
                 elapsed += Time.deltaTime;
                 float progress = Mathf.Clamp01(elapsed / sweepDuration);
                 ring.MarkerRadius = Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress);
-                ring.Refresh();
             }
+
+            // Same "keep repainting even after this ring's own timer runs out while still queued"
+            // reasoning as RunVolleyRingOffense above.
+            ring.MarkerColor = isFront ? Color.white : VolleyWaitingRingColor;
+            ring.Refresh();
 
             if (isFront && (slot.Clicked || elapsed >= sweepDuration))
             {

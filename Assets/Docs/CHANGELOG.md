@@ -16,6 +16,167 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-15] Phase 3 follow-up — Multi-Hit Volley rings now show which one is the current focus
+- **Context:** User: "is there a way to differentiate the colors of the ring so you know which ring
+  is being focused? Right now its hard to differentiate which ring is the main ring i should be
+  focusing on. After you resolve that main target ring, then the next ring should show to be the
+  new main focus."
+- **Built:** New `BattleHUDController.VolleyWaitingRingColor` (a muted gray, `(0.55,0.55,0.55,0.8)`)
+  alongside the existing outcome-flash colors. `RunVolleyRingOffense`/`RunVolleyRingDefense` now set
+  each ring's `MarkerColor` every frame based on live FIFO-front status — the front (currently-
+  listening) ring stays bright white, every other queued ring is dimmed gray. The color/`Refresh()`
+  call moved OUTSIDE the sweep-progress `if` block so a ring whose own sweep timer has already run
+  out but is still waiting in queue (not yet promoted) keeps repainting every frame — otherwise it
+  would freeze at its last-drawn color and only visually update once its own radius resumed
+  animating, which never happens once its timer has elapsed.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: opened two
+  rings directly (one converging, one expanding) and read `RingVisual.MarkerColor` off both —
+  confirmed the first (FIFO-front) was pure white and the second (queued) was the muted gray.
+  Force-resolved the front ring and re-checked in the very next call (minimal real-world gap, to
+  dodge this environment's Editor-unfocused frame-throttling that can otherwise let even a
+  30-second-authored ring auto-timeout within about a second of wall-clock time) — the previously-
+  gray second ring had correctly promoted to pure white the instant it became the new front.
+  `read_console` clean throughout.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Double Tap's asymmetric pause fixed (split dash-leg field)
+- **Context:** User, after trying Double Tap: "make sure that the timing is consistent before the
+  1st 2 attacks and the 2nd two attacks. The 2nd two seem to have a bigger delay than the 1st two
+  attacks."
+- **Root cause:** `SkillData.VolleyDashLegDurationsSeconds` (added the session before) used ONE
+  shared value per hit for both its forward-dash (approach, before firing) and back-dash (return,
+  after firing) legs. Placing the intended pause on hit 3's entry (`[0.16, 0.16, 0.8, 0.16]`)
+  stretched BOTH the gap before hit 3 (intended) and the gap before hit 4 (unintended — hit 3's own
+  return leg is the SAME value). Worked out the gap math: with a single symmetric value per hit,
+  there is no combination that makes gap(1→2) and gap(3→4) equal while keeping one real pause in the
+  middle — negative durations would be required. Not a tuning miss, a real modeling limitation.
+- **Fixed:** Split the single array into two independent ones —
+  `VolleyDashForwardDurationsSeconds` (hit's own approach) and `VolleyDashBackDurationsSeconds` (hit's
+  own return), each with the same empty/short-falls-back-to-`BeatSequenceConfig
+  .VolleyDashLegDurationSeconds` convention as before. `BattleManager.ResolveMultiHitVolleyAttack`
+  looks each up independently for its two `RunRhythmDash` calls per hit instead of sharing one value.
+  This field was only a day old and used by exactly one asset, so this was a clean field-shape change,
+  not a migration — the old serialized data simply drops out of the `.asset` YAML on next save.
+- **Re-tuned `Ranged_MultiHitVolley_DoubleTap.asset`:** forward legs `[0.16, 0.16, 0.8, 0.16]` (pause
+  lives here, before hit 3 only), back legs flat `[0.16, 0.16, 0.16, 0.16]` (no hit's own return is
+  ever stretched) — gap(1→2) = gap(3→4) = 0.32s exactly, gap(2→3) = 0.96s (the one real pause).
+  `Ranged_MultiHitVolley_Tracking.asset` updated to the same shape with both arrays flat 0.13s
+  (numerically unchanged, no pause structure needed there).
+- **Verified:** Clean compile (`read_console`, no `error CS`). Read `Ranged_MultiHitVolley_DoubleTap
+  .asset` back to confirm the new fields persisted correctly and the old field is gone. Live via
+  `execute_code`: a full 4-hit Double Tap cast resolved correctly end-to-end (4 log lines, correct
+  damage), no exceptions. `read_console` clean.
+- **Docs:** Updated `Attack_Pattern_Directive_v0_1_0.md`'s Multi-Hit Volley tuning-knobs reference
+  (added the same day) to match the split field names.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Multi-Hit Volley projectile/ring desync fixed
+- **Context:** User: "the timing of the rings is better but i noticed that the timing of the
+  projectiles isnt sync up. Is the timing of the rings set on projectile release or projectile
+  landing?" Then, after I proposed shrinking the projectile's travel time to match the ring instead:
+  "so i want to maintain the projectile speed as it is then adjust the release or showing of the
+  ring accordinghly."
+- **Root cause:** `RunVolleyHit` launched each hit's projectile with `travelDuration ==
+  ringDuration` directly, implicitly assuming the ring's "perfect" instant (MarkerRadius crossing
+  RingTargetRadius) lands at the very END of its sweep. It doesn't — same geometry the existing
+  single-ring path already accounts for (`BattleHUDController.ComputeSweepDurationForTravelTime`,
+  2026-08-11): a converging ring's perfect instant is ~51.7% through an unstretched sweep, an
+  expanding ring's is ~48.3%. Volley never used that stretch, so the projectile arrived roughly
+  twice as late (converging hits) or before (expanding hits) as the ring actually said "now."
+  Neither is quite "release" nor "landing" as asked — before the fix, ring and projectile both
+  START together but the ring's own internal "perfect" sub-moment didn't line up with either the
+  launch or the true arrival.
+- **Fixed:** New `BattleHUDController.ComputeVolleyRingSweepDuration(travelDurationSeconds,
+  isConverging)` — same stretch-the-ring math as `ComputeSweepDurationForTravelTime`, generalized to
+  handle Volley's expanding-ring case too (its own, different perfect-fraction). Per the user's
+  explicit direction, the PROJECTILE keeps traveling for exactly the skill-authored
+  `VolleyRingDurationsSeconds` value, untouched ("maintain the projectile speed as it is"); only the
+  ring's own displayed sweep is stretched (now noticeably longer than the authored value — e.g. a
+  0.75s hit's ring now takes ~1.45-1.55s to fully close) so its perfect instant coincides with the
+  projectile's real, unmodified landing time.
+- **Verified:** Live via `execute_code` — `ComputeVolleyRingSweepDuration(0.75f, true)` returned
+  1.45 (perfect instant lands at 0.9999s... recomputed: 1.45 x 0.5172 = 0.750s) and `(0.75f, false)`
+  returned 1.554 (0.7501s) — both correctly landing their perfect instant at the projectile's
+  unchanged 0.75s arrival. Re-ran a full Double Tap cast (4 hits) end-to-end with the fix live — all
+  4 resolved and logged correctly, same damage as before (timing-fix only, no damage-model change).
+  `read_console` clean throughout, no new errors.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Double Tap / Tracking Volley slowed down further
+- **Context:** User, after the first "touch" of slowdown: "slow them down further."
+- **Tuned (asset-only, no code changes):** `Ranged_MultiHitVolley_DoubleTap.asset` — ring durations
+  0.5s -> 0.75s (all 4 hits); dash-leg durations `[0.10,0.10,0.55,0.10]` -> `[0.16,0.16,0.8,0.16]`.
+  `Ranged_MultiHitVolley_Tracking.asset` — ring durations 0.85s -> 1.2s (all 8 hits); dash-leg
+  durations flat 0.13s -> flat 0.2s. Description text updated to match. A larger step than the
+  previous "a touch" pass, since the user asked for more this time rather than another small nudge.
+- **Note:** Same as the previous pass — both skills are already equipped on the user's live save by
+  GUID, so these new values apply automatically next time either is used, no re-equip needed.
+- **Verified:** Read `Ranged_MultiHitVolley_DoubleTap.asset` back after the edit to confirm the new
+  values persisted correctly. `read_console` clean.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Double Tap / Tracking Volley slowed down a touch
+- **Context:** User, after equipping both: "slow the speed down a touch for both of them."
+- **Tuned (asset-only, no code changes):** `Ranged_MultiHitVolley_DoubleTap.asset` — ring durations
+  0.4s -> 0.5s (all 4 hits); dash-leg durations `[0.08,0.08,0.5,0.08]` -> `[0.10,0.10,0.55,0.10]`
+  (quick-tap legs and the pause both nudged up proportionally).
+  `Ranged_MultiHitVolley_Tracking.asset` — ring durations 0.75s -> 0.85s (all 8 hits); dash-leg
+  durations, previously left empty (falling back to the flat 0.10s global default), now explicitly
+  authored at a flat 0.13s so the launch cadence is a touch slower too, not just the ring-open time.
+  Description text updated to match the new numbers.
+- **Note:** Both skills are already equipped on the user's live save (by skill GUID) — since the
+  save only stores which skills are equipped, not their timing data, these new values apply
+  automatically next time either skill is used, no re-equip needed.
+- **Verified:** Read both `.asset` files back after the edit to confirm the new values persisted
+  correctly. `read_console` clean, no new errors (asset-data-only change, no compile involved).
+
+---
+
+[2026-08-15] Phase 3 follow-up — Two more Multi-Hit Volley patterns: "Double Tap" and "Tracking Volley"
+- **Context:** User asked to try two of the three timing-exploration options discussed after the
+  first Volley playtest ("the timing is really fast and i couldnt keep up"): #2 (Paired Bursts) and
+  #3 (Steady Slow), as their own separate equippable skills, with hover-tooltip names matching.
+- **Built — new field, `SkillData.VolleyDashLegDurationsSeconds`:** Discovered mid-build that the
+  original engine had no way to express a real pause between groups of hits — the dash cadence that
+  paces WHEN each hit launches was a flat global constant
+  (`BeatSequenceConfig.VolleyDashLegDurationSeconds`), while the only per-hit-authorable knob
+  (`VolleyRingDurationsSeconds`) only controls how long a hit's ring stays open once already
+  launched, not when the next one fires. Added a new optional per-hit array, same empty-array-falls-
+  back-to-default convention as every other Volley field — zero risk to the existing "Basic Count"
+  asset, which doesn't set it.
+- **Built — `Ranged_MultiHitVolley_DoubleTap.asset` ("Double Tap"):** 4 hits (N, NE, S, SW) instead
+  of 8 — hits 1-2 converging/left-click, hits 3-4 expanding/right-click (the existing first-half/
+  second-half split, which still divides cleanly at 4 hits). Ring durations flat 0.4s. Dash-leg
+  durations `[0.08, 0.08, 0.5, 0.08]` — hits 1-2 fire as a quick pair, then a real pause (hit 3's own
+  0.5s wind-up) before hits 3-4 fire as a second quick pair.
+- **Built — `Ranged_MultiHitVolley_Tracking.asset` ("Tracking Volley"):** Same 8-hit compass sequence
+  as the original, but every ring duration flattened to 0.75s (up from 0.45s) with dash-leg
+  durations left at the default — needed no new field, exactly the "zero code changes" pure-asset
+  variant discussed. With dash cadence unchanged but ring duration much longer, 3-4 rings stay open
+  concurrently through most of the cast — shifts the challenge from reaction speed toward tracking
+  several open rings at once.
+- **Registered:** Both added to `SkillDatabase`'s `_allSkills`/GUID index (the same manual step every
+  new skill needs).
+- **Not added to `GameManager.ApplyDebugPlaytestLoadout`:** the existing forced debug set is already
+  at exactly 12/12 of the Tier-5 fallback starter's cap (zero slack, flagged when "Volley" was added)
+  — two more names would exceed it and silently skip the WHOLE override, not just fail for the new
+  entries. Separately, the actual local save's player party turned out to be Tier 1 (cap 4), so the
+  auto-loadout mechanism doesn't reach it regardless of this cap. Left as an open question for the
+  user rather than silently picking a fix (raise the cap, drop existing debug skills, or something
+  else) — both skills are fully registered and `SkillTreeType.Testing`-tagged, just not pre-equipped
+  anywhere yet.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`, direct
+  invocation (same pattern as the original Volley, bypassing the equip step entirely): Double Tap
+  resolved exactly 4 hits, correctly numbered 1/4-4/4; Tracking Volley resolved exactly 8, correctly
+  numbered 1/8-8/8. Both showed the same lowered per-hit damage as the original pattern (2 damage/
+  Miss-tier hit, matching the just-applied `VolleyPerHitDamageMultiplier`). `read_console` clean.
+
+---
+
 [2026-08-15] Phase 3 follow-up — Multi-Hit Volley damage lowered
 - **Context:** User, after the first playtest of Volley: "lower the damage for the volley."
 - **Fixed:** Each Volley hit computed full damage from `BattleConfig.PlaceholderSkillPower` same as
