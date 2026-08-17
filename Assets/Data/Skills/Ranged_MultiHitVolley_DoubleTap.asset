@@ -15,10 +15,10 @@ MonoBehaviour:
   _skillName: Double Tap
   _description: 'Attack Pattern Directive Group 2 - Multi-Hit Volley exploration
     option #2 ("Paired Bursts"). 4 hits instead of 8: N, NE fire as a quick pair,
-    then a real pause (long dash-leg on hit 3) before S, SW fire as a second quick
-    pair. Hits 1-2 converging/left-click, hits 3-4 expanding/right-click. Tests whether
-    a shorter, punchier volley with a genuine breathing gap reads better than one
-    continuous 8-hit stream.'
+    then a real pause (long forward-leg on hit 3) before S, SW fire as a second quick
+    pair. Hits 1-2 circle marker/left-click, hits 3-4 square marker/right-click.
+    Tests whether a shorter, punchier volley with a genuine breathing gap reads better
+    than one continuous 8-hit stream.'
   _treeType: 19
   _placeholderIndex: 0
   _grantsComboRule: 0

@@ -53,6 +53,32 @@ public class BattleHUDController : MonoBehaviour
     private const float RingMarkerStartRadius = 60f;
     private const float RingMarkerMinRadius = 2f;
 
+    /// <summary>
+    /// Multi-Hit Volley's own target-ring size (2026-08-15, user: "make the target square smaller
+    /// so theres more room for the moving ring to converge", then same-day follow-up: "you can make
+    /// the target ring slightly bigger, i just wanted the shape that converges to the target ring to
+    /// be a bit bigger" — so this settled a bit above its first pass (15) rather than back at the
+    /// original shared 30, and VolleyMarkerStartRadius below grew instead to do the actual work of
+    /// giving the marker "more room to converge"). Deliberately a SEPARATE constant from
+    /// RingTargetRadius above, not a shared one, so neither of these Volley-only tweaks touches the
+    /// classic single-ring system's already-tuned feel (RunTimedInput/RunDefenseTimedInput/
+    /// ComputeSweepDurationForTravelTime all still use RingTargetRadius/RingMarkerStartRadius
+    /// unchanged). Every RingTargetRadius reference inside RunVolleyRingOffense/Defense and
+    /// ComputeVolleyRingSweepDuration uses this instead, so the displayed target ring, the timing-
+    /// sync math, and the deviation/tolerance scoring all agree on the same value.
+    /// </summary>
+    private const float VolleyTargetRadius = 20f;
+
+    /// <summary>
+    /// Multi-Hit Volley's own marker starting size (2026-08-15, user: "i just wanted the shape that
+    /// converges to the target ring to be a bit bigger") — bigger than the classic single-ring
+    /// system's shared RingMarkerStartRadius (60), same "separate Volley-only constant" reasoning as
+    /// VolleyTargetRadius above. The ring's own CSS box (.timing-ring-volley in BattleHUD.uss) and
+    /// PositionVolleyRing's self-centering offset were both widened to match — a marker this size
+    /// would otherwise clip against the old, smaller box.
+    /// </summary>
+    private const float VolleyMarkerStartRadius = 80f;
+
     // Marker flash colors on click resolution (2026-08-05, user-directed — see DECISIONS.md ->
     // [Combat]), reworked same day from per-move colors (Dodge=orange/Parry=green) to
     // per-OUTCOME-QUALITY colors shared by Dodge/Parry/offense alike: green for a normal success,
@@ -65,14 +91,24 @@ public class BattleHUDController : MonoBehaviour
 
     /// <summary>
     /// Multi-Hit Volley only (2026-08-15, user: "its hard to differentiate which ring is the main
-    /// ring i should be focusing on") — several rings can be open at once (see _volleyQueue), but
-    /// only the FIFO-front one actually listens for clicks. This dims every ring EXCEPT the front
-    /// one so it's visually obvious which is currently "live" — the front ring stays bright white
-    /// (RunVolleyRingOffense/Defense's existing unresolved color), every other queued ring uses
-    /// this muted gray instead, and the moment a ring is promoted to front (the previous one
-    /// resolved and popped), it switches from this to white on the very next frame.
+    /// ring i should be focusing on... make it more distinct"). First pass just swapped white vs.
+    /// gray — not distinct enough on its own. This version leans on the same "the PROMOTION should
+    /// be an event, not a static state" principle QTE-heavy action games use (a prompt appearing/
+    /// changing is what grabs attention, not merely differing from its neighbors): the active ring
+    /// gets its own distinct hue (gold, not reused by any outcome-flash color) AND punches a quick
+    /// scale pop the instant it's promoted (see the punch-scale call in RunVolleyRingOffense/
+    /// Defense) AND plays AudioManager.PlayVolleyRingPromoted() — three simultaneous, redundant
+    /// cues instead of one subtle color swap. Waiting rings are pushed further into the background
+    /// (much lower alpha) so they compete less for attention in the first place.
     /// </summary>
-    private static readonly Color VolleyWaitingRingColor = new Color(0.55f, 0.55f, 0.55f, 0.8f);
+    private static readonly Color VolleyActiveRingColor = new Color(1f, 0.84f, 0.2f);
+    private static readonly Color VolleyWaitingRingColor = new Color(0.35f, 0.35f, 0.35f, 0.28f);
+
+    /// <summary>Peak scale of a Volley ring's promotion "punch" — jumps here instantly, then VisualElementTweening.TweenUniformScale eases back to 1 over VolleyPromotionPunchDurationSeconds.</summary>
+    private const float VolleyPromotionPunchScale = 1.4f;
+
+    /// <summary>Seconds for a promoted Volley ring's punch-scale to settle back to 1 — fast enough to read as a "pop," not a slow grow.</summary>
+    private const float VolleyPromotionPunchDurationSeconds = 0.18f;
 
     /// <summary>A hit counts as "perfect" when the marker/target ratio deviation is within this fraction of the full tolerance half-width — e.g. 0.2 means the innermost 20% of the success window. Placeholder, not tuned.</summary>
     private const float PerfectToleranceFraction = 0.2f;
@@ -1573,8 +1609,11 @@ public class BattleHUDController : MonoBehaviour
     private static void PositionVolleyRing(VisualElement ring, CompassPoint point)
     {
         (float dx, float dy) = ComputeCompassOffset(point, VolleyRingRadius);
-        ring.style.left = 36f - 70f + dx;
-        ring.style.top = 36f - 70f + dy;
+        // .stage-creature is 72x72; .timing-ring-volley is 180x180 (widened 2026-08-15 alongside
+        // VolleyMarkerStartRadius growing to 80 — a marker that size would clip against the ring's
+        // OLD 140x140 box) — self-centering offset is half of 180.
+        ring.style.left = 36f - 90f + dx;
+        ring.style.top = 36f - 90f + dy;
     }
 
     /// <summary>
@@ -2121,20 +2160,23 @@ public class BattleHUDController : MonoBehaviour
     /// noticed that the timing of the projectiles isnt sync up... i want to maintain the projectile
     /// speed as it is then adjust the release or showing of the ring accordingly") — same geometry
     /// as ComputeSweepDurationForTravelTime above (stretch the ring's sweep so its "perfect" instant
-    /// — MarkerRadius crossing RingTargetRadius — lands exactly when the projectile arrives), just
-    /// generalized to Volley's expanding-ring case too: a converging ring's perfect instant is
-    /// ~51.7% through an UNSTRETCHED sweep (RingMarkerStartRadius shrinking down to
-    /// RingMarkerMinRadius), an expanding ring's is ~48.3% (RingMarkerMinRadius growing up to
-    /// RingMarkerStartRadius) — so each needs its own perfect-fraction, unlike the single-ring path
-    /// above which only ever handles the converging case. The projectile keeps traveling for exactly
+    /// — MarkerRadius crossing RingTargetRadius — lands exactly when the projectile arrives): a
+    /// converging ring's perfect instant is ~51.7% through an unstretched sweep (RingMarkerStartRadius
+    /// shrinking down to RingMarkerMinRadius). The projectile keeps traveling for exactly
     /// travelDurationSeconds (the skill-authored SkillData.VolleyRingDurationsSeconds value,
     /// untouched); only the RING's own displayed sweepDuration is stretched to match it.
+    ///
+    /// 2026-08-15, same-day follow-up (user: "lets do circle... square for right click... Same
+    /// timing criteria") — every Volley ring animates the same way now (always converging/shrinking);
+    /// left vs. right click is communicated entirely by MARKER SHAPE (RingVisual.MarkerIsSquare) so
+    /// it reads from a single glance instead of requiring the player to watch which direction a ring
+    /// was moving. This method previously branched on an isConverging flag to pick between two
+    /// different perfect-fractions (~51.7% vs ~48.3%) for an expanding-ring variant that no longer
+    /// exists — removed rather than left as unreachable dead flexibility.
     /// </summary>
-    public float ComputeVolleyRingSweepDuration(float travelDurationSeconds, bool isConverging)
+    public float ComputeVolleyRingSweepDuration(float travelDurationSeconds)
     {
-        float perfectFraction = isConverging
-            ? (RingMarkerStartRadius - RingTargetRadius) / (RingMarkerStartRadius - RingMarkerMinRadius)
-            : (RingTargetRadius - RingMarkerMinRadius) / (RingMarkerStartRadius - RingMarkerMinRadius);
+        float perfectFraction = (VolleyMarkerStartRadius - VolleyTargetRadius) / (VolleyMarkerStartRadius - RingMarkerMinRadius);
         return travelDurationSeconds / perfectFraction;
     }
 
@@ -2407,29 +2449,37 @@ public class BattleHUDController : MonoBehaviour
     /// sweepDuration regardless of queue position (user: "multiple rings could be closing if
     /// multiple projectiles are out") but only actually resolves — pops itself, computes an
     /// outcome — once it is the front of the shared queue AND either clicked-correctly or its own
-    /// sweep has elapsed. isConverging picks the existing shrink-toward-target sweep (today's
-    /// RunTimedInput behavior, unchanged) vs. a new grow-toward-target sweep — the deviation-ratio
-    /// scoring math is already direction-agnostic (a plain |MarkerRadius/TargetRadius - 1| check),
-    /// so Good/Perfect/Miss tolerance checks need no changes for the expanding case.
+    /// sweep has elapsed.
+    ///
+    /// 2026-08-15 (user: "lets do circle like we've done for left click, the square for right
+    /// click... Same timing criteria") — every ring now animates identically (always converging/
+    /// shrinking toward the target); requiresLeftClick only selects marker SHAPE
+    /// (RingVisual.MarkerIsSquare) and which button resolves it, not animation direction anymore —
+    /// direction-based encoding needed watching a ring over a couple frames to tell which kind it
+    /// was, shape reads instantly. Deviation-ratio scoring (|MarkerRadius/TargetRadius - 1|) was
+    /// already shape/direction-agnostic, so Good/Perfect/Miss tolerance checks need no changes.
     /// Does NOT touch LastOffenseOutcome/LastTimedInputSuccess — those are single-slot properties
     /// meant for one ring at a time; concurrently-open Volley rings write into their own
     /// VolleyRingOutcome instead so they can never race each other.
     /// </summary>
-    public IEnumerator RunVolleyRingOffense(VisualElement targetElement, CompassPoint point, bool isConverging,
+    public IEnumerator RunVolleyRingOffense(VisualElement targetElement, CompassPoint point, bool requiresLeftClick,
         float goodToleranceHalfWidth, float perfectToleranceHalfWidth, float sweepDuration, VolleyRingOutcome outcome)
     {
         RingVisual ring = _volleyRingPool.Get();
         PositionVolleyRing(ring, point);
         targetElement.Add(ring);
-        ring.TargetRadius = RingTargetRadius;
-        ring.MarkerColor = Color.white;
-        ring.MarkerRadius = isConverging ? RingMarkerStartRadius : RingMarkerMinRadius;
+        ring.TargetRadius = VolleyTargetRadius;
+        ring.MarkerColor = VolleyWaitingRingColor;
+        ring.MarkerRadius = VolleyMarkerStartRadius;
+        ring.MarkerIsSquare = !requiresLeftClick;
+        ring.style.scale = new Scale(Vector3.one); // defensive reset — a pooled instance may still carry a leftover punch-scale from a prior use
         ring.Refresh();
 
-        var slot = new VolleySlot { RequiresLeftClick = isConverging };
+        var slot = new VolleySlot { RequiresLeftClick = requiresLeftClick };
         _volleyQueue.Add(slot);
 
         float elapsed = 0f;
+        bool wasFront = false;
         while (true)
         {
             bool isFront = _volleyQueue.Count > 0 && _volleyQueue[0] == slot;
@@ -2438,23 +2488,33 @@ public class BattleHUDController : MonoBehaviour
             {
                 elapsed += Time.deltaTime;
                 float progress = Mathf.Clamp01(elapsed / sweepDuration);
-                ring.MarkerRadius = isConverging
-                    ? Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress)
-                    : Mathf.Lerp(RingMarkerMinRadius, RingMarkerStartRadius, progress);
+                ring.MarkerRadius = Mathf.Lerp(VolleyMarkerStartRadius, RingMarkerMinRadius, progress);
             }
 
             // Color/Refresh live OUTSIDE the sweep-progress gate above — a ring whose own timer has
             // already run out but is still waiting in queue (not yet front) needs to keep repainting
             // every frame so it can flip from dimmed to bright the instant it's promoted, even though
             // its radius itself has stopped animating.
-            ring.MarkerColor = isFront ? Color.white : VolleyWaitingRingColor;
+            ring.MarkerColor = isFront ? VolleyActiveRingColor : VolleyWaitingRingColor;
+
+            // 2026-08-15 (user: "make it more distinct... give me some options") — the promotion
+            // itself is the event, not the resulting color: fires ONCE, exactly on the false->true
+            // transition, never while already front (that would re-punch every single frame).
+            if (isFront && !wasFront)
+            {
+                ring.style.scale = new Scale(new Vector3(VolleyPromotionPunchScale, VolleyPromotionPunchScale, 1f));
+                VisualElementTweening.TweenUniformScale(ring, 1f, VolleyPromotionPunchDurationSeconds);
+                AudioManager.Instance?.PlayVolleyRingPromoted();
+            }
+            wasFront = isFront;
+
             ring.Refresh();
 
             if (isFront && (slot.Clicked || elapsed >= sweepDuration))
             {
                 outcome.WasClick = slot.Clicked;
                 outcome.ClickButton = slot.ClickButton;
-                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / RingTargetRadius - 1f);
+                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / VolleyTargetRadius - 1f);
                 _volleyQueue.Remove(slot);
                 break;
             }
@@ -2489,15 +2549,17 @@ public class BattleHUDController : MonoBehaviour
         RingVisual ring = _volleyRingPool.Get();
         PositionVolleyRing(ring, point);
         targetElement.Add(ring);
-        ring.TargetRadius = RingTargetRadius;
-        ring.MarkerColor = Color.white;
-        ring.MarkerRadius = RingMarkerStartRadius;
+        ring.TargetRadius = VolleyTargetRadius;
+        ring.MarkerColor = VolleyWaitingRingColor;
+        ring.MarkerRadius = VolleyMarkerStartRadius;
+        ring.style.scale = new Scale(Vector3.one); // defensive reset — a pooled instance may still carry a leftover punch-scale from a prior use
         ring.Refresh();
 
         var slot = new VolleySlot { IsDefenseSlot = true };
         _volleyQueue.Add(slot);
 
         float elapsed = 0f;
+        bool wasFront = false;
         while (true)
         {
             bool isFront = _volleyQueue.Count > 0 && _volleyQueue[0] == slot;
@@ -2506,19 +2568,27 @@ public class BattleHUDController : MonoBehaviour
             {
                 elapsed += Time.deltaTime;
                 float progress = Mathf.Clamp01(elapsed / sweepDuration);
-                ring.MarkerRadius = Mathf.Lerp(RingMarkerStartRadius, RingMarkerMinRadius, progress);
+                ring.MarkerRadius = Mathf.Lerp(VolleyMarkerStartRadius, RingMarkerMinRadius, progress);
             }
 
             // Same "keep repainting even after this ring's own timer runs out while still queued"
-            // reasoning as RunVolleyRingOffense above.
-            ring.MarkerColor = isFront ? Color.white : VolleyWaitingRingColor;
+            // reasoning as RunVolleyRingOffense above, plus the same promotion pop+sound event.
+            ring.MarkerColor = isFront ? VolleyActiveRingColor : VolleyWaitingRingColor;
+            if (isFront && !wasFront)
+            {
+                ring.style.scale = new Scale(new Vector3(VolleyPromotionPunchScale, VolleyPromotionPunchScale, 1f));
+                VisualElementTweening.TweenUniformScale(ring, 1f, VolleyPromotionPunchDurationSeconds);
+                AudioManager.Instance?.PlayVolleyRingPromoted();
+            }
+            wasFront = isFront;
+
             ring.Refresh();
 
             if (isFront && (slot.Clicked || elapsed >= sweepDuration))
             {
                 outcome.WasClick = slot.Clicked;
                 outcome.ClickButton = slot.ClickButton;
-                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / RingTargetRadius - 1f);
+                outcome.FinalDeviation = Mathf.Abs(ring.MarkerRadius / VolleyTargetRadius - 1f);
                 _volleyQueue.Remove(slot);
                 break;
             }

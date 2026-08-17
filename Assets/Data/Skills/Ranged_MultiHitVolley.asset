@@ -15,9 +15,9 @@ MonoBehaviour:
   _skillName: Volley
   _description: Attack Pattern Directive Group 2 - Multi-Hit Volley, first pattern
     ("Basic Count"). 8 hits cycling the compass positions around the target in order
-    N, NE, E, SE, S, SW, W, NW. Hits 1-4 use a converging ring (left-click); hits
-    5-8 use an expanding ring (right-click). Every hit resolves and deals damage
-    independently - a miss does not cancel later hits.
+    N, NE, E, SE, S, SW, W, NW. Hits 1-4 use a circle marker (left-click); hits 5-8
+    use a square marker (right-click). Every hit resolves and deals damage independently
+    - a miss does not cancel later hits.
   _treeType: 19
   _placeholderIndex: 0
   _grantsComboRule: 0
@@ -36,3 +36,5 @@ MonoBehaviour:
   - 0.45
   - 0.45
   - 0.45
+  _volleyDashForwardDurationsSeconds: []
+  _volleyDashBackDurationsSeconds: []

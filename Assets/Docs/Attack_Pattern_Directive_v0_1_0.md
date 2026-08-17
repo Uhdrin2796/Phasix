@@ -34,9 +34,11 @@ errata as the authoritative current behavior for these two skills.
 open/animating around the target concurrently (new `CompassPoint`-positioned ring pool in
 `BattleHUDController`, replacing the single shared `_timingRing` for this archetype), resolved via
 a FIFO click-routing session where only the oldest open ring listens for input, and each ring's
-required click button is tied to its own sweep direction (converging = left, expanding = right) —
-see `SkillData.VolleyRingSequence`/`BattleManager.ResolveMultiHitVolleyAttack`. Offense only this
-pass — defense (an enemy casting Volley) is dispatch-wired but blocked on `CombatVfxController._held`
+required click button is tied to its own marker shape (circle = left, square = right — originally
+sweep direction/converging-vs-expanding, superseded same-day once that proved hard to read at a
+glance; see the tuning-knobs section below) — see `SkillData.VolleyRingSequence`/`BattleManager
+.ResolveMultiHitVolleyAttack`. Offense only this pass — defense (an enemy casting Volley) is
+dispatch-wired but blocked on `CombatVfxController._held`
 being a single-slot field; see CHANGELOG.md's matching entry for full detail. Not reflected in Part
 5's archetype table below (left as historical design-intent record).
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
@@ -132,11 +134,19 @@ needed to try a new combination.
 
 | Knob | Field | What it changes |
 |---|---|---|
-| **Hit count** | `VolleyRingSequence`'s length | Overall length/commitment of the cast. Also sets where the converging/expanding (left-click/right-click) split falls — always "first half converging, second half expanding," so an 8-hit volley splits 4/4, a 4-hit splits 2/2, etc. |
-| **Per-hit projectile speed** | `VolleyRingDurationsSeconds[i]` | How urgent that specific hit feels — smaller is harder. Since the 2026-08-15 sync fix, this value **is** the projectile's real travel time; the ring's own displayed sweep is *derived* from it (stretched ~1.9-2.1x depending on converging/expanding — see `BattleHUDController.ComputeVolleyRingSweepDuration`), so this one number moves both the shot's speed and the ring's open-time together. They are not independently tunable right now (see "Sync fix tradeoffs" below). |
+| **Hit count** | `VolleyRingSequence`'s length | Overall length/commitment of the cast. Also sets where the left-click/right-click (circle/square marker) split falls — always "first half left-click, second half right-click," so an 8-hit volley splits 4/4, a 4-hit splits 2/2, etc. |
+| **Per-hit projectile speed** | `VolleyRingDurationsSeconds[i]` | How urgent that specific hit feels — smaller is harder. Since the 2026-08-15 sync fix, this value **is** the projectile's real travel time; the ring's own displayed sweep is *derived* from it (stretched ~1.9x — see `BattleHUDController.ComputeVolleyRingSweepDuration`), so this one number moves both the shot's speed and the ring's open-time together. They are not independently tunable right now (see "Sync fix tradeoffs" below). |
 | **Shot cadence / rhythm — approach** | `VolleyDashForwardDurationsSeconds[i]` | How long the player waits BEFORE hit i+1 launches. A pause belongs here, on the hit AFTER which the gap should appear. |
 | **Shot cadence / rhythm — return** | `VolleyDashBackDurationsSeconds[i]` | How long hit i+1's own return takes AFTER it fires, before the next hit's own approach can begin. **Deliberately a separate field from the forward one above** (2026-08-15, same-day fix — a single shared value for both legs can't express "pause only before this hit" without also pausing after it, since one number drove both; see "Double Tap gap fix" below). Keep this short/uniform unless you specifically want extra breathing room AFTER a hit too. Both arrays fall back independently to the flat global default (`BeatSequenceConfig.VolleyDashLegDurationSeconds`) when empty/short. |
 | **Position order** | `VolleyRingSequence`'s *values*, not just length | Purely spatial variety — nothing forces the compass-clockwise order every existing pattern uses. Jumping around (e.g. N, S, E, W, NE, SW, SE, NW) or repeating a position reads as more chaotic without changing difficulty or rhythm at all. |
+
+**Left/right-click marker shape (2026-08-15, same day):** originally encoded via animation direction
+(a converging ring vs. an expanding one) — user feedback: "its still not clear enough... make it
+more distinct," direction needed a couple frames of motion to read. Replaced with marker SHAPE
+(`RingVisual.MarkerIsSquare`) instead: left-click rings draw as a circle, right-click as a square,
+readable from a single glance. Every ring now animates identically (always shrinking/converging) —
+shape carries the click-type signal, motion no longer does, so this isn't a separate tunable knob,
+just how the derived left/right split (row above) gets drawn.
 
 **Double Tap gap fix (2026-08-15, same day):** the cadence field used to be ONE shared value per hit
 for both its forward and back leg. Putting a long value on hit 3 (to create the pause before it)

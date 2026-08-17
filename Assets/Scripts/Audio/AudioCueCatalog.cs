@@ -27,6 +27,9 @@ public class AudioCueCatalog : ScriptableObject
     [Tooltip("Plays on a successful timed input — player offense (attack/skill) AND a player's successful Dodge/Parry against an enemy hit.")]
     [SerializeField] private AudioClip _timedInputSuccessClip;
 
+    [Tooltip("Multi-Hit Volley only (2026-08-15) — plays the instant a ring is promoted to the FIFO queue's front (becomes the one actually listening for input), paired with BattleHUDController's pop-in scale animation on the ring itself. Reinforces the visual promotion with an audio cue rather than relying on sight alone.")]
+    [SerializeField] private AudioClip _volleyRingPromotedClip;
+
     [Header("Hit Impact — Primal-type-flavored (GDD §27.3)")]
     [Tooltip("Index order matches PrimalType's first 8 base values: Fire, Water, Earth, Wind, Light, Shadow, Life, Lightning. Duo types fall back to their first base parent (PrimalTypeColor.GetDuoParents), same tie-break convention PlaceholderSkillResolver/PrimalTypeChart already use for ambiguous base resolution.")]
     [SerializeField] private AudioClip[] _hitImpactClipsByBaseType = new AudioClip[8];
@@ -44,6 +47,7 @@ public class AudioCueCatalog : ScriptableObject
     public AudioClip BattleFledClip => _battleFledClip;
     public AudioClip SkillUsedClip => _skillUsedClip;
     public AudioClip TimedInputSuccessClip => _timedInputSuccessClip;
+    public AudioClip VolleyRingPromotedClip => _volleyRingPromotedClip;
     public AudioClip BondMilestoneClip => _bondMilestoneClip;
     public AudioClip EvolvedClip => _evolvedClip;
     public AudioClip CapturedClip => _capturedClip;

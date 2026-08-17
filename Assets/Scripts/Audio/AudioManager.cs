@@ -77,6 +77,7 @@ public class AudioManager : MonoBehaviour
     public void PlayBattleFled() => PlayClip(_cueCatalog != null ? _cueCatalog.BattleFledClip : null);
     public void PlaySkillUsed() => PlayClip(_cueCatalog != null ? _cueCatalog.SkillUsedClip : null);
     public void PlayTimedInputSuccess() => PlayClip(_cueCatalog != null ? _cueCatalog.TimedInputSuccessClip : null);
+    public void PlayVolleyRingPromoted() => PlayClip(_cueCatalog != null ? _cueCatalog.VolleyRingPromotedClip : null);
     public void PlayHitImpact(PrimalType damagedCreatureType) => PlayClip(_cueCatalog != null ? _cueCatalog.GetHitImpactClip(damagedCreatureType) : null);
     public void PlayBondMilestone() => PlayClip(_cueCatalog != null ? _cueCatalog.BondMilestoneClip : null);
     public void PlayEvolved() => PlayClip(_cueCatalog != null ? _cueCatalog.EvolvedClip : null);

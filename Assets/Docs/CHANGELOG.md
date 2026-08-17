@@ -16,6 +16,120 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-15] Phase 3 follow-up — Volley marker enlarged instead of target shrunk
+- **Context:** User, after the target-shrink pass: "okay you can make the target ring slightly
+  bigger, i just wanted the shape that converges to the target ring to be a bit bigger." Clarifies
+  the actual ask was a bigger MARKER, not a smaller target.
+- **Built:** `VolleyTargetRadius` bumped 15px -> 20px (still smaller than the classic shared 30px,
+  per the earlier pass, just not as extreme). New `BattleHUDController.VolleyMarkerStartRadius`
+  (80px, up from the classic shared `RingMarkerStartRadius`'s 60px) — same "separate Volley-only
+  constant, classic single-ring system untouched" reasoning as every other Volley-specific sizing
+  knob. Every Volley usage of the marker's starting radius (`RunVolleyRingOffense`/`Defense`'s
+  initial `MarkerRadius` and per-frame Lerp, `ComputeVolleyRingSweepDuration`'s perfect-fraction
+  formula) switched to it together, so displayed size, sync math, and scoring stay in agreement —
+  same pattern as the target-radius change.
+- **Fixed a clipping risk that came with it:** an 80px-radius marker would clip against the ring's
+  old 140x140 CSS box (`.timing-ring-volley` in `BattleHUD.uss`). Widened the box to 180x180 and
+  updated `PositionVolleyRing`'s self-centering offset (70 -> 90, half the new box size) to match.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: recomputed
+  the perfect-fraction math against the new 80/20 marker/target pair and confirmed the perfect
+  instant still lands at exactly the projectile's 0.75s arrival time. Opened a real ring and read its
+  `resolvedStyle.width`/`height` back — resolved to exactly 180x180 (confirmed the CSS widen took
+  effect, not just the constant) — and its initial `MarkerRadius` at ~80, `TargetRadius` at 20. Ran a
+  full 8-hit "Basic Count" Volley cast end-to-end — same damage/log output as prior passes.
+  `read_console` clean.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Volley target ring shrunk for a longer convergence journey
+- **Context:** User: "make the target square smaller so theres more room for the moving ring to
+  converge."
+- **Built:** New `BattleHUDController.VolleyTargetRadius` (15px, down from the shared
+  `RingTargetRadius`'s 30px) — deliberately a SEPARATE constant, not a change to the shared one, so
+  the classic single-ring system (`RunTimedInput`/`RunDefenseTimedInput`/
+  `ComputeSweepDurationForTravelTime`, all still using `RingTargetRadius` unchanged) keeps its
+  already-tuned feel untouched. Every Volley-specific `RingTargetRadius` reference — both
+  `ring.TargetRadius` assignments (offense and defense), both deviation/tolerance calculations, and
+  `ComputeVolleyRingSweepDuration`'s perfect-fraction formula — switched to the new constant
+  together, so the displayed target ring, the projectile-sync math, and the Good/Perfect/Miss
+  scoring all agree on the same value.
+- **Note:** shrinking the target radius also shortens the ring's own displayed sweepDuration overall
+  (since the sync fix keeps `sweepDuration x perfectFraction == the projectile's fixed travel time`,
+  and perfectFraction went UP as the target moved closer to the marker's minimum radius) — this is
+  expected, not a bug: the marker now needs to cover proportionally more of its own shrink range
+  before reaching the (now closer-to-center) target, which is exactly the "more room to converge"
+  effect asked for.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: recomputed
+  the perfect-fraction/sweepDuration math directly against the new 15px target and confirmed the
+  perfect instant still lands at exactly the projectile's real 0.75s arrival time (unchanged from
+  before the target-size change). Ran a full 8-hit "Basic Count" Volley cast end-to-end — same
+  damage/log output as prior passes (visual-only change, no scoring difference). `read_console` clean.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Left/right-click marker shape replaces converging/expanding direction
+- **Context:** Following up on "is expanding-for-right-click the right call, or should we use
+  different shapes?" — user: "I think shape would be clearer than direction... my take: shape would
+  be clearer than direction" (my own recommendation, confirmed). User: "lets do circle like we've
+  done for left click, the square for right click. Same pop as before. Same timing criteria. and
+  make it with the same color/pop-in."
+- **Built:** `RingVisual` gained `MarkerIsSquare` (default false — every non-Volley caller,
+  `RunTimedInput`/`RunDefenseTimedInput`, is untouched) and a `DrawSquareStroke` path alongside the
+  existing circular `DrawStroke`, applied to both the static target ring and the moving marker so a
+  right-click prompt reads as one consistent square shape, not a mismatched circle/square pair.
+  `BattleHUDController.RunVolleyRingOffense` now sets `ring.MarkerIsSquare = !requiresLeftClick` and
+  — since shape carries the click-type signal now, not animation direction — every ring's
+  `MarkerRadius` animates identically (always converging/shrinking). Simplified
+  `ComputeVolleyRingSweepDuration` to drop its now-unused `isConverging` parameter (one perfect-
+  fraction formula instead of two) rather than leave dead branching behind. Renamed the Volley-side
+  `isConverging` parameter/local to `requiresLeftClick` throughout (`BattleManager.RunVolleyHit`/
+  `ResolveMultiHitVolleyAttack`, `RunVolleyRingOffense`) since "converging" no longer describes
+  anything real. Gold color + punch-scale pop + sound cue (`AudioManager.PlayVolleyRingPromoted`) on
+  promotion are unchanged from the prior pass, applied identically regardless of shape.
+- **Docs:** Updated `SkillData.cs`'s class doc comment, `Attack_Pattern_Directive_v0_1_0.md`'s
+  Multi-Hit Volley errata and tuning-knobs reference, and the `Ranged_MultiHitVolley`/
+  `Ranged_MultiHitVolley_DoubleTap` asset descriptions to say "circle/square" instead of
+  "converging/expanding."
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: opened one
+  left-click and one right-click ring directly and read `RingVisual.MarkerIsSquare` off both —
+  `false` (circle) for the left-click ring, `true` (square) for the right-click one. Ran a full
+  8-hit "Basic Count" Volley cast end-to-end with both shapes live in the same sequence — all 8 hits
+  resolved and logged correctly, same damage/log formatting as before (shape is purely visual, no
+  scoring changes). `read_console` clean.
+
+---
+
+[2026-08-15] Phase 3 follow-up — Volley ring focus, take 2: promotion pop-in + sound instead of a static color swap
+- **Context:** User, after the white/gray color-only pass: "its still not clear enough. make it more
+  distinct from each other. Give me some options then let me choose." Offered 4 color/size-based
+  options; user instead asked how Clair Obscur: Expedition 33 handles drawing player attention for
+  QTE-style inputs. Answered with the genre pattern (the PROMOTION should be an event — a prompt
+  popping in, redundant audio+visual, high contrast against the whole scene, not just its siblings —
+  rather than a static state the player has to compare against its neighbors) and the user asked to
+  build that instead. First committed the working color-only version as a checkpoint (`c547e1b`) so
+  it stays easy to return to if this new approach doesn't land better.
+- **Built:** Three simultaneous, redundant promotion cues, firing exactly once per ring on the
+  false->true FIFO-front transition (never on every frame while already front):
+  - **Distinct hue** — active ring is now a vivid gold (`VolleyActiveRingColor`, not reused by any
+    outcome-flash color), waiting rings pushed further into the background (alpha 0.8 -> 0.28).
+  - **Punch-scale pop** — `BattleHUDController` jumps the ring's `style.scale` instantly to 1.4x,
+    then `VisualElementTweening.TweenUniformScale` eases it back to 1x over 0.18s — the same
+    primitive already used for Beat Sequence windup-squash, reused here for a "pop then settle" feel.
+  - **Sound cue** — new `AudioCueCatalog.VolleyRingPromotedClip` / `AudioManager
+    .PlayVolleyRingPromoted()`, following the exact same Inspector-swappable-clip pattern as the
+    other 9 combat audio events. Like every other `Play*` call in this catalog, this is currently a
+    silent no-op — the catalog has NO clips assigned to ANY slot yet (a pre-existing gap, not new;
+    see the 2026-08-10 "Blocked" note), so the call is wired and ready but produces no audible sound
+    until content is authored.
+- **Verified:** Clean compile (`read_console`, no `error CS`). Live via `execute_code`: opened two
+  rings and confirmed the front one was exact gold `RGBA(1.0, 0.84, 0.2, 1.0)` and the waiting one
+  was the dimmer gray `RGBA(0.35, 0.35, 0.35, 0.28)`. Separately confirmed the punch fires correctly:
+  read `style.scale` in the SAME `execute_code` call as opening a ring (before any real-world delay
+  could let the tween settle) and got exactly 1.4, matching `VolleyPromotionPunchScale`. `read_console`
+  clean, only pre-existing unrelated noise (AstarPath/network warnings).
+
+---
+
 [2026-08-15] Phase 3 follow-up — Multi-Hit Volley rings now show which one is the current focus
 - **Context:** User: "is there a way to differentiate the colors of the ring so you know which ring
   is being focused? Right now its hard to differentiate which ring is the main ring i should be

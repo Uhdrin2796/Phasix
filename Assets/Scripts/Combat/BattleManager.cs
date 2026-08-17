@@ -1465,7 +1465,10 @@ public class BattleManager : MonoBehaviour
             float ringDuration = i < skill.VolleyRingDurationsSeconds.Count
                 ? skill.VolleyRingDurationsSeconds[i]
                 : BeatSequenceConfig.VolleyDefaultRingDurationSeconds;
-            bool isConverging = i < hitCount / 2; // derived split — first half converging/left, second half expanding/right
+            // Derived split — first half requires left-click (circle marker), second half requires
+            // right-click (square marker, 2026-08-15 — shape replaced the earlier converging/
+            // expanding animation-direction encoding, which needed watching motion to read).
+            bool requiresLeftClick = i < hitCount / 2;
             // 2026-08-15 fix (user: "the 2nd two seem to have a bigger delay than the 1st two
             // attacks") — forward and back legs are looked up independently now, not one shared
             // value for both, so a pause authored on one hit's forward leg doesn't also stretch its
@@ -1485,7 +1488,7 @@ public class BattleManager : MonoBehaviour
             int hitIndex = i;
             pendingHits.Add(StartCoroutine(RunVolleyHit(
                 attacker, attackerSlotIndex, attackerIsPlayerSide, target, targetSlotIndex, targetIsPlayerSide,
-                targetElement, point, isConverging, ringDuration, skill, hitNumber, hitCount, hitLogLines, hitIndex)));
+                targetElement, point, requiresLeftClick, ringDuration, skill, hitNumber, hitCount, hitLogLines, hitIndex)));
 
             yield return StartCoroutine(BeatSequenceRunner.RunRhythmDash(
                 attacker, attackerSlotIndex, attackerIsPlayerSide, forward: false, BeatSequenceConfig.VolleyDashOffsetPx, dashBackDuration));
@@ -1528,7 +1531,7 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private IEnumerator RunVolleyHit(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
         BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, UnityEngine.UIElements.VisualElement targetElement,
-        CompassPoint point, bool isConverging, float ringDuration, SkillData skill, int hitNumber, int hitCount,
+        CompassPoint point, bool requiresLeftClick, float ringDuration, SkillData skill, int hitNumber, int hitCount,
         string[] hitLogLines, int hitIndex)
     {
         if (attackerIsPlayerSide)
@@ -1545,17 +1548,17 @@ public class BattleManager : MonoBehaviour
             // accordingly") — the ring's own "perfect" instant does NOT land at the very end of its
             // sweep (see ComputeVolleyRingSweepDuration's own doc comment), so displaying the ring
             // with sweepDuration == ringDuration directly made its perfect moment land well before
-            // (converging) or after (expanding) the projectile actually arrived. The projectile keeps
-            // traveling for exactly ringDuration (the skill-authored, already-tuned value, untouched
-            // — "maintain the projectile speed as it is"); only the RING's own displayed sweep is
-            // stretched so its perfect instant coincides with that same arrival moment.
-            float ringSweepDuration = BattleHUDController.Instance.ComputeVolleyRingSweepDuration(ringDuration, isConverging);
+            // the projectile actually arrived. The projectile keeps traveling for exactly ringDuration
+            // (the skill-authored, already-tuned value, untouched — "maintain the projectile speed as
+            // it is"); only the RING's own displayed sweep is stretched so its perfect instant
+            // coincides with that same arrival moment.
+            float ringSweepDuration = BattleHUDController.Instance.ComputeVolleyRingSweepDuration(ringDuration);
             BattleHUDController.Instance.LaunchRangedBeatSequenceProjectile(
                 attackerSlotIndex, true, targetSlotIndex, false, GetPrimalTypeOrDefault(attacker), ringDuration, holdForOutcome: false);
 
             var outcome = new BattleHUDController.VolleyRingOutcome();
             yield return StartCoroutine(BattleHUDController.Instance.RunVolleyRingOffense(
-                targetElement, point, isConverging, goodToleranceHalfWidth, perfectToleranceHalfWidth, ringSweepDuration, outcome));
+                targetElement, point, requiresLeftClick, goodToleranceHalfWidth, perfectToleranceHalfWidth, ringSweepDuration, outcome));
 
             BattleHUDController.OffenseOutcome quality = outcome.Quality;
             float attackMultiplier = quality switch

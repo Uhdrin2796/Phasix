@@ -53,11 +53,15 @@ using UnityEngine;
 /// Volley skill" — zero risk to any pre-existing asset. A non-empty CompassPoint list tells
 /// BattleManager to run ResolveMultiHitVolleyAttack instead of BeatSequence/StackingRhythm/the
 /// placeholder path — bypasses all three entirely, same "own dedicated resolution path" pattern
-/// StackingRhythm already established. Per-hit click-type requirement (converging/left-click vs
-/// expanding/right-click, offense only — user: "make the 1st 4 left click rings... last 4 click
-/// rings") is deliberately NOT its own field — it's derived at runtime from each hit's position
-/// within VolleyRingSequence's own length (first half = converging, second half = expanding), so a
+/// StackingRhythm already established. Per-hit click-type requirement (left-click vs right-click,
+/// offense only — user: "make the 1st 4 left click rings... last 4 click rings") is deliberately
+/// NOT its own field — it's derived at runtime from each hit's position within
+/// VolleyRingSequence's own length (first half = left-click, second half = right-click), so a
 /// differently-sized future volley pattern needs zero code changes, pure new-asset authoring.
+/// Originally encoded visually via the ring's animation direction (converging vs. expanding);
+/// 2026-08-15 same-day follow-up replaced that with marker SHAPE (circle vs. square,
+/// RingVisual.MarkerIsSquare) since direction needed a couple frames of motion to read, shape
+/// reads instantly — see BattleHUDController.RunVolleyRingOffense.
 ///
 /// 2026-08-15 follow-up (exploring alternate Volley "feels" — "Double Tap"/"Tracking Volley"):
 /// VolleyDashForwardDurationsSeconds and VolleyDashBackDurationsSeconds are a NINTH and TENTH

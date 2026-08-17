@@ -609,11 +609,14 @@
 
 /* Multi-Hit Volley (2026-08-14) — unlike .timing-ring above, position is set per-instance in C#
    (BattleHUDController.PositionVolleyRing), since up to 8 of these can be open at once, each at a
-   different compass offset around the target. No top/left/translate here. */
+   different compass offset around the target. No top/left/translate here.
+   Widened 140->180 (2026-08-15) alongside VolleyMarkerStartRadius growing to 80 (user: "i just
+   wanted the shape that converges to the target ring to be a bit bigger") — an 80px-radius marker
+   needs at least a 160px box to avoid clipping its own stroke; 180 leaves a small margin. */
 .timing-ring-volley {
     position: absolute;
-    width: 140px;
-    height: 140px;
+    width: 180px;
+    height: 180px;
 }
 
 /* Bottom row: action panel (current turn/move/timing bar) fills the left half of the screen,
