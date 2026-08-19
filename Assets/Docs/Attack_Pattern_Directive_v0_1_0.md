@@ -41,6 +41,18 @@ glance; see the tuning-knobs section below) — see `SkillData.VolleyRingSequenc
 dispatch-wired but blocked on `CombatVfxController._held`
 being a single-slot field; see CHANGELOG.md's matching entry for full detail. Not reflected in Part
 5's archetype table below (left as historical design-intent record).
+**Errata (2026-08-17):** Group 2 finished — Charge & Release + Sustained Pressure built together as
+planned, sharing a new `BattleHUDController.RunHoldGesture` press-and-hold-then-release primitive
+(the first mechanic in this codebase to use `PointerUpEvent` as a real release signal rather than
+drag-cleanup). Charge & Release ("Magma Burst") is offense, scored on BOTH press and release timing
+(revised mid-session from release-only) — a pass on both yields a continuous damage range, a miss on
+either cancels the attack for zero damage, a deliberate departure from every other skill's
+reduced-but-nonzero Miss convention. Sustained Pressure ("Flame Breath") is defense, introducing a
+new third `DefenseOutcome.Guard` — a graduated block percentage (press quality × release quality),
+not Dodge/Parry's binary avoid/hit. New triangle marker shape plus a new center-out fill visual
+(`RingVisual.FillRadius`) for both. See `SkillData.HoldInputArchetype`/`BattleManager
+.ResolveChargeReleaseAttack` and CHANGELOG.md's matching entry for full detail. Not reflected in Part
+5's archetype table below (left as historical design-intent record).
 **GDD Refs:** §14 (Skill Taxonomy), §16 (Battle System), §17 (Status Effects)
 **Related:** Combat_Directive_v0_1_0.md (lane system, timed input system, lane occupancy — authoritative for those mechanics; this doc builds on top)
 
@@ -79,7 +91,8 @@ For each system: build one deliberately **minimal** example and one deliberately
 | Beat Sequence | **Built 2026-08-11** — `BeatSequenceRunner.cs` (Approach/Windup/Return), `BattleManager.ResolveMeleeBeatSequence`/`ResolveMeleeAttackBeatOffense`/`Defense` | Lane Movement | Slash — done, live in `SkillDatabase` | Shadow teleport-strike — not built |
 | Strike Points | Spec'd (Part 9) — not built | Beat Sequence, Lane Movement | Single Front strike | Front→Rear→Flank chain |
 | Zone/Positional & Split Attention | Not designed | Lane Movement | — | — |
-| Sustained Pressure | Not designed | — | — | — |
+| Charge & Release | **Built 2026-08-17** — offense, `BattleManager.ResolveChargeReleaseAttack`, shares `BattleHUDController.RunHoldGesture` with Sustained Pressure below | — | `Ranged_ChargeRelease` ("Magma Burst") — done, live in `SkillDatabase` | — |
+| Sustained Pressure | **Built 2026-08-17** — defense (new `DefenseOutcome.Guard`), `BattleHUDController.RunSustainedPressureInput`, integrated into `ResolveEnemyDamageAction`'s existing Dodge/Parry/Miss flow | — | `Ranged_SustainedPressure` ("Flame Breath") — done, live in `SkillDatabase` | — |
 | Multi-Turn Buildup | Not designed | — | — | — |
 | Windup-Applies-Status | Not designed | Status system (§17, locked) | — | — |
 
@@ -122,9 +135,16 @@ archetypes that need a wholly new input model or temporal structure.
    reuse of the existing single-ring primitive. A second pattern (different compass order/timing) is
    planned as pure new-asset authoring, no code changes needed. Defense (an enemy using Volley)
    is dispatch-wired but blocked on a `CombatVfxController` refactor — flagged as a follow-up.
-6. **Charge & Release** + **Sustained Pressure** — build these two *together*: both are "hold input"
-   instead of "tap input," diverging only in scoring (release timing vs. duration matching). Share
-   one new hold-input primitive.
+6. **Charge & Release** + **Sustained Pressure** — **BUILT 2026-08-17** (see CHANGELOG.md's matching
+   entry for full detail) as `Ranged_ChargeRelease` ("Magma Burst", offense) and
+   `Ranged_SustainedPressure` ("Flame Breath", defense). Built together as planned, sharing
+   `BattleHUDController.RunHoldGesture` (a new press-and-hold-then-release primitive — the first in
+   this codebase to register `PointerUpEvent` as a real release signal). Turned out both archetypes
+   score TWO instants (press vs. release), not one — Charge & Release's scoring evolved mid-session
+   from "release timing only" to "press AND release timing, continuous damage range on a pass,
+   full-cancel on a miss on either instant" (a deliberate departure from every other skill's
+   reduced-but-nonzero Miss convention). Sustained Pressure needed a new third `DefenseOutcome.Guard`
+   — a graduated block percentage, not Dodge/Parry's binary avoid/hit.
 
 ### Multi-Hit Volley — tuning knobs reference (added 2026-08-15, updated same day)
 Before authoring another Volley pattern (after "Basic Count," "Double Tap," "Tracking Volley"),
@@ -178,6 +198,37 @@ option — three approaches were weighed:
 
 If a future pattern needs ring-open-time and projectile-speed tuned independently, option 3 is the
 one to revisit — not a quick asset tweak, budget it as its own small pass.
+
+### Charge & Release / Sustained Pressure — tuning knobs reference (added 2026-08-17)
+Both archetypes share one primitive (`BattleHUDController.RunHoldGesture`) and the same shape of
+knobs — a press-timing target (the "tell") and a release-timing target (the hold duration) — so this
+covers both. All are per-skill `SkillData` fields; 0 on any of them falls back to a
+`BeatSequenceConfig` default, so a new skill can be authored with zero fields set and still work.
+
+| Knob | Field | What it changes |
+|---|---|---|
+| **Ideal press instant** | `ChargeReleaseTellSeconds` / `SustainedPressureTellSeconds` | How long after the warning hop the player should press. Longer = more patience-testing "obvious windup" before anything is expected of the player. |
+| **Ideal hold duration** | `ChargeReleaseTargetHoldSeconds` / `SustainedPressureHoldSeconds` | How long the player should hold before releasing. For Charge & Release this is purely a feel/difficulty knob (the "charge time"). For Sustained Pressure this should match the attack's own authored duration — the fill visually reaching the target triangle right as the attack ends is what "hold-to-guard, boss-scale feel" is built around. |
+| **Press tolerance** | `BeatSequenceConfig.ChargeReleasePressToleranceSeconds` / `SustainedPressurePressToleranceSeconds` | How forgiving the press-timing judgment is — a shared config value, not per-skill (no per-skill override field exists yet; would need one added if a skill wants a tighter/looser press window than the others). |
+| **Release tolerance** | `ChargeReleaseReleaseToleranceRatio` (a RATIO, not seconds — judges held-duration-vs-target) / `SustainedPressureReleaseToleranceSeconds` (seconds — judges an absolute release instant) | How forgiving the release-timing judgment is. Note the two archetypes use different UNITS here — Charge & Release judges a held duration against a target duration (ratio-based, same shape every other ring in this codebase already uses), while Sustained Pressure judges an absolute wall-clock instant relative to the attack's own tell+duration clock (seconds-based, matching its own press tolerance). |
+| **Guard's damage cap** | `BeatSequenceConfig.SustainedPressureMaxBlockFraction` | Even a flawless double-perfect Guard blocks at most this much (0.8 = 80%) — never full Dodge/Parry-style avoidance. Raising this makes a perfect Guard closer to a Parry; lowering it makes Guard a weaker, more purely damage-mitigating option even at its best. |
+
+**Two-instant scoring, not one (2026-08-17, revised mid-session):** Charge & Release originally only
+scored the release instant (a free-to-choose press). User: "note that a perfect on the start and the
+release means the most damage" — both archetypes now score press AND release, combined
+MULTIPLICATIVELY (`pressQuality * releaseQuality`, each already `[0,1]` via
+`Mathf.Clamp01(1 - deviation/tolerance)`). Multiplicative, not additive/averaged, because a
+badly-timed press already means the attempt started wrong — a perfect release shouldn't be able to
+fully rescue a bad press the way averaging would (e.g. a 0.0-quality press with a 1.0-quality release
+scores 0 under multiplication vs. 0.5 under averaging).
+
+**Charge & Release's damage range, not tiers:** unlike every other skill's discrete Miss/Good/Perfect
+multiplier lookup, a passing (non-cancelled) Charge & Release interpolates continuously between
+`TimedInputConfig.GoodDamageMultiplier` and `PerfectDamageMultiplier` via
+`Mathf.Lerp(Good, Perfect, combinedQuality)` — reuses the existing multiplier constants, just a new
+way of moving between them. A miss on EITHER instant skips this entirely and deals zero damage (see
+`BattleManager.ResolveChargeReleaseAttack`) — there is no Miss-tier damage for this skill, unlike
+`TimedInputConfig.MissDamageMultiplier`'s usual reduced-but-nonzero rule everywhere else.
 
 **Group 3 — one dedicated pass, builds directly on the 2026-08-12 formation grid work:**
 7. **Zone/Positional** — the Lane Selection input model (no timing, just picking lanes) plus a

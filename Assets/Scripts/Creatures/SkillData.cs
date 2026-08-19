@@ -79,6 +79,23 @@ using UnityEngine;
 /// mid-sequence gap always produced two. Split into independent forward/back arrays so the pause
 /// can live entirely in one hit's forward leg while its own back leg — and therefore the gap after
 /// it — stays exactly as fast as every other hit's.
+///
+/// 2026-08-17 session (Charge & Release + Sustained Pressure — Attack_Pattern_Directive Part 5
+/// Group 2's second/third archetypes, "build these two together: both are 'hold input' instead of
+/// 'tap input,' diverging only in scoring... Share one new hold-input primitive"): HoldInputArchetype
+/// and its four tuning fields are an ELEVENTH through FIFTEENTH structural field, same tier as
+/// StackingRhythm/VolleyRingSequence. None (default, applied automatically to all existing assets)
+/// means "not a hold-input skill" — zero risk to any pre-existing asset. ChargeRelease is an OFFENSE
+/// archetype (hold to charge, release for a damage bonus); SustainedPressure is a DEFENSE archetype
+/// ("hold-to-guard" against an incoming attack, producing BattleHUDController.DefenseOutcome.Guard).
+/// Both are scored on TWO instants — how well-timed the press was against an authored tell, and how
+/// well-timed the release was — via BattleHUDController.RunHoldGesture's shared press-then-release
+/// primitive; see HoldInputArchetype's own doc comment and BattleManager.ResolveChargeReleaseAttack.
+/// Charge & Release additionally departs from every other skill's Miss handling: a miss on EITHER
+/// scored instant cancels the attack for zero damage (not the usual reduced-but-nonzero
+/// TimedInputConfig.MissDamageMultiplier), and a pass on both instants yields a continuous
+/// quality-scaled damage range rather than a discrete Miss/Good/Perfect tier — deliberate, scoped to
+/// this archetype only.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -165,6 +182,36 @@ public class SkillData : ScriptableObject
              "the forward array above.")]
     [SerializeField] private float[] _volleyDashBackDurationsSeconds = System.Array.Empty<float>();
 
+    [Header("Hold Input — Charge & Release / Sustained Pressure (Attack_Pattern_Directive Part 5 Group 2 — structural, not balance)")]
+    [Tooltip("None (default) = not a hold-input skill, resolves through the normal existing paths " +
+             "unchanged. ChargeRelease routes BattleManager.ResolveSkillAction into " +
+             "ResolveChargeReleaseAttack (offense: hold-charge-release). SustainedPressure routes " +
+             "ResolveEnemyDamageAction's existing Dodge/Parry/Miss flow into a new graduated Guard " +
+             "outcome instead (defense: hold-to-guard).")]
+    [SerializeField] private HoldInputArchetype _holdInputArchetype = HoldInputArchetype.None;
+
+    [Tooltip("Seconds after the warning hop that mark the ideal PRESS instant for a Charge & Release " +
+             "cast. Ignored unless HoldInputArchetype == ChargeRelease. 0 (default) falls back to " +
+             "BeatSequenceConfig.ChargeReleaseDefaultTellSeconds.")]
+    [SerializeField] private float _chargeReleaseTellSeconds;
+
+    [Tooltip("How long the player should hold before releasing for a Charge & Release cast to land " +
+             "\"Perfect\" on the release instant. Ignored unless HoldInputArchetype == ChargeRelease. " +
+             "0 (default) falls back to BeatSequenceConfig.ChargeReleaseDefaultTargetHoldSeconds.")]
+    [SerializeField] private float _chargeReleaseTargetHoldSeconds;
+
+    [Tooltip("Seconds after the warning hop that mark the ideal PRESS instant for a Sustained " +
+             "Pressure defense (when this skill is cast AT the player). Ignored unless " +
+             "HoldInputArchetype == SustainedPressure. 0 (default) falls back to " +
+             "BeatSequenceConfig.SustainedPressureDefaultTellSeconds.")]
+    [SerializeField] private float _sustainedPressureTellSeconds;
+
+    [Tooltip("This attack's own authored duration — defines the ideal RELEASE instant " +
+             "(TellSeconds + this) for a Sustained Pressure defense. Ignored unless " +
+             "HoldInputArchetype == SustainedPressure. 0 (default) falls back to " +
+             "BeatSequenceConfig.SustainedPressureDefaultHoldSeconds.")]
+    [SerializeField] private float _sustainedPressureHoldSeconds;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -179,4 +226,9 @@ public class SkillData : ScriptableObject
     public IReadOnlyList<float> VolleyRingDurationsSeconds => _volleyRingDurationsSeconds;
     public IReadOnlyList<float> VolleyDashForwardDurationsSeconds => _volleyDashForwardDurationsSeconds;
     public IReadOnlyList<float> VolleyDashBackDurationsSeconds => _volleyDashBackDurationsSeconds;
+    public HoldInputArchetype HoldInputArchetype => _holdInputArchetype;
+    public float ChargeReleaseTellSeconds => _chargeReleaseTellSeconds;
+    public float ChargeReleaseTargetHoldSeconds => _chargeReleaseTargetHoldSeconds;
+    public float SustainedPressureTellSeconds => _sustainedPressureTellSeconds;
+    public float SustainedPressureHoldSeconds => _sustainedPressureHoldSeconds;
 }

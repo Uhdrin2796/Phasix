@@ -16,6 +16,18 @@ below. Addition only — no version bump.
 has 5 discrete positions, confirmed symmetric on both player and enemy sides (supersedes the
 player-side-only deferral in the errata directly above). See `Attack_Pattern_Directive_v0_1_0.md`
 Part 8 for the reactive-dodge mechanics this enables. Addition/refinement only — no version bump.
+**Errata (2026-08-17):** Two small corrections to Part 3's Lane occupancy paragraph, caught while
+diagnosing a real bug (two party members rendering fully overlapped — see `KNOWN_ISSUES.md`
+`[COMBAT-002]`): (1) "position exists beneath that, for movement/collision/visual-spacing purposes
+only" undersells what actually shipped — the ORIGINAL free-form "non-exclusive, spaced-apart-in-lane"
+spacing math (`LaneMovementSystem.GetInLaneSpacingOffsetPx`) was fully REMOVED once positions became
+exclusive, not layered on top of it; "visual spacing" today means only the fixed per-position column
+offset (`LaneMovementSystem.GetPositionOffsetPx`), a pure function of position index, nothing more.
+(2) "Exact position layout... is pending numerical calibration" is stale — the layout itself
+(`GetLaneScreenTop`'s depth-scale formula, `GetPositionOffsetPx`'s column spacing,
+`PositionColumnSpacingPx = 150f`) is fully implemented and live; only the specific numeric constants
+remain placeholders pending `NumericalCalibration.md`, same status as every other tuning value in
+this project, not an unbuilt system. Addition/clarification only — no version bump.
 **GDD Refs:** §18 (Battle System), §18.5 (Wild Creature Behavior), §18.6 (Enemy AI Design)
 
 ---

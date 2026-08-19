@@ -40,8 +40,13 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class BattleHUDController : MonoBehaviour
 {
-    /// <summary>Result of RunDefenseTimedInput — which live click (if any) landed in its zone.</summary>
-    public enum DefenseOutcome { Miss, Dodge, Parry }
+    /// <summary>
+    /// Result of RunDefenseTimedInput/RunSustainedPressureInput — which live click (if any) landed
+    /// in its zone. Guard added 2026-08-17 for Sustained Pressure ("hold-to-guard") — unlike
+    /// Dodge/Parry, Guard is NOT a binary avoid-all-damage outcome; see LastGuardBlockFraction for
+    /// its graduated block percentage.
+    /// </summary>
+    public enum DefenseOutcome { Miss, Dodge, Parry, Guard }
 
     /// <summary>Result of RunTimedInput — which of the two nested bands (if any) the click landed in. Miss now carries a real damage penalty (TimedInputConfig.MissDamageMultiplier), unlike DefenseOutcome.Miss (2026-08-11, user-directed — see DECISIONS.md -> [Combat]).</summary>
     public enum OffenseOutcome { Miss, Good, Perfect }
@@ -78,6 +83,26 @@ public class BattleHUDController : MonoBehaviour
     /// would otherwise clip against the old, smaller box.
     /// </summary>
     private const float VolleyMarkerStartRadius = 80f;
+
+    /// <summary>
+    /// Charge & Release / Sustained Pressure's target-ring size (2026-08-17, user: "make the target
+    /// triangle bigger, and the starting triangle overlay bigger") — deliberately bigger than every
+    /// existing ring type (RingTargetRadius 30, VolleyTargetRadius 20), same "own dedicated constant"
+    /// reasoning as Volley's own radii, so this tuning never touches the classic or Volley rings.
+    /// 45 -> 55 (2026-08-17 follow-up, user: "make the overall triangle a bit larger").
+    /// </summary>
+    private const float HoldInputTargetRadius = 55f;
+
+    /// <summary>
+    /// Charge & Release / Sustained Pressure's outer "frame" triangle starting size (2026-08-17) —
+    /// unlike every other ring's marker, this one CONVERGES (shrinks toward RingMarkerMinRadius, same
+    /// language RunTimedInput's classic sweep uses) before press, then FREEZES the instant the player
+    /// presses; only RingVisual.FillRadius grows after that, over the hold. Bigger than
+    /// VolleyMarkerStartRadius (80) per the same user request above. 100 -> 120 (2026-08-17
+    /// follow-up, user: "make the overall triangle a bit larger"). See .timing-ring-hold in
+    /// BattleHUD.uss for the matching CSS box.
+    /// </summary>
+    private const float HoldInputFrameRadius = 120f;
 
     // Marker flash colors on click resolution (2026-08-05, user-directed — see DECISIONS.md ->
     // [Combat]), reworked same day from per-move colors (Dodge=orange/Parry=green) to
@@ -184,8 +209,11 @@ public class BattleHUDController : MonoBehaviour
     /// <summary>Result of the most recently completed RunDefenseTimedInput call. Valid once that coroutine finishes.</summary>
     public DefenseOutcome LastDefenseOutcome { get; private set; }
 
-    /// <summary>True if the most recently completed RunDefenseTimedInput hit was a "perfect" (see PerfectToleranceFraction). Always false when LastDefenseOutcome is Miss. Not wired to any bonus yet — visual feedback only for now.</summary>
+    /// <summary>True if the most recently completed RunDefenseTimedInput/RunSustainedPressureInput hit was a "perfect" (see PerfectToleranceFraction, or BeatSequenceConfig.SustainedPressurePerfectQualityThreshold for Guard). Always false when LastDefenseOutcome is Miss. Not wired to any bonus yet — visual feedback only for now.</summary>
     public bool LastDefenseWasPerfect { get; private set; }
+
+    /// <summary>Damage-block fraction (0..SustainedPressureMaxBlockFraction) from the most recently completed RunSustainedPressureInput — only meaningful when LastDefenseOutcome == Guard; 0 for every other outcome. Read by BattleManager to compute a graduated defenseMultiplier instead of Dodge/Parry's binary 0/1.</summary>
+    public float LastGuardBlockFraction { get; private set; }
 
     private readonly VisualElement[] _playerStageCreatures = new VisualElement[BattleConfig.ActivePartySize];
     private VisualElement _playerStageArea;
@@ -535,6 +563,13 @@ public class BattleHUDController : MonoBehaviour
     // EnemyTurn don't run concurrently), so one shared instance is enough.
     private RingVisual _timingRing;
 
+    // Charge & Release / Sustained Pressure (Attack_Pattern_Directive Part 5 Group 2, 2026-08-17) —
+    // its own dedicated single ring, same "never both at once" reasoning as _timingRing above (one
+    // hold-input skill resolves fully before another could start), but a SEPARATE instance/CSS class
+    // (.timing-ring-hold) since its frame/target radii (HoldInputFrameRadius/HoldInputTargetRadius)
+    // are deliberately bigger than the classic ring's own — see .timing-ring-hold in BattleHUD.uss.
+    private RingVisual _holdInputRing;
+
     // Multi-Hit Volley (Attack_Pattern_Directive Part 5 Group 2, 2026-08-14, user: "the number of
     // rings shown should match the number of projectiles airborne. so multiple rings could be
     // closing if multiple projectiles are out") — UNLIKE _timingRing above, a Volley cast can have
@@ -757,6 +792,10 @@ public class BattleHUDController : MonoBehaviour
         _timingRing = new RingVisual();
         _timingRing.AddToClassList("timing-ring");
         _timingRing.style.display = DisplayStyle.None;
+
+        _holdInputRing = new RingVisual();
+        _holdInputRing.AddToClassList("timing-ring-hold");
+        _holdInputRing.style.display = DisplayStyle.None;
 
         _volleyRingPool = new ObjectPool<RingVisual>(
             createFunc: () =>
@@ -2378,6 +2417,318 @@ public class BattleHUDController : MonoBehaviour
         _actionAnnouncement.style.display = DisplayStyle.None;
         _timingRing.style.display = DisplayStyle.None;
         _timingRing.RemoveFromHierarchy();
+    }
+
+    /// <summary>One hold gesture's press/release outcome, filled in by RunHoldGesture as it runs (2026-08-17) — same mutable-holder pattern VolleyRingOutcome below already uses, so callers can read timestamps after `yield return StartCoroutine(...)` completes.</summary>
+    public class HoldGestureOutcome
+    {
+        public bool WasPressed;
+        public bool WasReleased;
+        public float PressTimestampSeconds = -1f;
+        public float ReleaseTimestampSeconds = -1f;
+
+        /// <summary>Seconds between press and release — 0 if either never happened (caller treats that as a forced Miss on whichever instant is missing, same convention every other ring uses for "no click").</summary>
+        public float HeldDurationSeconds => WasPressed && WasReleased ? ReleaseTimestampSeconds - PressTimestampSeconds : 0f;
+    }
+
+    /// <summary>Shared quality-from-deviation helper (2026-08-17) — Clamp01(1 - deviation/tolerance), used by both RunChargeReleaseInput and RunSustainedPressureInput for their press/release instant scoring. deviation and tolerance must be in the same units (either both seconds, or both a MarkerRadius/TargetRadius-style ratio) — the two callers each pick whichever shape fits what they're measuring.</summary>
+    private static float ComputeQuality(float deviation, float tolerance) => Mathf.Clamp01(1f - deviation / tolerance);
+
+    /// <summary>
+    /// Shared "press and hold, then release" primitive (2026-08-17, Attack_Pattern_Directive Part 5
+    /// Group 2's second/third archetypes — "share one new hold-input primitive") — the first
+    /// mechanic in this codebase to register PointerUpEvent as a real release signal rather than
+    /// drag-cleanup; every existing ring (RunTimedInput/RunDefenseTimedInput/the Volley FIFO system)
+    /// only ever listens for a single PointerDownEvent instant. Registers BOTH PointerDownEvent and
+    /// PointerUpEvent on _root up front (unlike every existing one-shot down-only handler) and
+    /// tracks them against a running elapsed clock in a `while(!released && elapsed&lt;maxTimeout)
+    /// {...; yield return null;}` loop — same per-frame-coroutine shape RunTimedInput's own sweep
+    /// loop already uses, just driven by a released flag instead of a fixed duration.
+    ///
+    /// The ring is a TRIANGLE from the very first frame and never changes shape (2026-08-17, user:
+    /// "so for this skill it should start as a triangle not change"). It has TWO animated phases,
+    /// mirroring the two decisions the player makes (when to press, how long to hold) — revised
+    /// same session, user: "i was expecting for the outer triangle to converge like the ring does
+    /// for the basic projectile. So that lets the triangle ring converge for first targeting, then
+    /// holding for the inner triangle to expand to the same target":
+    /// 1. **Before press** — ring.MarkerRadius CONVERGES from its caller-set starting radius toward
+    ///    RingMarkerMinRadius over tellSeconds, exactly the same shrinking-sweep language
+    ///    RunTimedInput's classic ring already uses for "when to act" — this is the "first
+    ///    targeting" cue the outer triangle now gives for the ideal PRESS instant, replacing the
+    ///    earlier fully-static frame.
+    /// 2. **After press** — MarkerRadius FREEZES at wherever it happened to be at the press instant
+    ///    (a good press leaves it near ring.TargetRadius; a bad one leaves it further off), and
+    ///    ring.FillRadius takes over: a solid triangle growing from the center outward (user: "the
+    ///    triangle fill from the center going outward"), reaching ring.TargetRadius exactly at
+    ///    durationSeconds after the press — the "how long have I held" cue for the ideal RELEASE
+    ///    instant.
+    ///
+    /// Invokes onPress (if given) the INSTANT the press event fires, synchronously from within the
+    /// PointerDownEvent callback itself, passing the press timestamp — so a caller like
+    /// RunChargeReleaseInput can classify and flash the ring's color right at that instant (2026-08-19,
+    /// user: "i just want it to match the start similar to the standard projectile timing
+    /// notification" — RunTimedInput's ring flashes its Miss/Good/Perfect color the moment its
+    /// outcome is known; this gives the press instant the same immediate feedback instead of only
+    /// finding out at the very end).
+    ///
+    /// Invokes onRelease (if given) the INSTANT the release event fires, synchronously from within
+    /// the PointerUpEvent callback itself — not after this whole coroutine returns — so a caller
+    /// like RunChargeReleaseInput can trigger a payoff (projectile launch) at that exact moment
+    /// rather than waiting for scoring to finish.
+    /// </summary>
+    private IEnumerator RunHoldGesture(RingVisual ring, float tellSeconds, float durationSeconds, float maxTimeoutSeconds, HoldGestureOutcome outcome, Action onRelease = null, Action<float> onPress = null)
+    {
+        bool pressed = false;
+        bool released = false;
+        float pressedAt = -1f;
+        float releasedAt = -1f;
+        float elapsed = 0f;
+        float convergeStartRadius = ring.MarkerRadius;
+
+        void TryPress()
+        {
+            if (pressed) return;
+            pressed = true;
+            pressedAt = elapsed;
+            onPress?.Invoke(pressedAt);
+        }
+        void TryRelease()
+        {
+            if (!pressed || released) return;
+            released = true;
+            releasedAt = elapsed;
+            onRelease?.Invoke();
+        }
+
+        EventCallback<PointerDownEvent> onPointerDown = evt => { if (evt.button == 0) TryPress(); };
+        EventCallback<PointerUpEvent> onPointerUp = evt => { if (evt.button == 0) TryRelease(); };
+        _root.RegisterCallback(onPointerDown);
+        _root.RegisterCallback(onPointerUp);
+
+        // TEMPORARY debug hook (2026-08-17, mirrors DebugForceResolveVolleyFront) — real
+        // PointerDownEvent/PointerUpEvent dispatch (or even real-time-paced calls to a plain
+        // no-arg debug hook) proved unreliable to script against via Unity MCP: round-trip latency
+        // between separate execute_code calls alone can exceed maxTimeoutSeconds, causing the
+        // gesture to time out before a debug caller's next call ever lands — unrelated to this
+        // feature's own correctness (confirmed live: the loop's own timeout path completes cleanly
+        // with no exceptions when genuinely never pressed). These two hooks take an explicit
+        // atSeconds value and ASSIGN it directly to this closure's own `elapsed` instead of relying
+        // on real Time.deltaTime accumulation between calls — fully decouples deterministic testing
+        // from real-world round-trip pacing. DELETE once playtesting is done.
+        _debugSimulateHoldPress = atSeconds => { elapsed = atSeconds; TryPress(); };
+        _debugSimulateHoldRelease = atSeconds => { elapsed = atSeconds; TryRelease(); };
+
+        while (!released && elapsed < maxTimeoutSeconds)
+        {
+            elapsed += Time.deltaTime;
+            if (!pressed)
+            {
+                ring.MarkerRadius = Mathf.Lerp(convergeStartRadius, RingMarkerMinRadius, Mathf.Clamp01(elapsed / tellSeconds));
+                ring.Refresh();
+            }
+            else
+            {
+                ring.FillRadius = Mathf.Lerp(0f, ring.TargetRadius, Mathf.Clamp01((elapsed - pressedAt) / durationSeconds));
+                ring.Refresh();
+            }
+            yield return null;
+        }
+
+        _root.UnregisterCallback(onPointerDown);
+        _root.UnregisterCallback(onPointerUp);
+        _debugSimulateHoldPress = null;
+        _debugSimulateHoldRelease = null;
+
+        outcome.WasPressed = pressed;
+        outcome.WasReleased = released;
+        outcome.PressTimestampSeconds = pressedAt;
+        outcome.ReleaseTimestampSeconds = releasedAt;
+    }
+
+    private Action<float> _debugSimulateHoldPress;
+    private Action<float> _debugSimulateHoldRelease;
+
+    /// <summary>TEMPORARY debug hook (2026-08-17) — simulates a press at exactly atSeconds against whichever hold gesture (RunChargeReleaseInput/RunSustainedPressureInput) is currently running, for deterministic Unity MCP testing decoupled from real tool-call round-trip timing. No-op if none is running. DELETE once playtesting is done.</summary>
+    internal void DebugSimulateHoldPress(float atSeconds) => _debugSimulateHoldPress?.Invoke(atSeconds);
+
+    /// <summary>TEMPORARY debug hook (2026-08-17) — simulates a release at exactly atSeconds against whichever hold gesture is currently running. No-op if none is running or nothing is pressed yet. DELETE once playtesting is done.</summary>
+    internal void DebugSimulateHoldRelease(float atSeconds) => _debugSimulateHoldRelease?.Invoke(atSeconds);
+
+    /// <summary>Charge & Release's most recently completed cast cancelled outright (a Miss on either its press or release instant) — see RunChargeReleaseInput. Read right after that coroutine completes, same "single shared slot" convention as LastOffenseOutcome (never more than one Charge & Release resolving at once).</summary>
+    public bool LastChargeReleaseCancelled { get; private set; }
+
+    /// <summary>Charge & Release's combined press*release quality (0..1) — 0 whenever LastChargeReleaseCancelled is true. Read by BattleManager to interpolate a continuous damage multiplier instead of picking a discrete Miss/Good/Perfect tier.</summary>
+    public float LastChargeReleaseQuality { get; private set; }
+
+    /// <summary>Discrete Miss/Good/Perfect classification of the PRESS instant alone (2026-08-19, user: "adjust the battle log as well") — same tier the press's own immediate flash already uses. Read by BattleLogFormatter.FormatChargeReleaseHit to report each instant's outcome explicitly, not just the single combined damage number. Never Miss in a non-cancelled result (a Miss on either instant cancels the whole attack before this would be logged).</summary>
+    public OffenseOutcome LastChargeReleasePressOutcome { get; private set; }
+
+    /// <summary>Discrete Miss/Good/Perfect classification of the RELEASE instant alone (2026-08-19) — same tier convention as LastChargeReleasePressOutcome, computed against ChargeReleaseReleaseToleranceRatio instead of the press's seconds-based tolerance.</summary>
+    public OffenseOutcome LastChargeReleaseReleaseOutcome { get; private set; }
+
+    /// <summary>
+    /// Charge & Release's offense caller (2026-08-17) — see RunHoldGesture for the shared
+    /// press/hold/release mechanics. Scores TWO instants, not just release (revised same session):
+    /// how well-timed the press was against tellSeconds (the gap after the warning hop), and how
+    /// well-timed the release was against targetHoldSeconds (how long the player should have held).
+    /// A Miss on EITHER instant sets LastChargeReleaseCancelled — see BattleManager.
+    /// ResolveChargeReleaseAttack for how that/LastChargeReleaseQuality actually drive damage
+    /// (a continuous quality-scaled range on a pass, zero damage on a cancel — a deliberate,
+    /// skill-specific departure from every other skill's Miss handling).
+    ///
+    /// Anchored above the ATTACKER (attackerSlotIndex, always player-side per this archetype's
+    /// offense-only scope this pass), not the target (2026-08-17 follow-up, user: "should the charge
+    /// be on top of the player instead?") — unlike the classic ring (RunTimedInput), which is timing
+    /// a hit LANDING on the target in sync with a traveling projectile, the hold phase here is purely
+    /// the caster's own charge-up: nothing about the target is relevant until release actually fires
+    /// the projectile. Reads as "I am charging" on the attacker, then the shot flies to the target at
+    /// release — matches Sustained Pressure's own placement logic (anchored on whoever is actually
+    /// performing the held gesture, defender there, attacker here).
+    ///
+    /// 2026-08-19 (user: "i just want it to match the start similar to the standard projectile
+    /// timing notification"): the press instant now gets its OWN immediate Miss/Good/Perfect flash
+    /// (via RunHoldGesture's onPress callback), classified the same way ClassifyOffenseOutcome
+    /// already classifies every other timed input in this codebase — the player finds out how their
+    /// press landed right away, not only after the whole gesture resolves at release. This flash is
+    /// purely a visual read on the press alone; the final combined flash at release (below) still
+    /// reflects LastChargeReleaseQuality (press*release together) and overwrites it once release
+    /// happens — the press flash is a mid-hold preview, not the final word.
+    /// </summary>
+    public IEnumerator RunChargeReleaseInput(int attackerSlotIndex, string label, float tellSeconds, float targetHoldSeconds, Action onRelease)
+    {
+        _actionAnnouncementLabel.text = label;
+        _actionAnnouncement.EnableInClassList("action-announcement-offense", true);
+        _actionAnnouncement.EnableInClassList("action-announcement-defend", false);
+        _actionAnnouncement.style.display = DisplayStyle.Flex;
+
+        _playerStageCreatures[attackerSlotIndex].Add(_holdInputRing);
+        _holdInputRing.style.display = DisplayStyle.Flex;
+        _holdInputRing.MarkerIsTriangle = true;
+        _holdInputRing.TargetRadius = HoldInputTargetRadius;
+        _holdInputRing.MarkerRadius = HoldInputFrameRadius;
+        _holdInputRing.MarkerColor = Color.white;
+        _holdInputRing.FillRadius = 0f;
+        _holdInputRing.Refresh();
+
+        // Immediate press-instant flash (2026-08-19, user: "i just want it to match the start
+        // similar to the standard projectile timing notification") — classifies the press the same
+        // Miss/Good/Perfect way ClassifyOffenseOutcome already does everywhere else, using
+        // PerfectToleranceFraction of the press tolerance as the Perfect sub-band, same convention
+        // RunDefenseTimedInput already established for Dodge/Parry's own Perfect. Flashes right away
+        // rather than waiting for release — the color then persists (nothing else touches
+        // MarkerColor until the final combined flash at release) as a lingering "how was my press"
+        // indicator for the rest of the hold.
+        // Tracks the press's own discrete tier for reuse below (LastChargeReleasePressOutcome) —
+        // computed once here, not recomputed after release, since OnPress already has everything
+        // it needs at the instant it fires. Stays Miss (its default) if never pressed at all.
+        OffenseOutcome pressTierOutcome = OffenseOutcome.Miss;
+
+        void OnPress(float pressTimestamp)
+        {
+            float pressDeviation = Mathf.Abs(pressTimestamp - tellSeconds);
+            pressTierOutcome = ClassifyOffenseOutcome(true, pressDeviation,
+                BeatSequenceConfig.ChargeReleasePressToleranceSeconds,
+                BeatSequenceConfig.ChargeReleasePressToleranceSeconds * PerfectToleranceFraction);
+            _holdInputRing.MarkerColor = FlashColorForOffenseOutcome(pressTierOutcome);
+            _holdInputRing.Refresh();
+        }
+
+        var outcome = new HoldGestureOutcome();
+        yield return StartCoroutine(RunHoldGesture(_holdInputRing, tellSeconds, targetHoldSeconds, BeatSequenceConfig.HoldInputMaxTimeoutSeconds, outcome, onRelease, OnPress));
+
+        float pressQuality = outcome.WasPressed
+            ? ComputeQuality(Mathf.Abs(outcome.PressTimestampSeconds - tellSeconds), BeatSequenceConfig.ChargeReleasePressToleranceSeconds)
+            : 0f;
+        float releaseDeviation = outcome.WasReleased ? Mathf.Abs(outcome.HeldDurationSeconds / targetHoldSeconds - 1f) : float.MaxValue;
+        float releaseQuality = outcome.WasReleased
+            ? ComputeQuality(releaseDeviation, BeatSequenceConfig.ChargeReleaseReleaseToleranceRatio)
+            : 0f;
+        // 2026-08-19 (user: "adjust the battle log as well") — same discrete Miss/Good/Perfect
+        // classification the press flash already uses, now also computed for release, so
+        // BattleLogFormatter.FormatChargeReleaseHit can report both instants' outcomes explicitly
+        // instead of only a single blended damage number.
+        LastChargeReleasePressOutcome = pressTierOutcome;
+        LastChargeReleaseReleaseOutcome = ClassifyOffenseOutcome(outcome.WasReleased, releaseDeviation,
+            BeatSequenceConfig.ChargeReleaseReleaseToleranceRatio,
+            BeatSequenceConfig.ChargeReleaseReleaseToleranceRatio * PerfectToleranceFraction);
+
+        LastChargeReleaseCancelled = !outcome.WasPressed || !outcome.WasReleased || pressQuality <= 0f || releaseQuality <= 0f;
+        // Multiplicative, same reasoning as Sustained Pressure's block formula below — a badly-timed
+        // press already means the charge itself was mistimed, so a perfect release shouldn't fully
+        // rescue it the way averaging would.
+        LastChargeReleaseQuality = LastChargeReleaseCancelled ? 0f : pressQuality * releaseQuality;
+
+        _holdInputRing.MarkerColor = LastChargeReleaseCancelled ? MissFlashColor : Color.Lerp(SuccessFlashColor, PerfectFlashColor, LastChargeReleaseQuality);
+        _holdInputRing.Refresh();
+
+        yield return new WaitForSeconds(0.3f);
+        _actionAnnouncement.style.display = DisplayStyle.None;
+        _holdInputRing.style.display = DisplayStyle.None;
+        _holdInputRing.RemoveFromHierarchy();
+    }
+
+    /// <summary>
+    /// Sustained Pressure's defense caller (2026-08-17, "hold-to-guard") — see RunHoldGesture for
+    /// the shared press/hold/release mechanics. Ideal press instant = tellSeconds after this
+    /// coroutine starts (right after the caller's own warning-hop tell); ideal release instant =
+    /// tellSeconds + holdSeconds (the attack's own authored duration). Both instants are scored and
+    /// MULTIPLIED into LastGuardBlockFraction (user: "percentage block base[d]... dependent on
+    /// start timing, then let go timing") — a badly-timed press already means the player wasn't
+    /// braced when the attack started landing, so a perfect release shouldn't fully rescue it the
+    /// way averaging would. Sets LastDefenseOutcome/LastDefenseWasPerfect/LastGuardBlockFraction —
+    /// read them right after this coroutine completes, same convention RunDefenseTimedInput uses.
+    /// </summary>
+    public IEnumerator RunSustainedPressureInput(int targetSlotIndex, string label, float tellSeconds, float holdSeconds)
+    {
+        _actionAnnouncementLabel.text = label;
+        _actionAnnouncement.EnableInClassList("action-announcement-offense", false);
+        _actionAnnouncement.EnableInClassList("action-announcement-defend", true);
+        _actionAnnouncement.style.display = DisplayStyle.Flex;
+
+        _playerStageCreatures[targetSlotIndex].Add(_holdInputRing);
+        _holdInputRing.style.display = DisplayStyle.Flex;
+        _holdInputRing.MarkerIsTriangle = true;
+        _holdInputRing.TargetRadius = HoldInputTargetRadius;
+        _holdInputRing.MarkerRadius = HoldInputFrameRadius;
+        _holdInputRing.MarkerColor = Color.white;
+        _holdInputRing.FillRadius = 0f;
+        _holdInputRing.Refresh();
+
+        var outcome = new HoldGestureOutcome();
+        yield return StartCoroutine(RunHoldGesture(_holdInputRing, tellSeconds, holdSeconds,
+            tellSeconds + holdSeconds + BeatSequenceConfig.HoldInputMaxTimeoutSeconds, outcome));
+
+        float pressQuality = outcome.WasPressed
+            ? ComputeQuality(Mathf.Abs(outcome.PressTimestampSeconds - tellSeconds), BeatSequenceConfig.SustainedPressurePressToleranceSeconds)
+            : 0f;
+        float releaseQuality = outcome.WasReleased
+            ? ComputeQuality(Mathf.Abs(outcome.ReleaseTimestampSeconds - (tellSeconds + holdSeconds)), BeatSequenceConfig.SustainedPressureReleaseToleranceSeconds)
+            : 0f;
+
+        float blockFraction = outcome.WasPressed && outcome.WasReleased
+            ? pressQuality * releaseQuality * BeatSequenceConfig.SustainedPressureMaxBlockFraction
+            : 0f;
+
+        LastDefenseOutcome = outcome.WasPressed ? DefenseOutcome.Guard : DefenseOutcome.Miss;
+        LastGuardBlockFraction = LastDefenseOutcome == DefenseOutcome.Guard ? blockFraction : 0f;
+        LastDefenseWasPerfect = LastDefenseOutcome == DefenseOutcome.Guard
+            && (blockFraction / BeatSequenceConfig.SustainedPressureMaxBlockFraction) >= BeatSequenceConfig.SustainedPressurePerfectQualityThreshold;
+
+        // Same "fire the projectile's real outcome cue immediately" reasoning RunDefenseTimedInput's
+        // own switch already documents — Guard still lands SOME damage (unlike Dodge/Parry's full
+        // avoidance), so it resolves as a hit here too; BattleManager scales the actual number down
+        // afterward via LastGuardBlockFraction.
+        if (LastDefenseOutcome == DefenseOutcome.Miss || LastDefenseOutcome == DefenseOutcome.Guard) ResolveHitProjectile();
+
+        _holdInputRing.MarkerColor = LastDefenseOutcome == DefenseOutcome.Miss ? MissFlashColor
+            : LastDefenseWasPerfect ? PerfectFlashColor
+            : Color.Lerp(MissFlashColor, SuccessFlashColor, blockFraction / BeatSequenceConfig.SustainedPressureMaxBlockFraction);
+        _holdInputRing.Refresh();
+
+        yield return new WaitForSeconds(0.3f);
+        _actionAnnouncement.style.display = DisplayStyle.None;
+        _holdInputRing.style.display = DisplayStyle.None;
+        _holdInputRing.RemoveFromHierarchy();
     }
 
     /// <summary>One ring's resolution outcome, filled in by RunVolleyRingOffense/Defense as it runs (2026-08-14) — a plain mutable holder (not a return value) so BattleManager can read it after `yield return StartCoroutine(...)` completes, the same pattern CombatVfxController.HeldProjectile already uses.</summary>

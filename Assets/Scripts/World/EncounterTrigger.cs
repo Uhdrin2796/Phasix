@@ -26,7 +26,7 @@ public class EncounterTrigger : MonoBehaviour
     [SerializeField] private bool _overrideTintColor;
     [SerializeField] private Color _tintColorOverride = Color.white;
 
-    [Tooltip("DEBUG (2026-08-12): if checked, the spawned wild creature's entire loadout is replaced with just the built-in Attack move + the 'Slash' skill, guaranteeing every enemy turn triggers either the old single-beat Dodge/Parry flow (Attack) or the Melee Beat Sequence framework (Slash) so both can be reliably playtested and compared side by side. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
+    [Tooltip("DEBUG (2026-08-12, extended 2026-08-17): if checked, the spawned wild creature's entire loadout is replaced with the built-in Attack move + the 'Slash' skill + the 'Flame Breath' skill (Sustained Pressure), guaranteeing every enemy turn can trigger the old single-beat Dodge/Parry flow (Attack), the Melee Beat Sequence framework (Slash), or the new hold-to-guard archetype (Flame Breath) so all three can be reliably playtested and compared side by side. Flame Breath was added here rather than a new debug flag, since Sustained Pressure MUST be exercised live (unlike Multi-Hit Volley's deferred defense side) and this is this project's one existing enemy-side debug override mechanism. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
     [SerializeField] private bool _debugForceAttackAndSlash = true;
 
     private GameObject _activeInstance;
@@ -53,6 +53,13 @@ public class EncounterTrigger : MonoBehaviour
             foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
             {
                 if (skill.SkillName == "Slash") { guids.Add(guid); break; }
+            }
+            // 2026-08-17: Sustained Pressure ("Flame Breath") — must be exercised live against a
+            // real player, unlike Multi-Hit Volley's deliberately-deferred defense side, so it's
+            // added to this existing enemy-side debug override rather than needing a new mechanism.
+            foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+            {
+                if (skill.SkillName == "Flame Breath") { guids.Add(guid); break; }
             }
             WildSpawnSystem.ApplyDebugSkillsOverride(runtimeData, _skillDatabase, guids);
         }

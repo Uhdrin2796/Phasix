@@ -226,4 +226,78 @@ public static class BattleLogFormatter
 
         return line;
     }
+
+    /// <summary>
+    /// Formats a successful (non-cancelled) Charge & Release hit (2026-08-17,
+    /// BattleManager.ResolveChargeReleaseAttack) — same shape as FormatSkillAttack. The actual damage
+    /// multiplier is still driven by a CONTINUOUS combined quality (press*release, not a discrete
+    /// tier — see ResolveChargeReleaseAttack), but the log line (2026-08-19 follow-up, user: "adjust
+    /// the battle log as well") now reports each instant's OWN discrete Miss/Good/Perfect
+    /// classification explicitly (BattleHUDController.LastChargeReleasePressOutcome/
+    /// LastChargeReleaseReleaseOutcome — the same tiers the press's own immediate flash and the
+    /// classic ClassifyOffenseOutcome convention already use), rather than only a single blended
+    /// damage number with no explanation of where it came from. Neither can actually BE Miss here —
+    /// a Miss on either instant cancels the whole attack before reaching this method (see
+    /// FormatChargeReleaseFizzle for that case) — DescribeOutcomeTier still handles it defensively.
+    /// "Flawless" now requires BOTH instants to have graded Perfect, not a continuous-quality
+    /// threshold — a more literal reading of "perfect on the start and the release."
+    /// </summary>
+    public static string FormatChargeReleaseHit(BattleParticipant attacker, BattleParticipant target, string skillName,
+        int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier,
+        BattleHUDController.OffenseOutcome pressOutcome, BattleHUDController.OffenseOutcome releaseOutcome)
+    {
+        (int, string) timingTerm = (finalDamage - damageAfterType, "timing");
+        string line = $"{attacker.DisplayName}'s {skillName} releases on {target.DisplayName} for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, timingTerm)}!";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        line += $" (Press: {DescribeOutcomeTier(pressOutcome)}, Release: {DescribeOutcomeTier(releaseOutcome)})";
+
+        if (pressOutcome == BattleHUDController.OffenseOutcome.Perfect && releaseOutcome == BattleHUDController.OffenseOutcome.Perfect)
+            line += $" {attacker.DisplayName}'s charge and release were flawless — maximum damage!";
+
+        return line;
+    }
+
+    /// <summary>Shared Press/Release tier label for FormatChargeReleaseHit — not reused elsewhere, kept tiny and local rather than a general-purpose OffenseOutcome-to-string helper other formatters don't need.</summary>
+    private static string DescribeOutcomeTier(BattleHUDController.OffenseOutcome outcome)
+    {
+        return outcome switch
+        {
+            BattleHUDController.OffenseOutcome.Perfect => "Perfect!",
+            BattleHUDController.OffenseOutcome.Good => "Good",
+            _ => "Miss"
+        };
+    }
+
+    /// <summary>
+    /// Formats a CANCELLED Charge & Release attempt (2026-08-17) — a Miss on either the press or
+    /// release instant. Unlike every other skill's Miss (still deals reduced,
+    /// TimedInputConfig.MissDamageMultiplier damage), this archetype deals ZERO damage on a
+    /// cancelled attempt (this session's explicit instruction) — no damage breakdown to show since
+    /// there is none, just a plain fizzle line.
+    /// </summary>
+    public static string FormatChargeReleaseFizzle(BattleParticipant attacker, string skillName)
+    {
+        return $"{attacker.DisplayName}'s {skillName} mistimes and fizzles — no damage!";
+    }
+
+    /// <summary>
+    /// Formats a Sustained Pressure "Guard" outcome (2026-08-17, BattleHUDController.DefenseOutcome.
+    /// Guard) — unlike FormatDefenseOutcome's two existing branches (silent full-avoidance for
+    /// Dodge/Parry, or a full-damage normal line for a Miss), Guard always deals SOME damage (a
+    /// graduated block, never full avoidance) so it needs its own line showing both the block
+    /// percentage and the damage that still got through.
+    /// </summary>
+    public static string FormatGuardOutcome(BattleParticipant attacker, BattleParticipant target,
+        int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier, float blockPercent)
+    {
+        string line = $"{target.DisplayName} braces against {attacker.DisplayName}'s attack — blocks {blockPercent:0}% of the damage! {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, extraTermOrNull: null)}";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        return line;
+    }
 }

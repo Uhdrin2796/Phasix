@@ -4850,3 +4850,123 @@ re-derive the reasoning from scratch before deciding whether to build these.
   `ResolveEnemyDamageAction`), `EnemyAI.cs` (bucket-override extension),
   `BattleLogFormatter.cs` (`FormatVolleyHit`), `Assets/Data/Skills/Ranged_MultiHitVolley.asset`,
   `GameManager.cs` (`ApplyDebugPlaytestLoadout`).
+
+### [Combat] Charge & Release / Sustained Pressure — shared press-hold-release primitive, two-instant scoring, new graduated Guard outcome
+- **Decided:** Built one new shared primitive, `BattleHUDController.RunHoldGesture` — the first
+  mechanic in this codebase to register `PointerUpEvent` as a real release signal (every prior ring,
+  including Multi-Hit Volley's FIFO system, only ever listens for a single `PointerDownEvent`
+  instant). Two thin archetype-specific callers sit on top of it (`RunChargeReleaseInput` for
+  offense, `RunSustainedPressureInput` for defense) rather than one branchy shared method — mirrors
+  the `RunVolleyRingOffense`/`Defense` precedent, since the two archetypes' scoring shapes diverge
+  enough that a shared branchy method would need nearly as much per-archetype code inside it anyway.
+  Both archetypes ended up scoring TWO instants (press timing vs. an authored "tell," release timing
+  vs. an authored target), not just one — this was a mid-session revision for Charge & Release
+  specifically (originally release-only, per the directive's own one-liner "uncertain exact release
+  moment"), driven by explicit user correction: "note that a perfect on the start and the release
+  means the most damage." The two instant-quality scores (`Mathf.Clamp01(1 - deviation/tolerance)`
+  each) are combined MULTIPLICATIVELY, not averaged, for both archetypes — a badly-timed press
+  already means the attempt started wrong, so a perfect release shouldn't be able to fully rescue it.
+  Charge & Release: a pass on both instants yields a CONTINUOUS damage multiplier (`Mathf.Lerp`
+  between the existing Good/Perfect constants by combined quality) instead of a discrete tier; a Miss
+  on EITHER instant CANCELS the attack for zero damage — a deliberate, skill-specific departure from
+  `TimedInputConfig.MissDamageMultiplier`'s usual reduced-but-nonzero rule, which every other skill in
+  this codebase still uses unchanged. Sustained Pressure: added a new third `BattleHUDController
+  .DefenseOutcome.Guard` value alongside Miss/Dodge/Parry — NOT binary like the other two, a
+  graduated block fraction (capped at `SustainedPressureMaxBlockFraction`, 0.8) that generalizes
+  cleanly into `ResolveEnemyDamageAction`'s existing `defenseMultiplier`/burst-fill logic once Guard
+  is a real enum member, needing no new dedicated resolution coroutine the way Volley/StackingRhythm
+  needed (it's the same single-beat defense decision point with a third outcome, not a different
+  temporal structure). A partial Guard still grants burst-meter fill scaled by the UNBLOCKED damage
+  fraction, unlike Dodge/Parry's flat zero-fill-on-success gate.
+- **New visual:** a third `RingVisual` marker shape, `MarkerIsTriangle`, alongside the existing
+  circle/square — the shape itself NEVER changes (no shape-swap, user: "it should start as a triangle
+  not change"), but the marker now has two animated phases (revised same session — see the
+  "outer triangle now converges before press" follow-up below): before press it CONVERGES from a
+  larger-than-usual starting radius toward the classic ring's own minimum, exactly like
+  `RunTimedInput`'s shrinking sweep, giving a real pre-press "when to act" cue; the instant of press
+  freezes it in place. A new `FillRadius` field then drives a SEPARATE solid filled triangle growing
+  from the center outward only while held, toward a larger-than-usual target triangle (both bigger
+  than every existing ring's radii, per explicit user request — new `HoldInputTargetRadius`/
+  `HoldInputFrameRadius` constants, plus a new `.timing-ring-hold` USS class sized to match).
+- **Why:** Attack_Pattern_Directive Part 5 Group 2's explicit build-order note: "build these two
+  together: both are 'hold input' instead of 'tap input,' diverging only in scoring." Charge &
+  Release = player offense (hold-charge-release for a damage bonus); Sustained Pressure = defense
+  (hold-to-guard against an enemy attack) — both confirmed via AskUserQuestion against the worked
+  examples table (Magma Burst = offense "erupt" pattern, Flame Breath = "hold-to-guard, boss-scale
+  feel" = defense).
+- **Alternatives rejected:** Averaging the two instant-quality scores instead of multiplying (would
+  let one badly-mistimed instant be nearly fully offset by a perfect second one — rejected as
+  inconsistent with "dependent on start timing, then let go timing" both mattering). Reusing
+  Parry's binary full-block structure for Sustained Pressure instead of a new graduated `Guard`
+  outcome (rejected — user explicitly wanted "a percentage block base[d]" on timing quality, not a
+  renamed Parry).
+- **Testing note:** real `PointerDownEvent`/`PointerUpEvent` dispatch (and even a plain no-arg debug
+  hook relying on real-time pacing between separate Unity MCP `execute_code` calls) proved unreliable
+  to script against — round-trip latency between calls alone can exceed the 3s
+  `HoldInputMaxTimeoutSeconds` safety valve, timing the gesture out before a debug caller's next call
+  ever lands (confirmed live: Unity's own `editor_state` resource showed 300+ seconds of staleness
+  during this session). Added two TEMPORARY debug hooks,
+  `DebugSimulateHoldPress(float atSeconds)`/`DebugSimulateHoldRelease(float atSeconds)` (mirrors
+  `DebugForceResolveVolleyFront`, DELETE once playtesting is done), which assign the given value
+  directly to the gesture's own `elapsed` closure variable instead of relying on real
+  `Time.deltaTime` accumulation between calls — fully decouples deterministic testing from real-world
+  round-trip pacing. All six scoring scenarios (Charge & Release perfect/imperfect-pass/cancel;
+  Sustained Pressure perfect/imperfect Guard/never-pressed Miss) verified live this way, matching
+  hand-computed expected values exactly.
+- **Date:** 2026-08-17
+- **Ref:** `HoldInputArchetype.cs` (new), `SkillData.cs` (`HoldInputArchetype`/
+  `ChargeReleaseTellSeconds`/`ChargeReleaseTargetHoldSeconds`/`SustainedPressureTellSeconds`/
+  `SustainedPressureHoldSeconds`), `BeatSequenceConfig.cs` (hold-input constants section),
+  `RingVisual.cs` (`MarkerIsTriangle`/`FillRadius`/`DrawTriangleStroke`/`DrawFilledTriangle`),
+  `BattleHUDController.cs` (`_holdInputRing`, `HoldInputTargetRadius`/`HoldInputFrameRadius`,
+  `RunHoldGesture`/`HoldGestureOutcome`/`ComputeQuality`, `RunChargeReleaseInput`/
+  `RunSustainedPressureInput`, `DefenseOutcome.Guard`, `LastChargeReleaseCancelled`/
+  `LastChargeReleaseQuality`/`LastGuardBlockFraction`, `DebugSimulateHoldPress`/
+  `DebugSimulateHoldRelease`), `BattleManager.cs` (`ResolveChargeReleaseAttack` + dispatch in
+  `ResolveSkillAction`/Sustained Pressure branch in `ResolveEnemyDamageAction`), `EnemyAI.cs`
+  (bucket-override extension), `BattleLogFormatter.cs` (`FormatChargeReleaseHit`/
+  `FormatChargeReleaseFizzle`/`FormatGuardOutcome`), `Assets/Data/Skills/Ranged_ChargeRelease.asset`,
+  `Assets/Data/Skills/Ranged_SustainedPressure.asset`, `GameManager.cs`
+  (`ApplyDebugPlaytestLoadout`), `EncounterTrigger.cs` (`_debugForceAttackAndSlash`),
+  `BattleHUD.uss` (`.timing-ring-hold`).
+
+### [Combat] Formation picker becomes a live-style preview mirroring the real battle stage
+- **Decided:** Replaced `FormationGridPicker.Build()` — a flat, abstract 7x5 flex grid of uniform
+  buttons showing only a species-initial letter, with no relationship to how the real battle stage
+  actually looks — with a new `BuildLivePreview` that mirrors `BattleHUDController
+  .LayoutPlayerStageCreaturesByLane`/`ApplyLaneLayout`'s exact depth-scale/position math
+  (`LaneMovementSystem.GetLaneScreenTop`/`GetDepthScale`/`GetPositionOffsetPx`), scaled down by a
+  new `FormationGridPicker.PreviewScaleFactor` (0.43) to fit a Party-menu panel. Each occupied slot
+  renders as a `PrimalTypeColor`-tinted circle — the same creature-visual convention the real
+  battle stage already uses everywhere in this project (no per-species sprite art exists yet, so
+  "creature sprites" here means this project's actual placeholder-circle convention, not new art).
+  Free slots show a faint outline; the picking creature's own current slot gets a green highlight
+  ring. Each cell keeps a fixed 28px clickable hit-box (`PreviewMinHitTargetPx`) independent of its
+  depth-scaled decorative circle, so a back-lane slot's smaller circle never makes it harder to
+  actually click. `FormationGridPicker.Build()` and its now-orphaned `.formation-grid`/
+  `.formation-grid-row` USS were deleted as dead code (exactly one caller, fully replaced) —
+  `BuildCell` and the `.formation-grid-cell`/`-current`/`-occupied`/`-title` rules it shares with the
+  in-battle Move-skill drag flow (`BattleHUDController.ShowStagePositionMarkers`) were left
+  untouched, since that flow needs its own real-stage-coordinate positioning logic, not this menu's
+  scaled-down preview math.
+- **Why:** User: "the party positional thing in the overworld is not a direct representation of what
+  the battle scene movement looks like. Can we align those?" — offered three levels of alignment
+  (depth-scale the existing grid cells only; a full live preview with creature visuals; or just
+  confirm the picker's row ordering already matches, no visual rework) and chose the fullest: "show a
+  live-style preview with creature sprites."
+- **Alternatives rejected:** Depth-scaling the cells while keeping the flex-row/column grid layout
+  (a lighter middle option) — rejected once the user picked the fuller live-preview option, which
+  needs absolute per-cell positioning to actually reproduce the real stage's row/column geometry
+  rather than flex-flow approximating it.
+- **Date:** 2026-08-19
+- **Ref:** `FormationGridPicker.cs` (`BuildLivePreview`, `PreviewScaleFactor`/`PreviewMinHitTargetPx`),
+  `OverworldMenuController.cs` (`BuildFormationSection`, `GetOccupantSpecies`), `BattleHUD.uss`
+  (`.formation-preview-*`), `Assets/Tests/EditMode/FormationGridPickerTests.cs`.
+- **Same-day follow-up:** user: "i want to be able to move or adjust the position of the phasix
+  before a fight as needed. can we add that to the starting formation menu?" — clicking an occupied
+  slot in the preview now SWAPS the two party members instead of being blocked (the occupant takes
+  the clicked-from creature's old slot). `BuildLivePreview`'s cells are unconditionally clickable now;
+  the swap-vs-block decision lives in `OverworldMenuController.OnCellChosen`, not in
+  `FormationGridPicker` itself, which stays a pure "report which cell was clicked" UI builder.
+  `BuildCell`/the in-battle Move-skill drag flow keep their own occupied-means-blocked behavior,
+  untouched — swapping positions mid-battle via Move is a different, not-yet-asked-for feature.

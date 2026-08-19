@@ -667,6 +667,12 @@ public class BattleManager : MonoBehaviour
             yield return StartCoroutine(ResolveMultiHitVolleyAttack(attacker, attackerSlotIndex, true, target, volleyTargetSlotIndex, false, skill));
             timedInputHappened = true;
         }
+        else if (skill.HoldInputArchetype == HoldInputArchetype.ChargeRelease)
+        {
+            int chargeTargetSlotIndex = _state.EnemySide.IndexOf(target);
+            yield return StartCoroutine(ResolveChargeReleaseAttack(attacker, attackerSlotIndex, true, target, chargeTargetSlotIndex, false, skill));
+            timedInputHappened = true;
+        }
         else if (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
         {
             int meleeTargetSlotIndex = _state.EnemySide.IndexOf(target);
@@ -1607,6 +1613,74 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Charge & Release's offense resolution (2026-08-17, Attack_Pattern_Directive Part 5 Group 2's
+    /// second/third archetypes) — single-hit, no FIFO/pooling needed (only ever one hold-input skill
+    /// resolving at a time, same "never both at once" reasoning as the classic single-ring system).
+    /// Fires the projectile at the EXACT instant of release (user: "fire at the moment of release"),
+    /// via RunChargeReleaseInput's onRelease callback, not after the whole gesture resolves.
+    ///
+    /// Damage is a deliberate departure from every other skill's Miss handling (user, this session):
+    /// a Miss on EITHER the press or release instant (BattleHUDController.LastChargeReleaseCancelled)
+    /// cancels the attack for ZERO damage — no DamageCalculator/BattleEngine call at all, just a
+    /// "fizzled" log line. A pass on both instants uses a CONTINUOUS multiplier interpolated from
+    /// LastChargeReleaseQuality (0..1) between the existing Good/Perfect damage multipliers, not a
+    /// discrete tier — "a perfect on the start and the release means the most damage. Things in
+    /// between as long as passing should have a damage range."
+    /// </summary>
+    private IEnumerator ResolveChargeReleaseAttack(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, SkillData skill)
+    {
+        UnityEngine.UIElements.VisualElement attackerElement = BattleHUDController.Instance.GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+
+        yield return StartCoroutine(BeatSequenceRunner.RunWarningHop(attacker, attackerSlotIndex, attackerIsPlayerSide));
+
+        float tellSeconds = skill.ChargeReleaseTellSeconds > 0f ? skill.ChargeReleaseTellSeconds : BeatSequenceConfig.ChargeReleaseDefaultTellSeconds;
+        float targetHoldSeconds = skill.ChargeReleaseTargetHoldSeconds > 0f ? skill.ChargeReleaseTargetHoldSeconds : BeatSequenceConfig.ChargeReleaseDefaultTargetHoldSeconds;
+
+        PrimalType colorType = GetPrimalTypeOrDefault(attacker);
+        void OnRelease() => BattleHUDController.Instance.LaunchRangedBeatSequenceProjectile(
+            attackerSlotIndex, attackerIsPlayerSide, targetSlotIndex, targetIsPlayerSide, colorType,
+            BeatSequenceConfig.ResolvedProjectileTravelSeconds, holdForOutcome: false);
+
+        yield return StartCoroutine(BattleHUDController.Instance.RunChargeReleaseInput(
+            attackerSlotIndex, $"{skill.SkillName} — {attacker.DisplayName}", tellSeconds, targetHoldSeconds, OnRelease));
+
+        bool cancelled = BattleHUDController.Instance.LastChargeReleaseCancelled;
+        float combinedQuality = BattleHUDController.Instance.LastChargeReleaseQuality;
+
+        if (cancelled)
+        {
+            BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatChargeReleaseFizzle(attacker, skill.SkillName));
+        }
+        else
+        {
+            float attackMultiplier = Mathf.Lerp(TimedInputConfig.GoodDamageMultiplier, TimedInputConfig.PerfectDamageMultiplier, combinedQuality);
+
+            int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+            int baseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, DamageCategory.Physical, BattleConfig.PlaceholderSkillPower);
+            float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, attacker, target, attackMultiplier, baseDamage);
+            List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+            AccumulateDamageDealt(results);
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+            foreach (BattleActionResult result in results)
+            {
+                BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatChargeReleaseHit(
+                    result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier,
+                    BattleHUDController.Instance.LastChargeReleasePressOutcome, BattleHUDController.Instance.LastChargeReleaseReleaseOutcome));
+            }
+
+            EventBus.Raise_TimedInputSuccess(attacker.RuntimeData);
+            AddBurstFill(attacker, attackerSlotIndex, BattleConfig.BurstFillPerSkillUse + BattleConfig.BurstFillPerTimedInputSuccess);
+        }
+
+        VisualElementTweening.TweenTranslateX(attackerElement, 0f, BeatSequenceConfig.AttackLungeDurationSeconds);
+        yield return new WaitForSeconds(BeatSequenceConfig.AttackLungeDurationSeconds);
+    }
+
+    /// <summary>
     /// Runs one of the 5 built-in moves' own dedicated mechanics (2026-08 follow-up — relocated
     /// verbatim from PlayerTurn's old chosenOptionIndex-keyed if/else chain, now triggered by
     /// skill identity via ResolveSkillAction's dispatch instead of a fixed wheel-position index —
@@ -2059,6 +2133,81 @@ public class BattleManager : MonoBehaviour
         {
             int volleyAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
             yield return StartCoroutine(ResolveMultiHitVolleyAttack(attacker, volleyAttackerSlotIndex, false, target, targetSlotIndex, true, skillOrNull));
+            yield break;
+        }
+
+        // Sustained Pressure ("hold-to-guard", 2026-08-17) — a new outcome value INSIDE this same
+        // single-beat defense flow, not a wholly separate dedicated coroutine like the three
+        // branches above. It's fundamentally the same decision point (one incoming hit, one
+        // defensive response) with a third, graduated outcome alongside Dodge/Parry/Miss, so it
+        // reuses this method's own damage-application tail below instead of duplicating it.
+        if (skillOrNull != null && skillOrNull.HoldInputArchetype == HoldInputArchetype.SustainedPressure)
+        {
+            int sustainedAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
+            yield return StartCoroutine(BeatSequenceRunner.RunWarningHop(attacker, sustainedAttackerSlotIndex, false));
+
+            float sustainedTellSeconds = skillOrNull.SustainedPressureTellSeconds > 0f ? skillOrNull.SustainedPressureTellSeconds : BeatSequenceConfig.SustainedPressureDefaultTellSeconds;
+            float sustainedHoldSeconds = skillOrNull.SustainedPressureHoldSeconds > 0f ? skillOrNull.SustainedPressureHoldSeconds : BeatSequenceConfig.SustainedPressureDefaultHoldSeconds;
+
+            // Held (holdForOutcome:true) same as the classic Dodge/Parry flow below — resolved by
+            // RunSustainedPressureInput itself the instant its outcome is known (ResolveHitProjectile,
+            // same "fire the real cue immediately" pattern RunDefenseTimedInput already established).
+            BattleHUDController.Instance.LaunchSyncedProjectile(
+                sustainedAttackerSlotIndex, false, targetSlotIndex, true, GetPrimalTypeOrDefault(attacker), holdForOutcome: true);
+            yield return StartCoroutine(BattleHUDController.Instance.RunSustainedPressureInput(
+                targetSlotIndex, $"GUARD — {attacker.DisplayName}! Hold to brace, release when it ends", sustainedTellSeconds, sustainedHoldSeconds));
+
+            BattleHUDController.DefenseOutcome sustainedOutcome = BattleHUDController.Instance.LastDefenseOutcome;
+            bool sustainedDefended = sustainedOutcome != BattleHUDController.DefenseOutcome.Miss;
+            bool sustainedWasPerfect = BattleHUDController.Instance.LastDefenseWasPerfect;
+            float blockFraction = BattleHUDController.Instance.LastGuardBlockFraction;
+            // Generalizes cleanly once Guard is a real enum member: full avoidance (0f) for
+            // Dodge/Parry, full damage (1f) for Miss, and now a graduated value in between for Guard
+            // — no other downstream logic in this method needed to change.
+            float sustainedDefenseMultiplier = sustainedOutcome == BattleHUDController.DefenseOutcome.Guard ? 1f - blockFraction : (sustainedDefended ? 0f : 1f);
+            if (sustainedDefended) EventBus.Raise_TimedInputSuccess(target.RuntimeData);
+
+            DamageCategory sustainedCategory = isNamedTreeSkill ? PlaceholderSkillResolver.Resolve(skillOrNull).Category : DamageCategory.Physical;
+            int sustainedPower = isNamedTreeSkill ? BattleConfig.PlaceholderSkillPower : DamageCalculator.BasicAttackPower;
+            int sustainedPureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, target, sustainedCategory, sustainedPower);
+            int sustainedBaseDamage = DamageCalculator.ComputeDamage(attacker, target, _typeChart, sustainedCategory, sustainedPower);
+            float sustainedTypeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, target, _typeChart);
+
+            BattleEngine.QueueBasicAttack(_state, attacker, target, sustainedDefenseMultiplier, sustainedBaseDamage);
+            List<BattleActionResult> sustainedResults = BattleEngine.ResolveQueuedActions(_state);
+
+            if (sustainedDefended && sustainedWasPerfect) target.RestoreAura(BattleConfig.PerfectDefenseAuraRestore);
+
+            BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+            if (sustainedOutcome == BattleHUDController.DefenseOutcome.Guard)
+            {
+                foreach (BattleActionResult result in sustainedResults)
+                {
+                    BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatGuardOutcome(
+                        result.Attacker, result.Target, sustainedPureBaseDamage, sustainedBaseDamage, result.DamageApplied, sustainedTypeMultiplier, blockFraction * 100f));
+                }
+            }
+            else
+            {
+                LogDefenseResult(sustainedResults, attacker, target, sustainedPureBaseDamage, sustainedBaseDamage, sustainedTypeMultiplier, sustainedDefended, isParry: false);
+            }
+            if (sustainedDefended && sustainedWasPerfect) BattleHUDController.Instance.AppendBattleLog($"{target.DisplayName} restores Aura!");
+
+            // Scaled partial burst fill (2026-08-17, this session's explicit decision) — a Guard
+            // still let SOME damage through, unlike a full Dodge/Parry, so it grants a fill scaled
+            // by the UNBLOCKED damage fraction instead of the flat full/zero gate every other
+            // outcome here uses.
+            if (sustainedOutcome == BattleHUDController.DefenseOutcome.Guard)
+                AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken * (1f - blockFraction));
+            else if (!sustainedDefended)
+                AddBurstFill(target, targetSlotIndex, BattleConfig.BurstFillPerHitTaken);
+
+            yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+                sustainedOutcome == BattleHUDController.DefenseOutcome.Guard ? $"{target.DisplayName} braces against the attack!"
+                    : sustainedDefended ? $"{target.DisplayName} defended!" : $"{target.DisplayName} was hit!",
+                BattleConfig.AutoMessageDurationSeconds));
+
             yield break;
         }
 

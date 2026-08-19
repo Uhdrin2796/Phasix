@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Ranged_SustainedPressure
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Flame Breath
+  _description: 'Attack Pattern Directive Group 2 - Sustained Pressure ("Flame Breath"
+    flavor, hold-to-guard, boss-scale feel). Enemy-cast defense archetype: the
+    defending player holds through the attack''s authored duration instead of
+    tapping to Dodge/Parry, producing a graduated Guard block percentage
+    (BattleHUDController.DefenseOutcome.Guard) instead of a binary avoid/hit -
+    dependent on BOTH press timing (vs. the warning-hop tell) and release timing
+    (vs. the attack''s own end).'
+  _treeType: 19
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence:
+  _responseTiming: 0
+  _windupJitterRangeSeconds: 0
+  _stackingRhythm: 0
+  _volleyRingSequence:
+  _volleyRingDurationsSeconds: []
+  _volleyDashForwardDurationsSeconds: []
+  _volleyDashBackDurationsSeconds: []
+  _holdInputArchetype: 2
+  _chargeReleaseTellSeconds: 0
+  _chargeReleaseTargetHoldSeconds: 0
+  _sustainedPressureTellSeconds: 0
+  _sustainedPressureHoldSeconds: 0

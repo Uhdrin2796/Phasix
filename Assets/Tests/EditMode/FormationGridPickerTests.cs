@@ -4,42 +4,51 @@ using NUnit.Framework;
 namespace Phasix.Tests.EditMode
 {
     /// <summary>
-    /// Covers FormationGridPicker.Build/BuildCell — specifically the 2026-08-12 orientation fix
-    /// (the grid used to render Lane 1 as its TOP row, inverted from the real stage, which renders
-    /// Lane 1 at the BOTTOM — see LaneMovementSystem.GetLaneScreenTop's own doc comment) and the
-    /// userData tagging the in-battle Move drag's hit-testing depends on.
+    /// Covers FormationGridPicker.BuildLivePreview/BuildCell. BuildLivePreview (2026-08-17,
+    /// replacing the old flat Build()) lays every one of the 35 (lane, position) slots out as
+    /// absolutely-positioned children of one flat container (no row grouping, unlike the old
+    /// Build()), so these tests locate cells by their userData tag rather than by child/row index —
+    /// still covering the same orientation invariant the original 2026-08-12 fix established (Lane
+    /// 1 renders at the BOTTOM of the real stage, Lane 7 at the TOP — see
+    /// LaneMovementSystem.GetLaneScreenTop's own doc comment) and the userData tagging the
+    /// in-battle Move drag's hit-testing depends on.
     /// </summary>
     public class FormationGridPickerTests
     {
-        [Test]
-        public void Build_FirstRow_IsLane7_MatchingRealStageTopOrientation()
+        private static VisualElement FindCell(VisualElement stage, int lane, int position)
         {
-            VisualElement grid = FormationGridPicker.Build(currentLane: 4, currentPosition: 3, getOccupantLabel: null, onCellChosen: null);
-
-            VisualElement firstRow = grid[0];
-            var (lane, _) = ((int, int))firstRow[0].userData;
-
-            Assert.AreEqual(BattleLaneLayout.LaneCount, lane, "The grid's first (topmost) row must be Lane 7 (back) — the real stage renders Lane 7 at the top.");
+            foreach (VisualElement child in stage.Children())
+            {
+                var (l, p) = ((int, int))child.userData;
+                if (l == lane && p == position) return child;
+            }
+            Assert.Fail($"No cell found for lane {lane}, position {position}.");
+            return null;
         }
 
         [Test]
-        public void Build_LastRow_IsLane1_MatchingRealStageBottomOrientation()
+        public void BuildLivePreview_Lane7Cell_RendersAboveLane1Cell_MatchingRealStageOrientation()
         {
-            VisualElement grid = FormationGridPicker.Build(currentLane: 4, currentPosition: 3, getOccupantLabel: null, onCellChosen: null);
+            VisualElement stage = FormationGridPicker.BuildLivePreview(currentLane: 4, currentPosition: 3,
+                currentSpecies: null, getOccupantSpecies: null, onCellChosen: null);
 
-            VisualElement lastRow = grid[grid.childCount - 1];
-            var (lane, _) = ((int, int))lastRow[0].userData;
+            VisualElement lane7Cell = FindCell(stage, BattleLaneLayout.LaneCount, 3);
+            VisualElement lane1Cell = FindCell(stage, 1, 3);
 
-            Assert.AreEqual(1, lane, "The grid's last (bottommost) row must be Lane 1 (front) — the real stage renders Lane 1 at the bottom.");
+            Assert.Less(lane7Cell.style.top.value.value, lane1Cell.style.top.value.value,
+                "Lane 7 (back) must render ABOVE Lane 1 (front) — the real stage renders Lane 1 at the bottom.");
         }
 
         [Test]
-        public void Build_CellUserData_MatchesItsRealLaneAndPosition()
+        public void BuildLivePreview_ContainsAllThirtyFiveSlots_EachWithCorrectUserData()
         {
-            VisualElement grid = FormationGridPicker.Build(currentLane: 4, currentPosition: 3, getOccupantLabel: null, onCellChosen: null);
+            VisualElement stage = FormationGridPicker.BuildLivePreview(currentLane: 4, currentPosition: 3,
+                currentSpecies: null, getOccupantSpecies: null, onCellChosen: null);
 
-            // Row 0 = Lane 7 (post-fix); its 4th cell (index 3) should be position 4.
-            var (lane, position) = ((int, int))grid[0][3].userData;
+            Assert.AreEqual(BattleLaneLayout.LaneCount * LaneMovementSystem.PositionsPerLane, stage.childCount);
+
+            VisualElement cell = FindCell(stage, BattleLaneLayout.LaneCount, 4);
+            var (lane, position) = ((int, int))cell.userData;
             Assert.AreEqual(BattleLaneLayout.LaneCount, lane);
             Assert.AreEqual(4, position);
         }

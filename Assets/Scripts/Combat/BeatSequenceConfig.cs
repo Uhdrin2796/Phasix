@@ -120,4 +120,42 @@ public static class BeatSequenceConfig
     /// pending NumericalCalibration.md like every other value in this class.
     /// </summary>
     public const float VolleyPerHitDamageMultiplier = 0.3f;
+
+    // --- 2026-08-17: Charge & Release + Sustained Pressure (Attack_Pattern_Directive Part 5 Group
+    // 2's second/third archetypes — "build these two together: both are 'hold input' instead of
+    // 'tap input,' diverging only in scoring... Share one new hold-input primitive.") All placeholder
+    // values, same "pending NumericalCalibration.md" status as every other constant in this class.
+
+    /// <summary>Safety-valve timeout for BattleHUDController.RunHoldGesture — if the player never releases at all, the hold loop force-resolves as if released so a forgotten hold can't stall the battle coroutine forever.</summary>
+    public const float HoldInputMaxTimeoutSeconds = 3.0f;
+
+    /// <summary>Fallback gap (seconds) between the warning hop and Charge & Release's ideal PRESS instant, when a skill's own SkillData.ChargeReleaseTellSeconds is 0. Also drives the outer triangle's pre-press convergence sweep duration (BattleHUDController.RunHoldGesture), so this doubles as a visual-pacing knob. 0.5 -> 0.8 (2026-08-17 follow-up, user: "the timing on the converging is a little too fast").</summary>
+    public const float ChargeReleaseDefaultTellSeconds = 0.8f;
+
+    /// <summary>Fallback target hold duration (seconds) for Charge & Release's ideal RELEASE instant, when a skill's own SkillData.ChargeReleaseTargetHoldSeconds is 0 — "long obvious windup" per the archetype's own Part 5 one-liner.</summary>
+    public const float ChargeReleaseDefaultTargetHoldSeconds = 1.2f;
+
+    /// <summary>Tolerance window (seconds, absolute deviation) for Charge & Release's PRESS-instant quality — same absolute-seconds shape as Sustained Pressure's own press/release tolerances, since it's judged against a real-time tell instant rather than a ring-radius ratio.</summary>
+    public const float ChargeReleasePressToleranceSeconds = 0.35f;
+
+    /// <summary>Tolerance (deviation RATIO, not seconds) for Charge & Release's RELEASE-instant quality — same |heldDuration/targetHoldSeconds - 1| shape every other ring in this codebase already uses, since it's judging a held duration against a target duration, not an absolute wall-clock instant.</summary>
+    public const float ChargeReleaseReleaseToleranceRatio = 0.35f;
+
+    /// <summary>Fallback gap (seconds) between the warning hop and Sustained Pressure's ideal PRESS instant, when a skill's own SkillData.SustainedPressureTellSeconds is 0. Also drives the outer triangle's pre-press convergence sweep duration (BattleHUDController.RunHoldGesture), so this doubles as a visual-pacing knob. 0.5 -> 0.8 (2026-08-17 follow-up, user: "the timing on the converging is a little too fast") — matches ChargeReleaseDefaultTellSeconds's identical change, same reasoning.</summary>
+    public const float SustainedPressureDefaultTellSeconds = 0.8f;
+
+    /// <summary>Fallback attack duration (seconds) for Sustained Pressure, when a skill's own SkillData.SustainedPressureHoldSeconds is 0 — deliberately longer than Charge & Release's own default, "hold-to-guard, boss-scale feel" per the Flame Breath worked example.</summary>
+    public const float SustainedPressureDefaultHoldSeconds = 1.5f;
+
+    /// <summary>Tolerance window (seconds, absolute deviation) for Sustained Pressure's PRESS-instant quality.</summary>
+    public const float SustainedPressurePressToleranceSeconds = 0.35f;
+
+    /// <summary>Tolerance window (seconds, absolute deviation) for Sustained Pressure's RELEASE-instant quality.</summary>
+    public const float SustainedPressureReleaseToleranceSeconds = 0.35f;
+
+    /// <summary>Hard cap on Guard's block fraction — even a flawless double-perfect Guard blocks at most this much, never the full 100% Dodge/Parry avoidance grants, keeping Guard a genuinely graduated third outcome rather than a renamed Parry.</summary>
+    public const float SustainedPressureMaxBlockFraction = 0.8f;
+
+    /// <summary>The (blockFraction / SustainedPressureMaxBlockFraction) ratio above which a Guard counts as "perfect" for BattleHUDController.LastDefenseWasPerfect — feeds the same perfect-aura-restore path Dodge/Parry's own Perfect already grants.</summary>
+    public const float SustainedPressurePerfectQualityThreshold = 0.9f;
 }

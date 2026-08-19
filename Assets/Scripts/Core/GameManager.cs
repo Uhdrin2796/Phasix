@@ -200,6 +200,17 @@ public class GameManager : MonoBehaviour
     /// EXACTLY 12 of the Tier-5 cap's 12 slots — zero slack left. A second Volley pattern (already
     /// planned as a follow-up) cannot be added to this same debug loadout without either raising
     /// SkillSlotCapacity's Tier-5 cap or dropping an existing debug skill from this list.
+    ///
+    /// 2026-08-17 follow-up (Charge & Release, Attack_Pattern_Directive Part 5 Group 2's second
+    /// archetype — "Magma Burst") — the flagged 12/12 conflict above came due: adding a 13th name
+    /// would trip the "skip override" guard below and silently fall back to the normal seeded
+    /// loadout, defeating the whole point of this debug hook. Rather than raising
+    /// SkillSlotCapacity's Tier-5 cap (a locked progression value per CLAUDE.md's Aura-requirements
+    /// table, not a debug knob) or leaving Charge & Release untestable, "Jitter" was swapped out for
+    /// "Magma Burst" — Jitter's own mechanic was already fully built/playtested in an earlier
+    /// session, while Charge & Release is the thing that needs live validation right now. Purely a
+    /// debug-loadout swap, freely reversible (Jitter's own asset/behavior is untouched) — flag to
+    /// the user if Jitter needs to come back onto this list alongside Charge & Release later.
     /// </summary>
     private void ApplyDebugPlaytestLoadout(PhasixRuntimeData runtime)
     {
@@ -222,7 +233,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Jitter", "Volley" };
+        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Magma Burst", "Volley" };
         foreach (string name in desiredNames)
         {
             foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)

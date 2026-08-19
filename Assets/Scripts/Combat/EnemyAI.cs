@@ -132,7 +132,8 @@ public static class EnemyAI
                     // meant to answer this for a skill with its own resolution path.
                     if (skill.StackingRhythm != StackingRhythmType.None
                         || (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
-                        || (skill.VolleyRingSequence != null && skill.VolleyRingSequence.Count > 0))
+                        || (skill.VolleyRingSequence != null && skill.VolleyRingSequence.Count > 0)
+                        || skill.HoldInputArchetype != HoldInputArchetype.None)
                     {
                         damageOptions.Add(skill);
                         break;

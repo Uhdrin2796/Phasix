@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Ranged_ChargeRelease
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Magma Burst
+  _description: 'Attack Pattern Directive Group 2 - Charge & Release ("Magma Burst"
+    flavor, erupt pattern). Hold to charge, release at the right moment for a damage
+    bonus. Scores TWO instants: press timing vs. the warning-hop tell, and release
+    timing vs. the target hold duration. A perfect press + perfect release deals
+    maximum damage; any passing combination deals a scaled damage range; a miss on
+    EITHER instant cancels the attack for zero damage.'
+  _treeType: 19
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence:
+  _responseTiming: 0
+  _windupJitterRangeSeconds: 0
+  _stackingRhythm: 0
+  _volleyRingSequence:
+  _volleyRingDurationsSeconds: []
+  _volleyDashForwardDurationsSeconds: []
+  _volleyDashBackDurationsSeconds: []
+  _holdInputArchetype: 1
+  _chargeReleaseTellSeconds: 0
+  _chargeReleaseTargetHoldSeconds: 0
+  _sustainedPressureTellSeconds: 0
+  _sustainedPressureHoldSeconds: 0

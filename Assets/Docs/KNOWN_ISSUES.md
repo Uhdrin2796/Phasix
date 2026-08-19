@@ -27,6 +27,14 @@ evidence gathered, not a fully closed loop.
 
 ## Closed Issues
 
+### [COMBAT-002] — Two party members can render fully overlapping in battle — CLOSED (fixed)
+**Status:** Closed — fixed same session, verified live: reflected the fix method against the user's real save (two party members both at lane 4/position 3), confirmed the second moved to a genuinely free slot and the save persisted correctly.
+**Affects:** `Assets/Scripts/Creatures/PartySystem.cs` (`AddToParty`)
+**Description:** User report (2026-08-17): "the two phasix i have are overlayed on top of each other. i thought thats not possible?" Root cause: `PhasixRuntimeData.preferredLaneIndex`/`preferredPositionIndex` default to the SAME (lane, position) pair for every new creature (`LaneMovementSystem.DefaultStartingLane`/`DefaultStartingPosition` — dead center of the exclusive 7x5 formation grid). Formation slots are supposed to be exclusive (`FormationSystem.IsSlotOccupied`), but nothing ever enforced that at party-add time — the only thing that assigns a creature a different slot is the player manually opening the Party menu's formation picker for that specific creature. A second party member never individually customized there silently shared the first's exact default slot, and since `LaneMovementSystem.GetLaneScreenTop`/`GetPositionOffsetPx` are pure functions of `(lane, position)`, identical inputs produced pixel-identical screen coordinates — fully overlapping sprites in battle.
+**Fix:** New `PartySystem.AssignFreeFormationSlotIfOccupied`, called from `AddToParty` right after a new member is placed. Checks the new member's default slot against every other current party member's slot; if it collides, scans the full 35-slot grid (lanes 1-7 x positions 1-5) for the first free pair and reassigns the new member there. Only fires on an actual collision — a member whose default happens to already be free (e.g. the first one added) is left untouched, so this never overrides a slot the player deliberately chose via the picker.
+**Verified:** Live via `execute_code` against the user's real save: confirmed both existing party members were at lane 4/position 3 (proving the bug), then invoked the fix method directly (reflection, since it's private) against the second member — it moved to lane 1/position 1, `SaveSystem.Save` persisted the change, re-read confirmed the new values stuck. `read_console` clean throughout.
+**Closed:** 2026-08-17, same session.
+
 ### [DEBUG-001] — `EncounterTrigger._debugForceSlashOnly` is dead — never wired to anything — CLOSED (fixed)
 **Status:** Closed — fixed same session, verified live: toggled a real `EncounterTrigger` (`Test_WildSpawnPoint_TopLeft`) off/on in Play Mode, spawned creature came back with exactly 1 learned + 1 equipped skill
 **Affects:** `Assets/Scripts/World/EncounterTrigger.cs`

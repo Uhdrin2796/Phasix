@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -56,12 +57,56 @@ public class PartySystem : MonoBehaviour
             if (_slots[i] == null)
             {
                 _slots[i] = phasix;
+                AssignFreeFormationSlotIfOccupied(phasix);
                 if (_activeSlotIndex < 0) SetActiveSlot(i);
                 return i;
             }
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Bugfix (2026-08-17, user report: "the two phasix i have are overlayed on top of each other. i
+    /// thought thats not possible?") — every new PhasixRuntimeData defaults its
+    /// preferredLaneIndex/preferredPositionIndex to the exact same (lane, position) pair
+    /// (LaneMovementSystem.DefaultStartingLane/Position, dead center of the 7x5 grid), and the only
+    /// thing that has ever assigned a DIFFERENT slot is the player manually visiting the Party menu's
+    /// formation picker for that specific creature (OverworldMenuController.BuildFormationSection).
+    /// The grid is exclusive by design (FormationSystem.IsSlotOccupied), but nothing enforced that at
+    /// ADD time — a second party member never individually customized in the picker silently shares
+    /// the first's exact slot, rendering fully overlaid in battle (LaneMovementSystem.GetLaneScreenTop/
+    /// GetPositionOffsetPx are pure functions of (lane, position), so identical inputs produce
+    /// identical screen coordinates). This only fires when a real collision exists — a party member
+    /// whose default slot happens to already be free (e.g. the very first member added) is left
+    /// untouched, so this never overrides a slot the player deliberately chose via the picker.
+    /// </summary>
+    private void AssignFreeFormationSlotIfOccupied(PhasixRuntimeData newMember)
+    {
+        var occupied = new List<(int lane, int position)>();
+        for (int i = 0; i < MaxPartySize; i++)
+        {
+            if (_slots[i] != null && _slots[i] != newMember)
+                occupied.Add((_slots[i].preferredLaneIndex, _slots[i].preferredPositionIndex));
+        }
+
+        if (!FormationSystem.IsSlotOccupied(occupied, newMember.preferredLaneIndex, newMember.preferredPositionIndex))
+            return;
+
+        for (int lane = 1; lane <= BattleLaneLayout.LaneCount; lane++)
+        {
+            for (int position = 1; position <= LaneMovementSystem.PositionsPerLane; position++)
+            {
+                if (!FormationSystem.IsSlotOccupied(occupied, lane, position))
+                {
+                    newMember.preferredLaneIndex = lane;
+                    newMember.preferredPositionIndex = position;
+                    return;
+                }
+            }
+        }
+        // All 35 slots full — can't happen with MaxPartySize=3, left as a defensive fallback. The new
+        // member keeps the colliding default; the player can still reassign manually via the picker.
     }
 
     /// <summary>Switches which slot's Phasix physically follows the player. No-op if the slot is empty.</summary>

@@ -361,21 +361,39 @@ public class OverworldMenuController : MonoBehaviour
 
     /// <summary>
     /// Pre-battle formation slot picker (2026-08-12, user: "lets just have 5 positions across a
-    /// lane. Then you can preset which position you want to be in") — reuses
-    /// FormationGridPicker.Build (a flex-flowed row/column grid, click-to-select) for THIS static
-    /// screen. The in-battle Move redesign (same session, user: "drag and drop a player to a
-    /// location... just like how we do the projectile") shows a DIFFERENT construction instead —
-    /// BattleHUDController.ShowStagePositionMarkers, individually positioned to match real stage
-    /// coordinates and hit-tested via drag-release rather than clicked — but both share
-    /// FormationGridPicker.BuildCell for cell appearance/state, so a slot always LOOKS the same
-    /// whether you're picking it here or dragging to it in battle. Occupancy
-    /// is checked against every OTHER party slot's PhasixRuntimeData.preferredLaneIndex/
-    /// preferredPositionIndex (comparing PhasixRuntimeData references directly — party slots hold
-    /// distinct instances, no two slots can ever reference the same one). Picking a cell updates
-    /// the runtime fields directly (read by BattleParticipant's constructor at battle start) and
-    /// rebuilds the whole detail view via ShowDetail so the grid's "current" highlight moves — the
-    /// same "just rebuild everything, this isn't a hot path" approach ShowDetail already uses for
-    /// every other click in this view.
+    /// lane. Then you can preset which position you want to be in"). The in-battle Move redesign
+    /// (same session, user: "drag and drop a player to a location... just like how we do the
+    /// projectile") shows a DIFFERENT construction instead — BattleHUDController
+    /// .ShowStagePositionMarkers, individually positioned to match real stage coordinates and
+    /// hit-tested via drag-release rather than clicked — but both share FormationGridPicker
+    /// .BuildCell for cell appearance/state, so a slot always LOOKS the same whether you're picking
+    /// it here or dragging to it in battle. Occupancy is checked against every OTHER party slot's
+    /// PhasixRuntimeData.preferredLaneIndex/preferredPositionIndex (comparing PhasixRuntimeData
+    /// references directly — party slots hold distinct instances, no two slots can ever reference
+    /// the same one). Picking a cell updates the runtime fields directly (read by BattleParticipant's
+    /// constructor at battle start) and rebuilds the whole detail view via ShowDetail so the
+    /// preview's "current" highlight moves — the same "just rebuild everything, this isn't a hot
+    /// path" approach ShowDetail already uses for every other click in this view.
+    ///
+    /// 2026-08-17 (user: "the party positional thing in the overworld is not a direct
+    /// representation of what the battle scene movement looks like. Can we align those?"): switched
+    /// from FormationGridPicker.Build (a flat, abstract 7x5 flex grid showing only a species-initial
+    /// letter, no relationship to the real stage) to FormationGridPicker.BuildLivePreview, which
+    /// mirrors the real battle stage's own depth-scale/spacing math at a smaller scale and shows
+    /// each occupant's actual PrimalType-tinted circle — the same creature-visual convention the
+    /// battle stage itself uses (no per-species sprite art exists in this project yet). Occupancy
+    /// now needs the OTHER creature's PhasixData (for its PrimalType), not just a display-string
+    /// initial, so GetOccupantLabel became GetOccupantSpecies.
+    ///
+    /// 2026-08-19 (user: "i want to be able to move or adjust the position of the phasix before a
+    /// fight as needed. can we add that to the starting formation menu?"): clicking an OCCUPIED
+    /// cell now SWAPS the two party members' slots instead of being blocked — the occupant takes
+    /// whichever slot `runtime` is leaving, `runtime` takes the clicked slot. This lets the whole
+    /// party's formation be freely rearranged from any single creature's detail view (swap enough
+    /// times and you can reach any arrangement) without needing a separate multi-creature editor
+    /// screen. FormationGridPicker.BuildLivePreview's cells are now unconditionally enabled; the
+    /// swap-vs-block DECISION lives here, not in that class (see its own updated doc comment) — it
+    /// only reports which cell was clicked.
     /// </summary>
     private VisualElement BuildFormationSection(PhasixRuntimeData runtime)
     {
@@ -386,7 +404,7 @@ public class OverworldMenuController : MonoBehaviour
         title.AddToClassList("formation-grid-title");
         section.Add(title);
 
-        string GetOccupantLabel(int lane, int position)
+        PhasixRuntimeData FindOccupant(int lane, int position)
         {
             if (PartySystem.Instance == null) return null;
             for (int i = 0; i < PartySystem.MaxPartySize; i++)
@@ -394,19 +412,36 @@ public class OverworldMenuController : MonoBehaviour
                 PhasixRuntimeData other = PartySystem.Instance.GetSlot(i);
                 if (other == null || other == runtime) continue;
                 if (other.preferredLaneIndex == lane && other.preferredPositionIndex == position)
-                    return other.speciesData != null && other.speciesData.SpeciesName.Length > 0 ? other.speciesData.SpeciesName.Substring(0, 1) : "?";
+                    return other;
             }
             return null;
         }
 
+        PhasixData GetOccupantSpecies(int lane, int position) => FindOccupant(lane, position)?.speciesData;
+
         void OnCellChosen(int lane, int position)
         {
+            if (lane == runtime.preferredLaneIndex && position == runtime.preferredPositionIndex) return; // re-choosing your own slot is a no-op
+
+            PhasixRuntimeData occupant = FindOccupant(lane, position);
+            if (occupant != null)
+            {
+                occupant.preferredLaneIndex = runtime.preferredLaneIndex;
+                occupant.preferredPositionIndex = runtime.preferredPositionIndex;
+            }
+
             runtime.preferredLaneIndex = lane;
             runtime.preferredPositionIndex = position;
             ShowDetail(runtime);
         }
 
-        section.Add(FormationGridPicker.Build(runtime.preferredLaneIndex, runtime.preferredPositionIndex, GetOccupantLabel, OnCellChosen));
+        section.Add(FormationGridPicker.BuildLivePreview(runtime.preferredLaneIndex, runtime.preferredPositionIndex,
+            runtime.speciesData, GetOccupantSpecies, OnCellChosen));
+
+        var caption = new Label($"Lane {runtime.preferredLaneIndex} - Position {runtime.preferredPositionIndex}");
+        caption.AddToClassList("formation-preview-caption");
+        section.Add(caption);
+
         return section;
     }
 

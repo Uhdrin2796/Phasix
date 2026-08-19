@@ -619,6 +619,23 @@
     height: 180px;
 }
 
+/* Charge & Release / Sustained Pressure (2026-08-17) — a dedicated single ring, same centered-above
+   positioning as .timing-ring, but sized for HoldInputFrameRadius instead of the classic
+   RingMarkerStartRadius (60px) — user: "make the target triangle bigger, and the starting triangle
+   overlay bigger." Widened again 240->280 (2026-08-17 follow-up, HoldInputFrameRadius 100->120, user:
+   "make the overall triangle a bit larger") — a 120px radius needs at least a 240px box to avoid
+   clipping the frame triangle's own stroke; 280 leaves margin, same "radius*2 plus margin" sizing
+   .timing-ring-volley already used. top nudged -180->-200 (half the box's own growth) to keep the
+   ring's vertical center roughly where it was relative to the creature. */
+.timing-ring-hold {
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    translate: -50% 0;
+    width: 280px;
+    height: 280px;
+}
+
 /* Bottom row: action panel (current turn/move/timing bar) fills the left half of the screen,
    battle log fills the right half — each panel is flex-grow:1/flex-basis:0 so the row's full
    width (left:0/right:0, edge-to-edge) splits exactly 50/50, with only a small gap-via-margin
@@ -760,16 +777,12 @@
    wheel is set up, but instead a 7 by 5 grid") — FormationGridPicker.cs, shared between the Party
    menu's pre-battle picker and the in-battle Move skill. Lives here (not OverworldMenu.uss) because
    OverworldMenu.uxml already references this file as a second stylesheet — see that file's own
-   header comment for why (same reasoning as its shared skill-ring classes). */
-.formation-grid {
-    align-items: center;
-}
-
-.formation-grid-row {
-    flex-direction: row;
-    justify-content: center;
-}
-
+   header comment for why (same reasoning as its shared skill-ring classes).
+   .formation-grid/.formation-grid-row (the old flat abstract 7x5 flex grid, FormationGridPicker.Build)
+   were REMOVED 2026-08-17 once the Party menu switched to the depth-scaled .formation-preview-*
+   layout below (BuildLivePreview) — Build() had exactly one caller and became dead code. The rules
+   below (.formation-grid-cell/-current/-occupied/-title) stay: BuildCell still uses them for the
+   in-battle Move drag's real-stage-aligned marker set (BattleHUDController.ShowStagePositionMarkers). */
 .formation-grid-cell {
     width: 28px;
     height: 28px;
@@ -806,4 +819,60 @@
     color: rgb(230, 230, 230);
     -unity-font-style: bold;
     margin-bottom: 8px;
+}
+
+/* Live-style formation preview (2026-08-17, user: "the party positional thing in the overworld is
+   not a direct representation of what the battle scene movement looks like. Can we align those?" —
+   chose the fullest option, "show a live-style preview with creature sprites") —
+   FormationGridPicker.BuildLivePreview, replacing the old flat .formation-grid above for the Party
+   menu specifically. .formation-preview-cell is a fixed-size clickable hit box (see
+   FormationGridPicker.PreviewMinHitTargetPx's own doc comment for why it stays fixed regardless of
+   depth scale); .formation-preview-circle is the depth-scaled decorative visual inside it, sized
+   per-instance in C# (BuildLivePreview) since it varies by lane. */
+.formation-preview-stage {
+    position: relative;
+    align-self: center;
+}
+
+.formation-preview-cell {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    background-color: transparent;
+    border-width: 0;
+}
+
+.formation-preview-circle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    border-radius: 50%;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+.formation-preview-circle-free {
+    background-color: transparent;
+    border-color: rgba(200, 200, 210, 0.35);
+    border-width: 1px;
+}
+
+.formation-preview-circle-occupied {
+    /* background-color set per-instance in C# from PrimalTypeColor.GetColor(occupant.PrimalType) */
+    border-color: rgba(0, 0, 0, 0.5);
+}
+
+.formation-preview-circle-current {
+    border-color: rgb(90, 200, 100);
+    border-width: 3px;
+}
+
+.formation-preview-caption {
+    font-size: 13px;
+    color: rgb(190, 190, 195);
+    margin-top: 6px;
+    -unity-text-align: middle-center;
 }
