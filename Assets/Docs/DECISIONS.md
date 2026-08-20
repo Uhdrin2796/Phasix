@@ -144,6 +144,38 @@ Add an entry any time you make a choice that isn't obvious from the GDD.
   loops functional) — that's the trigger to begin real art/animation work, per the March
   2026 `[Art] Art pipeline` entry this one refines.
 
+### [Art] Fire/Water base colors raised in saturation — deliberate revision of the "locked" table above, not a Claude override
+- **Decided:** During a Zone/Positional VFX pass (Attack_Pattern_Directive Part 5 Group 3), Claude
+  flagged that Fire/Water are explicitly "not invented" values transcribed from the GDD's own Primal
+  wheel diagram, and asked whether the user really wanted them changed just for one skill's contrast
+  needs, or would rather achieve contrast purely through Zone/Positional's own (non-locked) accent
+  colors instead. User: "Yes, change Fire/Water's actual colors" — a deliberate designer decision,
+  not Claude inventing/overriding locked content unprompted.
+  | Type | Old Hex | New Hex |
+  |---|---|---|
+  | Fire | `#C04020` | `#E8511A` |
+  | Water | `#1A6A9A` | `#1E90D4` |
+  Both raised in saturation/luminance so PrimalType colors (the "30%" identity layer in a new 60/30/10
+  contrast pass across the battle stage) read clearly against the near-black "60%" stage background,
+  distinct from the "10%" accent reds Zone/Positional's danger signals use (`MissFlashColor`, reused
+  rather than invented). Every other base color and all 28 duo-merge pairs are unchanged.
+- **Known side effect, not fixed this pass:** Steam (the Fire+Water duo-merge) comes out a muted
+  grey-purple under `PrimalTypeColor.GetColor`'s existing `Color.Lerp` blend, regardless of how vivid
+  its two parents are — averaging two near-complementary hues (orange-red and blue) moves toward
+  grey, a property of straight RGB lerp blending, not something specific to these particular hex
+  values. A real fix (e.g. blending in HSV space, or boosting post-blend saturation) would be a
+  separate, bigger change to `GetColor` itself, affecting all 28 duo types, not just Steam — out of
+  scope for this pass.
+- **Why the GDD's own locked table itself wasn't edited:** Out of scope for this pass — the table in
+  the `[Art] Placeholder-first pipeline` entry above documents the ORIGINAL locked GDD values for
+  historical reference; this entry records the deliberate deviation from it, matching how other
+  entries in this file record "supersedes" relationships rather than editing history in place.
+- **Date:** 2026-08-20
+- **Revisit if:** A real species roster/art pass happens (per the entry above's own "Revisit if") —
+  at that point Fire/Water/Steam's real final colors should be decided holistically, not left as
+  whatever this one VFX-contrast pass happened to need.
+- **Ref:** `PrimalTypeColor.cs`, CHANGELOG.md's matching 2026-08-20 entry.
+
 ---
 
 ### [Art] Placeholder Phasix visual — one shape, underglow halo, sorting layer
@@ -4970,3 +5002,184 @@ re-derive the reasoning from scratch before deciding whether to build these.
   `FormationGridPicker` itself, which stays a pure "report which cell was clicked" UI builder.
   `BuildCell`/the in-battle Move-skill drag flow keep their own occupied-means-blocked behavior,
   untouched — swapping positions mid-battle via Move is a different, not-yet-asked-for feature.
+
+### [Combat] Zone/Positional — first Lane Selection/no-timing archetype; warning-glow tell turned out to need a UI Toolkit tint pulse, not URP Bloom
+- **Decided:** Built Zone/Positional (Attack_Pattern_Directive Part 5 Group 3, item 7) as three
+  worked skills — `Ranged_ZoneRow` (lanes 1/3/5/7), `Ranged_ZoneColumn` (positions 1/3/5),
+  `Ranged_ZoneDiagonalX` (a fixed 13-cell X shape) — sharing one dispatch key
+  (`SkillData.ZonePositionalPattern`), one resolution method (`BattleManager.
+  ResolveZonePositionalAttack`), and one HUD primitive (`BattleHUDController.
+  RunZonePositionalWarning`). No timing roll of any kind: the attacker's stage element pulses a
+  warning tint for `ZonePositionalGlowSeconds` (default 1s) with no location shown, then every
+  marked `(Lane, Position)` cell highlights on the live player-side stage for
+  `ZonePositionalHighlightSeconds` (default 1.5s), during which the enemy's single locked target
+  (only — other caught party members can't be moved this window, they just take the hit if they're
+  standing badly) can step one lane/position per arrow-key press, blocked by
+  `FormationSystem.IsSlotOccupied` the same way the in-battle Move skill already is. Resolution
+  checks final occupancy of every marked cell once the window closes and applies full damage to
+  whoever's still there — there is no dodge/parry/guard roll, the avoidance IS having moved in time.
+- **Cell-based data shape, not lane-only:** Row and Column patterns are naturally lane-only/
+  position-only, but DiagonalX needs true per-cell marking to read as an X on the non-square 7-lane
+  x 5-position grid, so `ZonePositionalPatternResolver.GetMarkedCells` always expands every pattern
+  down to a shared `ZoneCell(Lane, Position)` list — Row does a lane x every-position cross-product,
+  Column does a position x every-lane cross-product, DiagonalX returns a fixed hand-authored table.
+  This is a real correction to `Attack_Pattern_Directive_v0_1_0.md`'s prior claim that Zone/
+  Positional "operates at lane granularity... position is a layer beneath lane" — see that doc's own
+  2026-08-20 errata.
+- **DiagonalX's 13-cell table derivation:** proportional round-off across the grid — for the
+  top-left-to-bottom-right line, `position(lane) = 1 + (7-lane)/6*4`; for top-right-to-bottom-left,
+  `position(lane) = 5 - (7-lane)/6*4` — one cell per lane row (7+7, sharing the center cell (4,3) =
+  13 total), confirmed against `LaneMovementSystem`'s real screen mapping (Lane 1 = front = bottom
+  of stage, Lane 7 = back = top; Position 1 = left, Position 5 = right, verified live via
+  `GetLaneScreenTop`/`GetPositionOffsetPx`'s actual `style.top`/`style.left` usage before committing
+  to which corner was which). Hand-authored as a fixed table, not computed at runtime, per the
+  user's explicit preference, so it can be adjusted directly if it doesn't read right live.
+- **Why no Tank button:** an earlier plan draft had an explicit Tank button with no mechanical
+  effect of its own (mitigation would come from other skills, not new code). Once the response
+  became real-time arrow-key movement instead of a discrete menu choice, "don't move" is already
+  always available with zero extra UI — a separate button would have added a control with no
+  behavior distinct from simply not pressing anything.
+- **Why the enemy's Move drag flow (`BeginMoveDrag`/`MoveConfirmed`) wasn't reused:** it's
+  player-turn-initiated and sets `HasActedThisTurn`, consuming the player's own turn — wrong shape
+  for a reactive window that fires during the ENEMY's turn and must be free, like Dodge/Parry
+  already is. `RunZonePositionalWarning` calls down into the same `LaneMovementSystem`/
+  `FormationSystem.IsSlotOccupied` math (via a new `TryStepZonePositionalTarget` helper) but not
+  that event chain.
+- **Bloom-based glow abandoned for the actual battle-stage tell:** the literal ask was a
+  `SpriteGlowController` (URP Bloom via an HDR material color push on a `SpriteRenderer`) — built
+  exactly as specified and kept in the codebase, correct for any real `SpriteRenderer` GameObject
+  (e.g. overworld creatures, `PhasixPlaceholderVisual`). But the battle stage's creatures are UI
+  Toolkit `VisualElement`s, not `SpriteRenderer`s (`BattleHUDController._playerStageCreatures`/
+  `_enemyStageCreature`), composited via `BattleHUDPanelSettings.asset`'s Screen Space Overlay
+  `PanelSettings` (`m_RenderMode: 0`, no target texture) — confirmed this draws straight to the
+  backbuffer, entirely bypassing URP's post-processing stack, so Bloom categorically cannot affect
+  it regardless of Volume/threshold configuration. Built a UI Toolkit-native equivalent instead:
+  `ApplyZonePositionalGlowPulse` pulses the attacker element's `unityBackgroundImageTintColor`
+  between white and a warm orange via `Mathf.PingPong`, reusing the same "flash a color on state
+  change" convention `FlashColorForOffenseOutcome` already establishes throughout
+  `BattleHUDController.cs`, rather than inventing a new visual language.
+- **Verification note:** live Play Mode testing hit this project's own documented
+  `LESSONS_LEARNED.md` → "[Tooling] Play Mode doesn't tick frames while the Editor window is
+  unfocused" constraint — `RunZonePositionalWarning`'s frame-driven loop didn't visibly progress
+  across separate MCP tool calls. Per that entry's own established fix, verified the underlying
+  logic by invoking the private synchronous helpers directly via reflection instead of fighting
+  real-time ticking: `ShowZonePositionalHighlightCells` (confirmed 20/21/13 cells created for Row/
+  Column/DiagonalX, matching `ZonePositionalPatternResolver`'s own counts), `ApplyZonePositionalGlowPulse`/
+  `ResetZonePositionalGlow` (confirmed exact tint math and correct `StyleKeyword.Null` restore),
+  `TryStepZonePositionalTarget` (confirmed one-step movement, occupancy blocking against a real
+  second party member, and lane clamping), and `ApplyZonePositionalHit` (confirmed real
+  `DamageCalculator`/`BattleEngine` damage application and correctly formatted battle log output,
+  live against a real `BattleState` in an additively-loaded `BattleScene_Main`). A backgrounded
+  instance of the full `ResolveZonePositionalAttack` coroutine also completed on its own during this
+  session's investigation (once enough real frames eventually batched through), independently
+  confirming the full dispatch chain end-to-end.
+- **Deferred:** Split Attention (item 8) — reuses this same infrastructure per the directive's own
+  build-order note, but needs its own fake-tell visual-distinction question answered first; not
+  bundled into this pass. Player-side offense use of this archetype (enemy as the target) is also
+  out of scope, matching every prior archetype's initial single-direction ship pattern.
+- **Date:** 2026-08-20
+- **Ref:** `ZonePositionalPatternType.cs` (new), `ZoneCell.cs` (new),
+  `ZonePositionalPatternResolver.cs` (new), `SpriteGlowController.cs` (new, unused by battle stage —
+  see above), `SkillData.cs` (`ZonePositionalPattern`/`ZonePositionalRowLanes`/
+  `ZonePositionalColumnPositions`/`ZonePositionalGlowSeconds`/`ZonePositionalHighlightSeconds`),
+  `BeatSequenceConfig.cs` (`ZonePositionalGlowSeconds`/`ZonePositionalHighlightSeconds`),
+  `BattleManager.cs` (`ResolveZonePositionalAttack`/`ApplyZonePositionalHit` + dispatch in
+  `ResolveEnemyDamageAction`), `BattleHUDController.cs` (`RunZonePositionalWarning`/
+  `TryStepZonePositionalTarget`/`ApplyZonePositionalGlowPulse`/`ResetZonePositionalGlow`/
+  `ShowZonePositionalHighlightCells`/`HideZonePositionalHighlightCells`), `BattleLogFormatter.cs`
+  (`FormatZonePositionalHit`), `Assets/Data/Skills/Ranged_ZoneRow.asset`/`Ranged_ZoneColumn.asset`/
+  `Ranged_ZoneDiagonalX.asset`, `SkillDatabase.asset`,
+  `Assets/Tests/EditMode/ZonePositionalPatternResolverTests.cs`,
+  `Attack_Pattern_Directive_v0_1_0.md` (2026-08-20 errata + Part 8 corrections).
+
+### [Combat/Art] Battle stage rendering — UI Toolkit overlay now, real diorama scene later — migration boundary
+- **Context:** Grew out of a user Q&A session while planning Zone/Positional's lightning-bolt VFX
+  (see that entry above and CHANGELOG.md's matching 2026-08-20 entries) — the questions ("why build
+  it this way," "would a real scene be more limiting," "will we need to recreate VFX later," "should
+  we pivot now," "how would HUD work in a real scene") kept surfacing real architectural detail that
+  wasn't written down anywhere. This entry captures that discussion as a standing reference, not a
+  decision to act on now — no migration work is scheduled.
+- **Current state, confirmed by direct investigation (not assumed):** The entire battle presentation
+  — stage creatures, nameplates, bars, rings, drag-lines, the battle log, buttons — renders through
+  one `UIDocument` (`BattleHUDController`, `UIRoot_BattleHUD`) using `BattleHUDPanelSettings.asset`,
+  confirmed `m_RenderMode: 0` (Screen Space Overlay) with no target texture. This draws directly to
+  the backbuffer, after and independent of anything a Camera renders — confirmed the hard way twice
+  this session: URP Bloom cannot affect any stage element regardless of Volume/threshold config
+  (`SpriteGlowController.cs` built correctly per spec, works fine on real `SpriteRenderer`
+  GameObjects, but does nothing on the UI Toolkit stage), and a `LineRenderer`-based lightning bolt
+  (evaluated, not built) would render into the frozen-overworld camera layer sitting entirely
+  *underneath* the opaque HUD, functionally invisible. `Physics2D` is likewise inapplicable — no
+  `Collider2D` exists anywhere on the stage; all targeting/collision is plain lane/position index
+  math (`FormationSystem.IsSlotOccupied`, `ZonePositionalPatternResolver`, etc.), by design.
+- **Why it's built this way:** Not a battle-specific choice — it's the project's general
+  "placeholder-first" strategy (`[Art] Placeholder-first pipeline` above) applied to the entire
+  battle presentation, not just creature color. `BattleHUDController`'s own class doc comment says
+  it outright: "This is a flat screen-space overlay on top of the frozen overworld, not real diorama
+  art." `Combat_Directive_v0_1_0.md` Part 1 already specifies the actual *intended* final design (a
+  real side-profile diorama, Paper Mario-referenced, real background art, real depth) — today's
+  overlay is a deliberate stand-in for that, chosen so 12+ skill archetypes' actual rules (damage,
+  targeting, turn sequencing) could be built and iterated on in pure C#/data with zero art-sourcing
+  or scene-authoring dependency, matching `[UI] UI Toolkit chosen for runtime UI`'s original
+  iteration-speed rationale.
+- **Migration boundary — what moves later vs. what doesn't:** The split is NOT "creatures vs.
+  everything else," it's **fixed screen-position chrome vs. stage-anchored content**:
+  - **Stays in UI Toolkit untouched, permanently — including after a migration:** nameplate
+    sidebar (HP/Aura/Burst radial gauges, name, buff row), the battle log, Flee/End Turn buttons,
+    the action-announcement banner. None of these track a world position; they're fixed panels.
+    Screen Space Overlay UI Toolkit sitting on top of a real Camera-rendered scene is not a hack —
+    it's the standard architecture for exactly this ("world underneath, HUD on top"), and Overlay's
+    own "always composites last" property (the same thing that blocked Bloom) is precisely what
+    guarantees the HUD stays legible over whatever the world-space scene does. A real diorama
+    migration does NOT mean "rip out UI Toolkit."
+  - **Needs rebuilding as real scene content (or bridged) at migration time:** stage creatures
+    (`_playerStageCreatures`/`_enemyStageCreature` → real `SpriteRenderer` GameObjects, driven by
+    the SAME `LaneMovementSystem` formulas — `GetLaneScreenTop`/`GetDepthScale`/`GetPositionOffsetPx`
+    keep their exact math, just feed `transform.position`/`localScale` instead of
+    `style.top`/`left`/`scale`), the Move icon, skill/move wheel rings, timing rings (`RingVisual`),
+    the drag-target line (`DragLineVisual`), and — confirmed in this session — every Zone/Positional
+    VFX method (`ApplyZonePositionalGlowPulse`, `UpdateZonePositionalHighlightBlink`,
+    `PlayZonePositionalGroundStrikeVfx`, `HighlightZonePositionalLockedTarget`), since all of them
+    are positioned via stage/lane/position coordinates, not fixed screen position. Any future
+    lightning-bolt-style VFX built in the meantime falls into this same bucket.
+  - **Two valid technical options for stage-anchored content specifically**, when that migration
+    happens: (a) rebuild as real scene content parented directly to the creature GameObject — moves
+    automatically with it, no per-frame tracking code, the recommended default since this stage has
+    no real depth-occlusion needs to justify staying UI-anchored; or (b) keep it as a UI Toolkit
+    element but reposition every frame via `Camera.WorldToScreenPoint()` translated into the panel's
+    local space — keeps `Painter2D`-style drawing, works best under "Screen Space - Camera" mode
+    rather than Overlay, more per-frame bridging code. No element in this codebase currently needs
+    option (b); option (a) is the default recommendation until a concrete need for (b) shows up.
+- **Migration cost is asymmetric, and mostly favorable:** `BattleManager`/`BattleState`/
+  `BattleParticipant`/`DamageCalculator`/`EnemyAI`/`ZonePositionalPatternResolver`/`SkillData`/
+  `SkillDatabase` — the entire game-logic layer — has zero rendering dependency, confirmed by
+  inspection (every visual effect call from `BattleManager` goes through
+  `BattleHUDController.Instance.SomeMethod(...)` as an opaque presentation-layer call it just
+  `yield return`s on). That layer needs no changes at migration time. The cost is scoped entirely to
+  `BattleHUDController` and its handful of custom `VisualElement` subclasses
+  (`RingVisual`/`DragLineVisual`/`SkillWebEdgeVisual`/`FormationGridPicker`) — the largest file in
+  `Combat/`, but a presentation-layer rewrite, not a game rewrite.
+- **Why NOT to pivot to real-scene rendering now (evaluated, rejected for now):**
+  1. The full shape of remaining archetypes' visual needs isn't known yet (Split Attention,
+     Multi-Turn Buildup, Lane Displacement Attack, Strike Points are all unbuilt) — migrating now
+     means guessing at camera/scene requirements piecemeal instead of once, against the complete set.
+  2. No real Phasix art exists yet to migrate *to* — the entire payoff of Bloom/particles/lighting is
+     how they make real art look good; tested against placeholder colored circles (all that exists
+     today), the improvement is unverifiable either way.
+  3. Total rebuild cost doesn't shrink by front-loading it — every stage-anchored effect gets rebuilt
+     once regardless of when; doing it now only pauses archetype/design progress without saving
+     total effort.
+  4. This session's fast iterate-and-verify loop (`manage_ui render_ui` screenshots) is UI-Toolkit-
+     specific — pivoting now would slow down verification of unrelated, still-pending feature work.
+  5. Building "the real version" now still requires guessing at camera/art/proportion decisions the
+     project has explicitly deferred (no roster, no confirmed art direction beyond placeholder-first)
+     — those guesses carry their own rework risk, not less than the migration risk being avoided.
+- **Revisit if:** Same trigger as `[Art] Placeholder-first pipeline` above — the game reaches a
+  genuinely playable, systems-complete state (all core loops functional, skill archetype pass
+  substantially done). At that point, scope the migration against `BattleHUDController`'s full,
+  final method list rather than today's partial one.
+- **Date:** 2026-08-20
+- **Ref:** `BattleHUDController.cs`, `BattleHUDPanelSettings.asset`, `SpriteGlowController.cs`,
+  `LaneMovementSystem.cs`, `Combat_Directive_v0_1_0.md` Part 1 (Combat Perspective — describes the
+  intended final diorama this entry's migration would build toward), `[Art] Placeholder-first
+  pipeline` above, `[UI] UI Toolkit chosen for runtime UI` above, CHANGELOG.md's matching 2026-08-20
+  entries.

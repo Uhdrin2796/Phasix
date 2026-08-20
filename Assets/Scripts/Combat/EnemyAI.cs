@@ -130,10 +130,17 @@ public static class EnemyAI
                     // Approach/Windup/Attack/Return at all). Every one of these skills deals damage,
                     // so bucket directly rather than deriving it from tree metadata that was never
                     // meant to answer this for a skill with its own resolution path.
+                    //
+                    // 2026-08-20 follow-up: ZonePositionalPattern hit this EXACT same bug on first
+                    // playtest — the three new Zone/Positional skills (also SkillTreeType.Testing)
+                    // silently fell through to the PlaceholderSkillResolver branch below, got
+                    // misclassified as Debuff, and never reached BattleManager.
+                    // ResolveZonePositionalAttack at all. Added here alongside the others.
                     if (skill.StackingRhythm != StackingRhythmType.None
                         || (skill.BeatSequence != null && skill.BeatSequence.Count > 0)
                         || (skill.VolleyRingSequence != null && skill.VolleyRingSequence.Count > 0)
-                        || skill.HoldInputArchetype != HoldInputArchetype.None)
+                        || skill.HoldInputArchetype != HoldInputArchetype.None
+                        || skill.ZonePositionalPattern != ZonePositionalPatternType.None)
                     {
                         damageOptions.Add(skill);
                         break;

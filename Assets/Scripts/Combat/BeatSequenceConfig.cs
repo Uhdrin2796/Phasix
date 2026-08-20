@@ -158,4 +158,22 @@ public static class BeatSequenceConfig
 
     /// <summary>The (blockFraction / SustainedPressureMaxBlockFraction) ratio above which a Guard counts as "perfect" for BattleHUDController.LastDefenseWasPerfect — feeds the same perfect-aura-restore path Dodge/Parry's own Perfect already grants.</summary>
     public const float SustainedPressurePerfectQualityThreshold = 0.9f;
+
+    // --- 2026-08-20: Zone/Positional (Attack_Pattern_Directive Part 5 Group 3's first archetype —
+    // the first Lane Selection/no-timing input model in this codebase). All placeholder values, same
+    // "pending NumericalCalibration.md" status as every other constant in this class.
+
+    /// <summary>Fallback duration (seconds) for the attacker's preemptive warning glow, when a skill's own SkillData.ZonePositionalGlowSeconds is 0 — user-specified starting value ("a slight delay say 1 second").</summary>
+    public const float ZonePositionalGlowSeconds = 1.0f;
+
+    /// <summary>
+    /// Fallback duration (seconds) the zone highlight is visible and the response window stays
+    /// open, when a skill's own SkillData.ZonePositionalHighlightSeconds is 0. Briefly raised to
+    /// 3.0s (2026-08-20) while diagnosing a "movement doesn't work" report that turned out to be a
+    /// genuine live-testing artifact, not a real bug (see DECISIONS.md's matching entry) — reverted
+    /// back to the original 1.5s (same day, user-directed) once the response was also capped to a
+    /// single accepted move (see SkillData.ZonePositionalPattern's dispatch — one deliberate step,
+    /// not free-roam repositioning, is enough time at 1.5s).
+    /// </summary>
+    public const float ZonePositionalHighlightSeconds = 1.5f;
 }

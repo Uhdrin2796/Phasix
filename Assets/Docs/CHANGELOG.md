@@ -16,6 +16,313 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-20] Docs — Battle stage rendering migration boundary written up (UI Toolkit now, real diorama later)
+- **Context:** While evaluating a lightning-bolt VFX proposal (LineRenderer/Physics2D-based), a
+  longer Q&A followed: why the battle stage renders the way it does, whether a real diorama scene
+  would be more limiting, whether VFX built now would need to be recreated at migration time,
+  whether to pivot to real-scene rendering before continuing archetype work, and how the HUD would
+  work in a real scene if UI Toolkit couldn't reach it. User: "can we outline this somewhere in the
+  directives or docs... idk if we outlined this to this level of detail." None of this had been
+  written down anywhere despite being real, hard-won architectural findings from this session (the
+  Bloom investigation, the render-mode confirmation) and earlier ones.
+- **Built:** New `DECISIONS.md` -> `[Combat/Art] Battle stage rendering — UI Toolkit overlay now,
+  real diorama scene later — migration boundary` entry, capturing: the confirmed current-state
+  constraints (Screen Space Overlay, no Bloom/LineRenderer/Physics2D reach); why it's built this way
+  (placeholder-first, same as the rest of the project); the migration boundary (fixed HUD chrome
+  stays UI Toolkit forever; stage-anchored content — creatures, rings, drag-lines, any Zone/
+  Positional-style VFX — gets rebuilt as real scene content, parented to the creature GameObject,
+  the recommended default over `Camera.WorldToScreenPoint` bridging); why the game-logic layer
+  (`BattleManager`/`BattleState`/damage/targeting/all archetype rules) has zero migration cost,
+  confirmed by inspection; and five concrete reasons NOT to pivot now (unknown future archetype
+  needs, no real art to migrate toward yet, no total-cost savings from front-loading, this session's
+  UI-Toolkit-specific verification workflow, premature camera/art commitments). Added a matching
+  errata note to `Combat_Directive_v0_1_0.md` Part 1, which already describes the intended final
+  diorama perspective without ever noting the current implementation isn't that yet — now
+  cross-references the new `DECISIONS.md` entry directly.
+- **Decided:** No migration scheduled — this is a reference entry for when the project's own
+  "systems-complete state" trigger (already established in `[Art] Placeholder-first pipeline`) is
+  reached, not a new commitment to act now.
+- **Ref:** `DECISIONS.md` -> `[Combat/Art]` (new), `Combat_Directive_v0_1_0.md` (2026-08-20 errata).
+
+---
+
+[2026-08-20] Feature follow-up — Zone/Positional: ground-strike impact VFX on every marked cell
+- **Context:** Same-session follow-up — user: "can we have a vfx that shows a strike on the area
+  that are targeted even if there's no player?" Previously, an empty marked cell (nobody standing
+  there when the window closed) got zero visual payoff at all — the attack silently resolved with no
+  confirmation it actually landed on the ground.
+- **Built:** Refactored `ShowZonePositionalHighlightCells`'s per-cell positioning math out into a
+  shared `BuildZonePositionalCellElements(cells, initialColor)`, used by both the existing pre-attack
+  telegraph AND a new `PlayZonePositionalGroundStrikeVfx` — a brief (0.3s) impact flash that plays on
+  EVERY marked cell once the response window closes, regardless of occupancy. Bright white-blended
+  version of the same danger-red accent (`Color.Lerp(MissFlashColor, Color.white, 0.6f)`) — distinct
+  from the pre-attack blink's darker red/grey, reading as "impact" not "warning" — punches in then
+  shrinks/fades over its lifetime, rendered on top (not sent to back, unlike the telegraph) so it's
+  never hidden behind a stage creature standing in that cell. `BattleManager.
+  ResolveZonePositionalAttack` now plays this for all `markedCells` right after the response window
+  closes and before damage application, so a caught defender's own `FlashStageCreatureHit` layers on
+  top as the extra "you got hit" signal, while an empty cell still gets its own clear impact moment.
+- **Verified:** 344/344 EditMode tests pass. Live in Play Mode, `manage_ui render_ui` screenshot
+  confirms four bright flash bands across the Row pattern's marked lanes, correctly rendered above
+  stage creatures, visually distinct from the darker pre-attack telegraph. `read_console` clean.
+- **Ref:** `BattleHUDController.cs` (`BuildZonePositionalCellElements`, `PlayZonePositionalGroundStrikeVfx`,
+  `RemoveZonePositionalCellElements`), `BattleManager.cs` (`ResolveZonePositionalAttack`'s new call).
+
+---
+
+[2026-08-20] Feature follow-up — Zone/Positional: single-move cap, blinking highlight, unified 60/30/10 accent colors, hit VFX
+- **Context:** Same-session follow-up. User asked for four things at once: revert the window back to
+  1.5s but cap the response to exactly one move (was unlimited repositioning within the window);
+  make the highlight "more aggressive" / blink between the existing color and grey instead of a hard
+  static fill; asked for my opinion on upgrading the color palette toward a real 60/30/10 contrast
+  system across the battle scene, and whether a "lighting script" could drive the hit VFX; and asked
+  for a hit animation/VFX when the attack actually lands.
+- **Decided (design):** Recommended NOT touching PrimalType's locked, GDD-sourced base colors purely
+  for VFX contrast — flagged that Fire/Water are explicitly "not invented" values per
+  `PrimalTypeColor.cs`'s own doc comment, and that changing them redefines those types' actual
+  identity color everywhere, not just for this one skill. User confirmed (as the actual designer)
+  they want Fire/Water's real colors updated — a deliberate content change, not a Claude override.
+  On "lighting script": confirmed the same UI-Toolkit-vs-SpriteRenderer wall `SpriteGlowController`
+  already hit applies here too — a real Light2D/lighting component wouldn't render on these stage
+  elements either. Reused the codebase's own existing hit-flash mechanism instead
+  (`BattleHUDController.FlashStageCreatureHit` / `CombatVfxController.HitFlashRoutine`), which
+  Zone/Positional had simply never been wired into — no new VFX tech needed.
+- **Built (60/30/10 pass):** Consolidated three previously-competing accent hues (warm-orange
+  attacker glow, red zone highlight, cyan target outline) into a disciplined 2-hue accent system —
+  `MissFlashColor` (an existing color, reused rather than inventing a new one) now means "danger,"
+  driving BOTH the attacker's glow pulse and the zone highlight's blink; cyan stays the one
+  deliberately different hue, meaning "this is your unit." `PrimalTypeColor.cs`'s Fire (`#C04020` ->
+  `#E8511A`) and Water (`#1A6A9A` -> `#1E90D4`) raised in saturation/luminance so the "30%" identity
+  layer reads clearly against the near-black "60%" stage background — every other base color and all
+  28 duo-merge pairs untouched. (Note: Steam, the Fire+Water duo blend, comes out a muted grey-purple
+  under the existing RGB-lerp blend formula regardless of how vivid its parents are — averaging two
+  near-complementary hues moves toward grey; this is a pre-existing property of `GetColor`'s blend
+  math, not something this pass changed or can fix without a bigger blend-formula change.)
+- **Built (mechanics/visuals):** `BeatSequenceConfig.ZonePositionalHighlightSeconds` back to 1.5s.
+  `RunZonePositionalWarning`'s response loop now tracks a `hasMoved` flag — `TryStepZonePositionalTarget`
+  returns bool; once any ONE step is accepted, further presses are ignored for the rest of the
+  window (a blocked attempt, e.g. destination occupied, doesn't burn the one chance). New
+  `UpdateZonePositionalHighlightBlink` PingPongs every highlight cell between `MissFlashColor` and a
+  neutral grey (reusing `.stage-creature`'s own default grey) in sync, called every frame alongside
+  the existing glow pulse — replaces the old static translucent fill. Glow pulse frequency raised
+  1.75x (2f -> 3.5f) and its color swing widened (0.35-1.0 -> 0.15-1.0 lerp range) for a more
+  aggressive read. `BattleManager.ApplyZonePositionalHit` now calls the existing
+  `FlashStageCreatureHit` on each caught defender — the same hit-flash every other damage-application
+  path in this file already triggers, just never wired in for this archetype until now.
+- **Verified:** 344/344 EditMode tests pass. Live in Play Mode: confirmed `PrimalTypeColor.GetColor`
+  returns the new Fire/Water values directly; confirmed the one-move cap deterministically via the
+  same synchronous `MoveNext()` + synthetic Input System event technique from the prior investigation
+  entry — a second key press after an accepted first move left the target's position unchanged.
+  `manage_ui render_ui` screenshot confirms the blinking highlight, cyan target outline, and unified
+  accent colors render correctly together. `read_console` clean throughout.
+- **Ref:** `PrimalTypeColor.cs`, `BattleHUDController.cs` (`UpdateZonePositionalHighlightBlink`,
+  `ApplyZonePositionalGlowPulse`, `TryStepZonePositionalTarget`'s new bool return,
+  `RunZonePositionalWarning`'s `hasMoved` gate), `BattleManager.cs` (`ApplyZonePositionalHit`'s new
+  `FlashStageCreatureHit` call), `BeatSequenceConfig.cs`.
+
+---
+
+[2026-08-20] Investigation — Zone/Positional arrow-key movement "doesn't work": no code bug found, likely a too-short reaction window
+- **Context:** User reported the target/highlight are now clearly visible but arrow-key movement
+  still appears to do nothing.
+- **Investigation:** Live round-trip testing via separate MCP tool calls (queue a synthetic key
+  press, then check state) was inconclusive at first — the response window kept appearing already
+  closed by the time state was checked, even with an artificially extended 8-10s highlight duration.
+  Traced to MCP round-trip latency itself (confirmed via `Time.frameCount` jumping by thousands
+  between successive tool calls) — the SAME documented limitation noted elsewhere in this project
+  (AUD-006's testing note, Charge & Release's `DECISIONS.md` entry: "round-trip latency between
+  calls alone can exceed the 3s `HoldInputMaxTimeoutSeconds` safety valve"). Resolved by testing
+  deterministically instead: manually drove `RunZonePositionalWarning`'s `IEnumerator` via
+  `MoveNext()` synchronously within a single call (no round-trip involved), then injected a real
+  `InputSystem.QueueStateEvent` Up-arrow press and advanced one more step.
+- **Result: no code bug.** The locked target's `LaneIndex` correctly moved 4 -> 5 in response to the
+  synthetic press, proving the input polling and movement logic are both correct.
+- **Most likely real explanation:** `ZonePositionalHighlightSeconds`'s default is 1.5s (the user's
+  own originally specified value) — for a brand-new mechanic on a first encounter, that's very
+  little real time to read the "ZONE ATTACK — Move X with Arrow Keys!" banner, interpret which rows
+  are marked, decide a direction, and physically press a key, all before the window closes. This
+  reads identically to "movement doesn't work" from the player's side even though nothing is broken.
+  Flagged to the user as a likely tuning issue rather than silently changed, since 1.5s was their own
+  explicit original spec — same "pending NumericalCalibration.md" status as every other timing value
+  in this project.
+- **Resolution:** User confirmed the tuning theory and asked to extend the window. Raised
+  `BeatSequenceConfig.ZonePositionalHighlightSeconds` from 1.5s to 3.0s. Same-session follow-up
+  (user: "does the input let you move with arrow keys and WASD?") — it didn't, only arrow keys were
+  wired. Added WASD as an accepted alias alongside the arrow keys (W/S = lane, A/D = position, same
+  deltas as their arrow-key equivalents), and updated the response banner text to
+  "(Arrow Keys / WASD)" so both are visible to the player. 344/344 EditMode tests still pass,
+  `read_console` clean after each change.
+- **Ref:** `BattleHUDController.RunZonePositionalWarning`, `BeatSequenceConfig.
+  ZonePositionalHighlightSeconds`.
+
+---
+
+[2026-08-20] Bugfix follow-up — Zone/Positional's highlight read as "everything is highlighted," no visual target marker
+- **Context:** User playtested again after the glow/announcement fix and reported still being unable
+  to tell who was focused or where the highlight actually was — "it looks like everything is
+  highlighted."
+- **Root cause:** Confirmed visually via `manage_ui render_ui` screenshots. Each marked cell was a
+  small 28px dot (borrowed from `FormationGridPicker`'s clickable-button convention) floating in the
+  middle of its much larger real cell footprint (150px wide x 76.5px tall). For the Row pattern (4 of
+  7 lanes, every position each) that produced 20 dots spread edge-to-edge across most of the visible
+  stage with no clear gap between marked and unmarked ROWS — at a glance it genuinely did read as
+  "the whole board," not "these 4 specific rows." Separately, there was still no direct visual marker
+  ON the locked target's own stage element — only text.
+- **Fix:** `ShowZonePositionalHighlightCells` now sizes each highlight to (near) its full real cell
+  footprint (`PositionColumnSpacingPx`/`LaneRowHeightPx` minus a small gap) instead of a small marker
+  dot — adjacent marked cells in the same row/column now visually MERGE into one continuous band, and
+  unmarked rows/columns show as genuinely empty gaps between bands. Added
+  `HighlightZonePositionalLockedTarget` — a bright cyan border applied directly to the locked
+  target's own stage element for the duration of the response window (distinct from the attacker's
+  warm-orange glow and the red zone highlights), cleared alongside everything else at cleanup.
+- **Verified:** Live in Play Mode (real `BattleState`, `manage_ui render_ui` screenshots, before/
+  after comparison): before the fix, 20 small dots read as a near-solid field with no visible row
+  structure; after the fix, 4 clearly separated horizontal bands with visible gaps at the unmarked
+  rows, and the locked target's own circle now has an unmistakable cyan outline. 344/344 EditMode
+  tests still pass. `read_console` clean throughout. (Also hit and resolved an unrelated environment
+  quirk mid-session: repeated `BattleTransition.StartWildBattle` calls across several debugging
+  rounds without a full stop/restart between them left multiple duplicate `BattleScene_Main`
+  instances loaded simultaneously, with `FindFirstObjectByType<BattleManager>` resolving a stale
+  instance whose `PlayerSide` was null — same root cause class as a prior session's identical
+  duplicate-scene note; a clean Stop/Play cycle resolved it, not a code bug.)
+- **Ref:** `BattleHUDController.cs` (`ShowZonePositionalHighlightCells`'s new footprint-based sizing,
+  new `HighlightZonePositionalLockedTarget`, `ZoneLockedTargetOutlineColor`).
+
+---
+
+[2026-08-20] Bugfix follow-up — Zone/Positional's glow was invisible and had no on-screen target indicator
+- **Context:** Immediately after the EnemyAI bucketing fix (below), user playtested a real Zone/
+  Positional cast and reported three problems: no indication of who the target was, arrow-key
+  movement appeared not to work, and no visible glow.
+- **Root cause (glow):** `ApplyZonePositionalGlowPulse` pulsed `unityBackgroundImageTintColor` — a
+  property that only multiplies a `backgroundImage`. Stage creatures (`SetStageCreatureColor`) are a
+  plain `style.backgroundColor` fill with no background image at all, so the tint had nothing to
+  multiply and produced zero visible change, silently, with no error.
+- **Root cause (no target shown):** `RunZonePositionalWarning` never used the `_actionAnnouncement`/
+  `_actionAnnouncementLabel` prompt every other archetype already shows (e.g. Sustained Pressure's
+  "GUARD — X!" label) — there was no on-screen text at all telling the player who the locked target
+  was or when the response window was open, only the (broken) glow and the cell highlights.
+- **Movement:** no separate code bug found — `TryStepZonePositionalTarget` was re-verified correct
+  (see the original build's own live verification). Most likely explanation, given the other two
+  bugs: with no visible glow and no announcement, the player had no way to tell when Stage 1 (glow-
+  only, no input yet) ended and Stage 2 (the actual 1.5s response window) began, so arrow-key
+  attempts likely landed in the wrong stage or were never confidently timed. The new announcement
+  text now makes the Stage 2 transition and the exact target name explicit.
+- **Fix:** `ApplyZonePositionalGlowPulse`/`ResetZonePositionalGlow` now pulse `style.backgroundColor`
+  directly, lerping from the creature's own real captured base color (read once at the start of
+  `RunZonePositionalWarning`, restored exactly at the end) toward `ZoneWarningGlowColor`.
+  `RunZonePositionalWarning` now takes the attacker `BattleParticipant` directly and shows
+  `_actionAnnouncement` throughout both stages: "{attacker} is charging a zone attack..." during the
+  glow, switching to "ZONE ATTACK — Move {target} with Arrow Keys!" the instant the highlight window
+  opens, hidden again on cleanup.
+- **Verified:** Live in Play Mode (real `BattleState`): captured a real stage creature's actual
+  Fire-type color, confirmed `ApplyZonePositionalGlowPulse` correctly lerps toward the warning color
+  and `ResetZonePositionalGlow` restores the exact original value; confirmed the Stage 1 announcement
+  text and visibility (`display: Flex`) render correctly with the real attacker's name substituted
+  in. 344/344 EditMode tests still pass. `read_console` clean throughout.
+- **Ref:** `BattleHUDController.cs` (`RunZonePositionalWarning`'s new `BattleParticipant attacker`
+  parameter, `ApplyZonePositionalGlowPulse`/`ResetZonePositionalGlow`), `BattleManager.cs`
+  (`ResolveZonePositionalAttack`'s updated call site).
+
+---
+
+[2026-08-20] Bugfix follow-up — Zone/Positional skills were silently misclassified as Debuff moves, never reached their own resolution
+- **Context:** User playtested the Zone/Positional debug loadout immediately after it shipped and
+  reported never seeing any of the three new attacks in a real encounter.
+- **Root cause:** `EnemyAI.ChooseSkill` has a direct-to-Damage-bucket check for every archetype with
+  its own dedicated resolution path (StackingRhythm/BeatSequence/VolleyRingSequence/
+  HoldInputArchetype) — this exact mechanism was already flagged in the code's own comment as
+  fixing an IDENTICAL bug for Slash back on 2026-08-12 ("retagging Slash to SkillTreeType.Testing...
+  made IsDamageSkill(Testing) false, so Slash silently reclassified as a Debuff move"). The initial
+  Zone/Positional pass added `ZonePositionalPattern` to `BattleManager.ResolveEnemyDamageAction`'s
+  dispatch but never added it to this bucketing check — so all three new skills (also
+  `SkillTreeType.Testing`) fell through to `PlaceholderSkillResolver`, got misclassified as Debuff,
+  and were routed to `ResolveEnemyDebuffAction` instead — a method with no Zone/Positional dispatch
+  branch at all, so the enemy's turn resolved as an inert placeholder debuff with none of the
+  glow/highlight/arrow-key mechanic ever running.
+- **Fix:** Added `|| skill.ZonePositionalPattern != ZonePositionalPatternType.None` to
+  `EnemyAI.ChooseSkill`'s direct-to-Damage bucket check, alongside the existing archetype checks.
+- **Verified:** Live in Play Mode (additively-loaded `BattleScene_Main`, real `BattleState`): force-
+  equipped all three Zone skills on a real enemy `BattleParticipant`, called `EnemyAI.ChooseSkill` 6
+  times directly — every result now correctly returns `Damage` intent for Fault Line/Rift Line/
+  Crossfire (previously would have returned `Debuff`). 344/344 EditMode tests still pass (no
+  coverage change — this is enemy-AI bucketing logic, no pure-math surface new to this fix beyond
+  what `ZonePositionalPatternResolverTests` already covers). `read_console` clean throughout.
+- **Ref:** `EnemyAI.cs` (`ChooseSkill`'s `BuiltInMoveType.None` case).
+
+---
+
+[2026-08-20] Phase 3 — Attack Pattern Directive Group 3, item 7: Zone/Positional
+- **Context:** Next item in Attack_Pattern_Directive_v0_1_0.md's build order after Group 2 (Multi-Hit
+  Volley; Charge & Release + Sustained Pressure). Zone/Positional is the first archetype in this
+  codebase whose defender response is movement, not a timed press/hold gesture — the attacker marks a
+  zone, and the defender's single locked target can reposition to escape it before it resolves. User
+  supplied a specific tell sequence (attacker sprite glows -> 1s delay -> 1.5s zone highlight with
+  arrow-key movement) and three concrete zone shapes (Row: lanes 1/3/5/7; Column: positions 1/3/5;
+  Diagonal "X": a hand-authored 13-cell table), following the standard Explore-agents -> Plan-agent ->
+  clarifying-questions -> final-plan workflow.
+- **Built:** `ZonePositionalPatternType.cs` (dispatch enum), `ZoneCell.cs` (shared (Lane, Position)
+  struct), `ZonePositionalPatternResolver.cs` (pure Row/Column/DiagonalX -> cell-list expansion, same
+  tier as `LaneMovementSystem`/`FormationSystem`), `SpriteGlowController.cs` (generic URP Bloom sprite
+  glow component — see "Blocked" below). `SkillData.cs` gained `ZonePositionalPattern`/
+  `ZonePositionalRowLanes`/`ZonePositionalColumnPositions`/`ZonePositionalGlowSeconds`/
+  `ZonePositionalHighlightSeconds`. `BattleManager.ResolveZonePositionalAttack`/`ApplyZonePositionalHit`
+  handle dispatch (a new branch in `ResolveEnemyDamageAction`, structurally parallel to the Sustained
+  Pressure block) and per-defender damage — no `DefenseOutcome` roll at all, since the avoidance IS
+  having moved out of the marked cell in time. Resolution is per-cell, not per-original-target: it
+  re-queries the whole party at window-close, so a teammate left behind in a marked cell (own choice
+  or otherwise) still takes the full hit even though only the locked target could move.
+  `BattleHUDController.RunZonePositionalWarning` runs the full tell + response window: attacker glow,
+  then live-stage cell highlights, then a real-time arrow-key loop (Up/Down = lane, Left/Right =
+  position, one step per press) scoped to the single locked target, blocked by
+  `FormationSystem.IsSlotOccupied` via a new `TryStepZonePositionalTarget` helper — deliberately NOT a
+  reuse of the existing in-battle Move skill's drag flow (`BeginMoveDrag`/`MoveConfirmed`), since that's
+  player-turn-initiated and consumes the turn, wrong shape for a free reactive window on the enemy's
+  turn. `BattleLogFormatter.FormatZonePositionalHit` added (first archetype where one cast can hit
+  zero, one, or several defenders). Three worked `SkillData` assets — `Ranged_ZoneRow` ("Fault Line"),
+  `Ranged_ZoneColumn` ("Rift Line"), `Ranged_ZoneDiagonalX` ("Crossfire") — registered in
+  `SkillDatabase.asset`. New `ZonePositionalPatternResolverTests.cs` (7 tests, all passing, part of the
+  344/344 EditMode suite).
+- **Decided:** No separate "Tank" button — real-time arrow-key movement makes "don't move" always
+  available with zero extra UI, so a dedicated button would add a control with no distinct behavior.
+  DiagonalX's cell table is hand-authored (fixed data), not computed at runtime, per the user's
+  explicit preference — proportional round-off across the 7-lane x 5-position grid, confirmed against
+  `LaneMovementSystem`'s real screen mapping (Lane 1 = front/bottom, Lane 7 = back/top; Position 1 =
+  left, Position 5 = right) before picking which corner was which. Player-side offense use of this
+  archetype and Split Attention (item 8) are both explicitly deferred — see DECISIONS.md's matching
+  entry for the full reasoning on both, plus the cell-based (not lane-only) data shape correction to
+  `Attack_Pattern_Directive_v0_1_0.md`'s own prior claim.
+- **Blocked/Changed:** The user's literal ask was Bloom-based glow (`SpriteGlowController`, HDR
+  material color pushed past a Global Volume's Bloom threshold). Built exactly as specified and kept
+  in the codebase — it's correct for any real `SpriteRenderer` GameObject (e.g. overworld creatures)
+  — but the battle stage's creatures turned out to be UI Toolkit `VisualElement`s, not
+  `SpriteRenderer`s, composited via a Screen Space Overlay `PanelSettings` that draws straight to the
+  backbuffer and never passes through URP's post-processing stack at all. Bloom cannot affect it no
+  matter how it's configured. Built a UI Toolkit-native equivalent instead — pulsing the attacker
+  element's `unityBackgroundImageTintColor`, reusing the existing `FlashColorForOffenseOutcome`-style
+  "flash a color on state change" convention already used throughout `BattleHUDController.cs`.
+- **Verified:** 344/344 EditMode tests pass (`Ranged_ZoneRow`/`Column`/`DiagonalX` all resolve to the
+  correct cell counts — 20/21/13 — matching hand-computed expectations). Live in Play Mode
+  (additively-loaded `BattleScene_Main`, real `BattleState`): hit this session's own documented
+  `LESSONS_LEARNED.md` "Play Mode doesn't tick frames while the Editor window is unfocused" constraint
+  — per that entry's established fix, verified `RunZonePositionalWarning`'s private helpers directly
+  via reflection instead of fighting real-time ticking: `ShowZonePositionalHighlightCells` created
+  exactly 20/21/13 highlight elements for Row/Column/DiagonalX; `ApplyZonePositionalGlowPulse`/
+  `ResetZonePositionalGlow` produced the exact expected tint math and correctly restored
+  `StyleKeyword.Null`; `TryStepZonePositionalTarget` correctly stepped one lane/position per call,
+  correctly blocked a move into a real second party member's occupied slot, and correctly clamped at
+  the grid edge; `ApplyZonePositionalHit` applied real `DamageCalculator`/`BattleEngine` damage and
+  produced a correctly formatted battle log line, confirmed by reading the live `_battleLogContent`
+  ScrollView. A backgrounded instance of the full `ResolveZonePositionalAttack` coroutine also
+  completed on its own mid-session (once enough real frames eventually batched through), independently
+  confirming the whole dispatch chain end-to-end. `read_console` clean throughout (only the unrelated,
+  pre-existing A* Pathfinding update-checker warnings).
+- **Next:** Split Attention (item 8) — should cost close to zero new code once picked up, reusing
+  `RunZonePositionalWarning`/`ResolveZonePositionalAttack` unchanged apart from iterating two cell sets
+  instead of one, plus a fake-tell visual-distinction decision.
+
+---
+
 [2026-08-19] Feature follow-up — Charge & Release's battle log now reports Press/Release outcomes separately
 - **Context:** User: "adjust the battle log as well" — direct follow-up to the press-flash change
   above, closing the other half of the original ask (the log's damage breakdown was still a single

@@ -96,6 +96,21 @@ using UnityEngine;
 /// TimedInputConfig.MissDamageMultiplier), and a pass on both instants yields a continuous
 /// quality-scaled damage range rather than a discrete Miss/Good/Perfect tier — deliberate, scoped to
 /// this archetype only.
+///
+/// 2026-08-20 session (Zone/Positional — Attack_Pattern_Directive Part 5 Group 3's first archetype,
+/// the first Lane Selection/no-timing input model in this codebase): ZonePositionalPattern and its
+/// four supporting fields are a SIXTEENTH through TWENTIETH structural field, same tier as
+/// HoldInputArchetype. None (default, applied automatically to all existing assets) means "not a
+/// Zone/Positional skill" — zero risk to any pre-existing asset. A non-None pattern tells
+/// BattleManager.ResolveEnemyDamageAction to run ResolveZonePositionalAttack instead of the normal
+/// Dodge/Parry/Guard defense flow entirely — this archetype has no timing roll of any kind; the
+/// defender's only response is real-time arrow-key movement during a highlight window
+/// (BattleHUDController.RunZonePositionalWarning), and full damage applies to whoever is still
+/// standing in a marked (Lane, Position) cell once that window closes. Row and Column patterns are
+/// naturally lane-only/position-only; DiagonalX needs true per-cell granularity and uses a single
+/// shared, hand-authored 13-cell table (ZonePositionalPatternResolver) rather than a per-skill
+/// field, since every DiagonalX skill marks the same X shape. See ZonePositionalPatternType's own
+/// doc comment and BattleManager.ResolveZonePositionalAttack.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -212,6 +227,29 @@ public class SkillData : ScriptableObject
              "BeatSequenceConfig.SustainedPressureDefaultHoldSeconds.")]
     [SerializeField] private float _sustainedPressureHoldSeconds;
 
+    [Header("Zone/Positional (Attack_Pattern_Directive Part 5 Group 3 — Lane Selection archetype, structural not balance)")]
+    [Tooltip("None (default) = not a Zone/Positional skill, resolves through the normal existing " +
+             "defense paths unchanged. Row/Column/DiagonalX route BattleManager." +
+             "ResolveEnemyDamageAction into ResolveZonePositionalAttack instead of Dodge/Parry/Guard " +
+             "entirely — this archetype has no timing roll at all.")]
+    [SerializeField] private ZonePositionalPatternType _zonePositionalPattern = ZonePositionalPatternType.None;
+
+    [Tooltip("Lanes marked when ZonePositionalPattern == Row (every position within each listed " +
+             "lane is marked). Ignored otherwise. Worked example: [1, 3, 5, 7].")]
+    [SerializeField] private int[] _zonePositionalRowLanes = System.Array.Empty<int>();
+
+    [Tooltip("Positions marked when ZonePositionalPattern == Column (every lane at each listed " +
+             "position is marked). Ignored otherwise. Worked example: [1, 3, 5].")]
+    [SerializeField] private int[] _zonePositionalColumnPositions = System.Array.Empty<int>();
+
+    [Tooltip("Seconds the attacker's warning glow plays before the zone highlight appears. 0 " +
+             "(default) falls back to BeatSequenceConfig.ZonePositionalGlowSeconds.")]
+    [SerializeField] private float _zonePositionalGlowSeconds;
+
+    [Tooltip("Seconds the zone highlight is visible and the arrow-key response window stays open. " +
+             "0 (default) falls back to BeatSequenceConfig.ZonePositionalHighlightSeconds.")]
+    [SerializeField] private float _zonePositionalHighlightSeconds;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -231,4 +269,9 @@ public class SkillData : ScriptableObject
     public float ChargeReleaseTargetHoldSeconds => _chargeReleaseTargetHoldSeconds;
     public float SustainedPressureTellSeconds => _sustainedPressureTellSeconds;
     public float SustainedPressureHoldSeconds => _sustainedPressureHoldSeconds;
+    public ZonePositionalPatternType ZonePositionalPattern => _zonePositionalPattern;
+    public IReadOnlyList<int> ZonePositionalRowLanes => _zonePositionalRowLanes;
+    public IReadOnlyList<int> ZonePositionalColumnPositions => _zonePositionalColumnPositions;
+    public float ZonePositionalGlowSeconds => _zonePositionalGlowSeconds;
+    public float ZonePositionalHighlightSeconds => _zonePositionalHighlightSeconds;
 }

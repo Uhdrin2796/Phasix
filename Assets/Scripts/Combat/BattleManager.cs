@@ -2211,6 +2211,20 @@ public class BattleManager : MonoBehaviour
             yield break;
         }
 
+        // Zone/Positional (Attack_Pattern_Directive Part 5 Group 3, 2026-08-20) — the first Lane
+        // Selection/no-timing archetype in this codebase. No DefenseOutcome roll of any kind: the
+        // defender's only response is real-time arrow-key movement during the highlight window
+        // (BattleHUDController.RunZonePositionalWarning), and full damage applies to whoever is
+        // still standing in a marked (Lane, Position) cell once that window closes — including
+        // party members other than the locked target, since resolution is per-cell, not
+        // per-original-target. Entirely bypasses this method's own Dodge/Parry/Guard flow below.
+        if (skillOrNull != null && skillOrNull.ZonePositionalPattern != ZonePositionalPatternType.None)
+        {
+            int zoneAttackerSlotIndex = _state.EnemySide.IndexOf(attacker);
+            yield return StartCoroutine(ResolveZonePositionalAttack(attacker, zoneAttackerSlotIndex, false, target, targetSlotIndex, true, skillOrNull, isNamedTreeSkill));
+            yield break;
+        }
+
         // Both tolerances scale off the DEFENDER's own Instinct + bond, from their respective
         // bases (Dodge wide/easy, Parry narrow/hard).
         float dodgeToleranceHalfWidth = TimedInputConfig.ComputeToleranceHalfWidth(
@@ -2312,6 +2326,78 @@ public class BattleManager : MonoBehaviour
             yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
                 $"{target.DisplayName} counter-attacks!", BattleConfig.AutoMessageDurationSeconds));
         }
+    }
+
+    /// <summary>
+    /// Zone/Positional's entire resolution (Attack_Pattern_Directive Part 5 Group 3, 2026-08-20) —
+    /// the first Lane Selection/no-timing archetype in this codebase. Unlike every other
+    /// Resolve*Attack method, there is no DefenseOutcome roll here at all: BattleHUDController.
+    /// RunZonePositionalWarning owns the entire tell (attacker glow -> delay -> highlight) and the
+    /// defender's only response (real-time arrow-key movement of the single locked target). By the
+    /// time this method resumes after that coroutine, every defending-side participant's LaneIndex/
+    /// PositionIndex already reflects wherever they ended up — this method just checks final
+    /// occupancy of each marked cell and applies full damage to whoever's still there. Resolution is
+    /// per-lane/per-cell, not per-original-target (Attack_Pattern_Directive Part 8) — a teammate left
+    /// behind in a marked cell takes the full hit even though only the locked target could move.
+    /// </summary>
+    private IEnumerator ResolveZonePositionalAttack(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, SkillData skill, bool isNamedTreeSkill)
+    {
+        IReadOnlyList<ZoneCell> markedCells = ZonePositionalPatternResolver.GetMarkedCells(skill);
+        float glowSeconds = skill.ZonePositionalGlowSeconds > 0f ? skill.ZonePositionalGlowSeconds : BeatSequenceConfig.ZonePositionalGlowSeconds;
+        float highlightSeconds = skill.ZonePositionalHighlightSeconds > 0f ? skill.ZonePositionalHighlightSeconds : BeatSequenceConfig.ZonePositionalHighlightSeconds;
+
+        List<BattleParticipant> defendingSide = targetIsPlayerSide ? _state.PlayerSide : _state.EnemySide;
+
+        yield return StartCoroutine(BattleHUDController.Instance.RunZonePositionalWarning(
+            attacker, attackerSlotIndex, attackerIsPlayerSide, markedCells, glowSeconds, highlightSeconds, targetSlotIndex, defendingSide));
+
+        // Ground-strike impact flash on EVERY marked cell (2026-08-20, user-requested) — plays before
+        // damage application so the attack visibly lands on the ground itself even where nobody's
+        // standing, not just as a byproduct of a creature's own hit-flash.
+        yield return StartCoroutine(BattleHUDController.Instance.PlayZonePositionalGroundStrikeVfx(markedCells));
+
+        DamageCategory category = isNamedTreeSkill ? PlaceholderSkillResolver.Resolve(skill).Category : DamageCategory.Physical;
+        int power = isNamedTreeSkill ? BattleConfig.PlaceholderSkillPower : DamageCalculator.BasicAttackPower;
+
+        bool anyHit = false;
+        foreach (ZoneCell cell in markedCells)
+        {
+            List<BattleParticipant> caught = defendingSide.FindAll(p => p.IsAlive && p.LaneIndex == cell.Lane && p.PositionIndex == cell.Position);
+            foreach (BattleParticipant defender in caught)
+            {
+                int defenderSlotIndex = defendingSide.IndexOf(defender);
+                ApplyZonePositionalHit(attacker, defender, defenderSlotIndex, targetIsPlayerSide, skill, category, power);
+                anyHit = true;
+            }
+        }
+
+        BattleHUDController.Instance.RefreshBars(_state.PlayerSide, _state.EnemySide);
+
+        yield return StartCoroutine(BattleHUDController.Instance.ShowTimedMessage(
+            anyHit ? $"{skill.SkillName} catches the zone!" : "Everyone escaped the zone!",
+            BattleConfig.AutoMessageDurationSeconds));
+    }
+
+    /// <summary>One defender's share of a Zone/Positional hit — full damage always (no DefenseOutcome multiplier; the avoidance IS having moved out of the marked cell in time), same DamageCalculator/BattleEngine.QueueBasicAttack tail every other Resolve*Attack method here ends with, just routed per-defender instead of a single locked target. Also flashes the defender's stage element (2026-08-20, user-requested hit VFX) via the same FlashStageCreatureHit every other damage-application path in this file already uses — reused, not a new VFX system.</summary>
+    private void ApplyZonePositionalHit(BattleParticipant attacker, BattleParticipant defender, int defenderSlotIndex, bool defenderIsPlayerSide, SkillData skill, DamageCategory category, int power)
+    {
+        int pureBaseDamage = DamageCalculator.ComputeBaseDamage(attacker, defender, category, power);
+        int baseDamage = DamageCalculator.ComputeDamage(attacker, defender, _typeChart, category, power);
+        float typeMultiplier = DamageCalculator.ComputeTypeMultiplier(attacker, defender, _typeChart);
+
+        BattleEngine.QueueBasicAttack(_state, attacker, defender, damageMultiplier: 1f, baseDamage);
+        List<BattleActionResult> results = BattleEngine.ResolveQueuedActions(_state);
+
+        BattleHUDController.Instance.FlashStageCreatureHit(defenderSlotIndex, defenderIsPlayerSide, GetPrimalTypeOrDefault(attacker));
+
+        foreach (BattleActionResult result in results)
+        {
+            BattleHUDController.Instance.AppendBattleLog(BattleLogFormatter.FormatZonePositionalHit(
+                result.Attacker, result.Target, skill.SkillName, pureBaseDamage, baseDamage, result.DamageApplied, typeMultiplier));
+        }
+
+        AddBurstFill(defender, defenderSlotIndex, BattleConfig.BurstFillPerHitTaken);
     }
 
     /// <summary>

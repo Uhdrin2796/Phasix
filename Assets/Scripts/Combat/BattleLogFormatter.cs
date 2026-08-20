@@ -300,4 +300,16 @@ public static class BattleLogFormatter
 
         return line;
     }
+
+    /// <summary>Zone/Positional's per-defender hit line (Attack_Pattern_Directive Part 5 Group 3) — no timing term, unlike FormatVolleyHit/FormatChargeReleaseHit, since this archetype has no timing roll at all; the only variable is whether the defender was still standing in a marked cell.</summary>
+    public static string FormatZonePositionalHit(BattleParticipant attacker, BattleParticipant target, string skillName,
+        int pureBaseDamage, int damageAfterType, int finalDamage, float typeMultiplier)
+    {
+        string line = $"{attacker.DisplayName}'s {skillName} catches {target.DisplayName} in the zone for {FormatDamageBreakdown(pureBaseDamage, damageAfterType, finalDamage, extraTermOrNull: null)}!";
+
+        string effectiveness = FormatEffectiveness(typeMultiplier);
+        if (!string.IsNullOrEmpty(effectiveness)) line += $" {effectiveness}";
+
+        return line;
+    }
 }

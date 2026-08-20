@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c392ee8ebce18244b9b820b15f6796c, type: 3}
+  m_Name: Ranged_ZoneDiagonalX
+  m_EditorClassIdentifier: Phasix.Runtime::SkillData
+  _skillName: Crossfire
+  _description: Attack Pattern Directive Group 3 - Zone/Positional (DiagonalX pattern).
+    Warning glow, then a fixed X-shaped set of cells highlights across the live stage.
+    Move out with the arrow keys or stand your ground - anyone still in a marked
+    cell when the window closes takes the full hit.
+  _treeType: 19
+  _placeholderIndex: 0
+  _grantsComboRule: 0
+  _builtInMove: 0
+  _beatSequence: 
+  _responseTiming: 0
+  _windupJitterRangeSeconds: 0
+  _stackingRhythm: 0
+  _volleyRingSequence: 
+  _volleyRingDurationsSeconds: []
+  _volleyDashForwardDurationsSeconds: []
+  _volleyDashBackDurationsSeconds: []
+  _holdInputArchetype: 0
+  _chargeReleaseTellSeconds: 0
+  _chargeReleaseTargetHoldSeconds: 0
+  _sustainedPressureTellSeconds: 0
+  _sustainedPressureHoldSeconds: 0
+  _zonePositionalPattern: 3
+  _zonePositionalRowLanes: 
+  _zonePositionalColumnPositions: 
+  _zonePositionalGlowSeconds: 0
+  _zonePositionalHighlightSeconds: 0

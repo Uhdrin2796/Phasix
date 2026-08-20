@@ -28,6 +28,17 @@ offset (`LaneMovementSystem.GetPositionOffsetPx`), a pure function of position i
 `PositionColumnSpacingPx = 150f`) is fully implemented and live; only the specific numeric constants
 remain placeholders pending `NumericalCalibration.md`, same status as every other tuning value in
 this project, not an unbuilt system. Addition/clarification only — no version bump.
+**Errata (2026-08-20):** Part 1's "side-profile diorama view... real background art" describes the
+**intended final** perspective — worth flagging clearly that the CURRENT implementation
+(`BattleHUDController`) is not that yet: it's a flat UI Toolkit Screen Space Overlay panel over the
+frozen overworld (colored circles, no depth/parallax/real camera), a deliberate placeholder-first
+stand-in per `DECISIONS.md` -> `[Art] Placeholder-first pipeline`. A full migration boundary — what
+stays UI Toolkit forever (fixed HUD chrome: nameplates, bars, log, buttons) vs. what becomes real
+scene content later (stage creatures, rings, drag-lines, any stage-anchored VFX), confirmed
+technical constraints (URP Bloom and `LineRenderer`/`Physics2D` cannot reach the current UI Toolkit
+stage at all), and why now isn't the right time to migrate — is written up in `DECISIONS.md` ->
+`[Combat/Art] Battle stage rendering — UI Toolkit overlay now, real diorama scene later`. Addition
+only — no version bump.
 **GDD Refs:** §18 (Battle System), §18.5 (Wild Creature Behavior), §18.6 (Enemy AI Design)
 
 ---

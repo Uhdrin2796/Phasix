@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Pool;
 using UnityEngine.UIElements;
 
@@ -2729,6 +2730,315 @@ public class BattleHUDController : MonoBehaviour
         _actionAnnouncement.style.display = DisplayStyle.None;
         _holdInputRing.style.display = DisplayStyle.None;
         _holdInputRing.RemoveFromHierarchy();
+    }
+
+    // --- Zone/Positional (Attack_Pattern_Directive Part 5 Group 3, 2026-08-20) — the first Lane
+    // Selection/no-timing input model in this codebase. No ring, no hold gesture: a warning glow on
+    // the attacker, then every marked (Lane, Position) cell highlights on the live stage while the
+    // defender's single locked target can reposition with the arrow keys. Bloom-based glow (the
+    // literal ask) turned out not to apply here — the enemy stage element is a UI Toolkit
+    // VisualElement composited via a Screen Space Overlay PanelSettings (m_RenderMode: 0,
+    // BattleHUDPanelSettings.asset), which draws directly to the backbuffer and never passes through
+    // URP's post-processing stack at all, so URP Bloom (see SpriteGlowController.cs, which remains
+    // correct for actual SpriteRenderer GameObjects elsewhere in the project, e.g. overworld
+    // creatures) cannot affect it.
+    //
+    // 2026-08-20 follow-up (user playtest — "no glow" among other issues): pulsing
+    // unityBackgroundImageTintColor, the first attempt at a UI Toolkit-native equivalent, ALSO
+    // silently did nothing — stage creatures (SetStageCreatureColor) are a plain
+    // `style.backgroundColor` fill, never a `backgroundImage`, and tint color only multiplies a
+    // background IMAGE. Fixed by pulsing `style.backgroundColor` directly instead, lerping from the
+    // creature's own real current color (captured once at the start, restored exactly at the end)
+    // toward ZoneWarningGlowColor — same "flash a color on state change" spirit as
+    // FlashColorForOffenseOutcome, just the correct USS property for how this element actually
+    // renders. Same playtest also reported no on-screen indication of who the target is or when
+    // input is expected — added the same `_actionAnnouncement`/`_actionAnnouncementLabel` prompt
+    // every other archetype already shows (e.g. RunSustainedPressureInput's "GUARD — X!" label),
+    // naming the locked target explicitly during the response window.
+    //
+    // Highlight visuals are hardcoded to the player-side stage math (LaneMovementSystem's
+    // isPlayerSide: true path, same as ShowStagePositionMarkers) — matches this pass's
+    // enemy-casts/player-defends-only scope. A future player-offense use of this archetype would
+    // need a parallel enemy-side highlight path once multi-enemy battles support per-enemy stage
+    // positions (see Attack_Pattern_Directive Part 8's own deferred enemy-side note). ---
+
+    // 2026-08-20 60/30/10 pass (user-directed): consolidated the three previously-competing accent
+    // hues (warm-orange attacker glow, red zone highlight, cyan target outline) into a disciplined
+    // 2-hue accent system for the "10%" pop layer — MissFlashColor (an existing, already-established
+    // danger red, reused rather than inventing a new one) now means "something dangerous," used for
+    // BOTH the attacker's warning glow AND the zone highlight's blink; ZoneLockedTargetOutlineColor
+    // (cyan) is the one deliberately DIFFERENT hue, meaning "this is your unit" — a cool color
+    // reading as clearly distinct from every warm danger signal around it. PrimalType colors (Fire/
+    // Water raised in saturation this same pass — see PrimalTypeColor.cs, DECISIONS.md -> [Art]) are
+    // the "30%" identity layer; the near-black stage background is the unchanged "60%" dominant layer.
+    private const float ZonePositionalGlowPulseFrequency = 3.5f; // was 2f — faster, more aggressive pulse
+    private static readonly Color ZoneHighlightGreyColor = new Color(140f / 255f, 140f / 255f, 150f / 255f); // reuses .stage-creature's own default grey — the "safe" half of the blink
+    private static readonly Color ZoneLockedTargetOutlineColor = new Color(0.3f, 0.9f, 1f); // bright cyan — the one deliberately different hue, meaning "this is you," not "danger"
+
+    /// <summary>
+    /// Zone/Positional's entire tell + response window. Three stages: (1) the attacker's stage
+    /// element pulses toward MissFlashColor (the shared danger-red accent) for glowSeconds with no
+    /// location revealed yet (announcement names the attacker); (2) every marked cell BLINKS between
+    /// MissFlashColor and a neutral grey on the live player-side stage for highlightSeconds (glow
+    /// keeps pulsing throughout; announcement switches to naming the locked target and the
+    /// Arrow-Keys/WASD prompt), during which the single locked target (lockedTargetSlotIndex, within
+    /// defendingSide) gets exactly ONE accepted lane/position step (Up/W /Down/S = lane, Left/A/
+    /// Right/D = position — matches LaneMovementSystem's real screen mapping), blocked by
+    /// FormationSystem.IsSlotOccupied the same way the in-battle Move skill already is — a blocked
+    /// attempt (destination occupied) doesn't burn the one chance, only a genuinely accepted move
+    /// does; (3) cleanup. BattleManager checks final occupancy against markedCells itself once this
+    /// coroutine completes — this method never applies damage, only the tell and window.
+    /// </summary>
+    public IEnumerator RunZonePositionalWarning(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
+        IReadOnlyList<ZoneCell> markedCells, float glowSeconds, float highlightSeconds,
+        int lockedTargetSlotIndex, List<BattleParticipant> defendingSide)
+    {
+        VisualElement attackerElement = GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
+        Color attackerBaseColor = attackerElement != null ? attackerElement.style.backgroundColor.value : Color.white;
+        BattleParticipant lockedTarget = (defendingSide != null && lockedTargetSlotIndex >= 0 && lockedTargetSlotIndex < defendingSide.Count)
+            ? defendingSide[lockedTargetSlotIndex] : null;
+        // Highlight visuals are player-side-only this pass (see this method's own class doc comment)
+        // — lockedTarget is always drawn from the player's own stage slots.
+        VisualElement lockedTargetElement = lockedTarget != null ? GetStageCreatureElement(lockedTargetSlotIndex, isPlayerSide: true) : null;
+
+        _actionAnnouncementLabel.text = $"{attacker.DisplayName} is charging a zone attack...";
+        _actionAnnouncement.EnableInClassList("action-announcement-offense", false);
+        _actionAnnouncement.EnableInClassList("action-announcement-defend", true);
+        _actionAnnouncement.style.display = DisplayStyle.Flex;
+
+        // Stage 1: attacker glow only, no location revealed yet — "something is coming."
+        float glowElapsed = 0f;
+        while (glowElapsed < glowSeconds)
+        {
+            ApplyZonePositionalGlowPulse(attackerElement, attackerBaseColor, glowElapsed);
+            glowElapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Stage 2: glow continues + blinking cell highlights + single-target, single-move response window.
+        List<VisualElement> highlightCells = ShowZonePositionalHighlightCells(markedCells);
+        HighlightZonePositionalLockedTarget(lockedTargetElement, isHighlighted: true);
+
+        _actionAnnouncementLabel.text = lockedTarget != null
+            ? $"ZONE ATTACK — Move {lockedTarget.DisplayName}! (Arrow Keys / WASD)"
+            : "ZONE ATTACK!";
+
+        bool hasMoved = false; // 2026-08-20, user-directed: exactly one accepted step this window, not free-roam repositioning
+        float highlightElapsed = 0f;
+        while (highlightElapsed < highlightSeconds)
+        {
+            ApplyZonePositionalGlowPulse(attackerElement, attackerBaseColor, glowSeconds + highlightElapsed);
+            UpdateZonePositionalHighlightBlink(highlightCells, highlightElapsed);
+
+            if (!hasMoved && lockedTarget != null && lockedTarget.IsAlive && Keyboard.current != null)
+            {
+                // Arrow keys and WASD both accepted (2026-08-20, user-requested) — either convention
+                // steps the same lane/position delta, so a player can use whichever hand position
+                // they're already in.
+                int laneDelta = 0;
+                if (Keyboard.current.upArrowKey.wasPressedThisFrame || Keyboard.current.wKey.wasPressedThisFrame) laneDelta = 1;
+                else if (Keyboard.current.downArrowKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame) laneDelta = -1;
+                if (laneDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, laneDelta, 0))
+                    hasMoved = true;
+
+                if (!hasMoved)
+                {
+                    int positionDelta = 0;
+                    if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Keyboard.current.dKey.wasPressedThisFrame) positionDelta = 1;
+                    else if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Keyboard.current.aKey.wasPressedThisFrame) positionDelta = -1;
+                    if (positionDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, 0, positionDelta))
+                        hasMoved = true;
+                }
+            }
+
+            highlightElapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        HideZonePositionalHighlightCells(highlightCells);
+        HighlightZonePositionalLockedTarget(lockedTargetElement, isHighlighted: false);
+        ResetZonePositionalGlow(attackerElement, attackerBaseColor);
+        _actionAnnouncement.style.display = DisplayStyle.None;
+    }
+
+    /// <summary>Attempts to move lockedTarget by exactly one lane/position step, rejected if the destination is occupied by another living defendingSide member — same "recheck live, don't trust anything cached" posture OnMoveDragPointerUp/ResolveBuiltInMove's Move case already use. Applies the move and refreshes the visible stage layout immediately if accepted, so the player sees themselves actually move during the window, not just at the end. Returns whether the move was actually applied — a blocked/no-op attempt (destination occupied, or already at the clamped edge) doesn't count against the caller's one-move budget.</summary>
+    private bool TryStepZonePositionalTarget(BattleParticipant lockedTarget, List<BattleParticipant> defendingSide, int laneDelta, int positionDelta)
+    {
+        int newLane = LaneMovementSystem.ClampLane(lockedTarget.LaneIndex + laneDelta);
+        int newPosition = LaneMovementSystem.ClampPosition(lockedTarget.PositionIndex + positionDelta);
+        if (newLane == lockedTarget.LaneIndex && newPosition == lockedTarget.PositionIndex) return false;
+
+        var others = new List<(int, int)>();
+        foreach (BattleParticipant p in defendingSide)
+        {
+            if (p == lockedTarget || !p.IsAlive) continue;
+            others.Add((p.LaneIndex, p.PositionIndex));
+        }
+        if (FormationSystem.IsSlotOccupied(others, newLane, newPosition)) return false; // blocked: occupied, doesn't burn the one-move budget
+
+        lockedTarget.LaneIndex = newLane;
+        lockedTarget.PositionIndex = newPosition;
+        RefreshPlayerLaneLayout(defendingSide);
+        return true;
+    }
+
+    /// <summary>Pulses toward MissFlashColor (2026-08-20: was a separate orange, unified into the shared danger-red accent — see this section's own class doc comment) — a wider, faster swing than the original pulse for a more aggressive "something dangerous" read.</summary>
+    private void ApplyZonePositionalGlowPulse(VisualElement element, Color baseColor, float elapsedSeconds)
+    {
+        if (element == null) return;
+        float t = Mathf.PingPong(elapsedSeconds * ZonePositionalGlowPulseFrequency, 1f);
+        element.style.backgroundColor = Color.Lerp(baseColor, MissFlashColor, Mathf.Lerp(0.15f, 1f, t));
+    }
+
+    private void ResetZonePositionalGlow(VisualElement element, Color baseColor)
+    {
+        if (element == null) return;
+        element.style.backgroundColor = baseColor;
+    }
+
+    /// <summary>Blinks every highlight cell between MissFlashColor and a neutral grey in sync (2026-08-20, user-directed — "let the highlight... blink or flash... between two colors, maybe the existing color and a grey"), rather than a static translucent fill. Same aggressive frequency as the attacker's own glow pulse.</summary>
+    private void UpdateZonePositionalHighlightBlink(List<VisualElement> highlightCells, float elapsedSeconds)
+    {
+        if (highlightCells == null) return;
+        float t = Mathf.PingPong(elapsedSeconds * ZonePositionalGlowPulseFrequency, 1f);
+        Color blinkColor = Color.Lerp(ZoneHighlightGreyColor, MissFlashColor, t);
+        foreach (VisualElement cell in highlightCells)
+        {
+            cell.style.backgroundColor = blinkColor;
+        }
+    }
+
+    /// <summary>
+    /// Builds one non-interactive VisualElement per marked cell, positioned/sized via the exact same
+    /// LaneMovementSystem/PlayerNameplateClearanceShiftPx math ShowStagePositionMarkers uses so a
+    /// cell element's position is a truthful promise of where a creature standing there actually is.
+    /// Shared by ShowZonePositionalHighlightCells (the pre-attack telegraph) and
+    /// PlayZonePositionalGroundStrikeVfx (the post-window impact flash, 2026-08-20 — "show a strike
+    /// on the areas that are targeted even if there's no player") — both need identical cell
+    /// geometry, only their color/lifetime/z-order differ, so callers set those themselves.
+    ///
+    /// 2026-08-20 follow-up (user playtest — "it looks like everything is highlighted"): the first
+    /// attempt sized each cell as a small 28px dot (borrowed from FormationGridPicker's clickable-
+    /// button convention) floating in the middle of its much larger real cell footprint (a 150px-wide
+    /// x 76.5px-tall slot). For a Row pattern (4 of 7 lanes, every position each) that produced 20
+    /// small dots spread edge-to-edge across most of the stage with no visible gap between marked and
+    /// unmarked ROWS — reading as "everything," not "these 4 rows." Fixed by sizing each cell to
+    /// (near) its full real footprint instead of a small marker dot — adjacent marked cells in the
+    /// same row/column now visually MERGE into one continuous band, and unmarked rows/columns show as
+    /// genuinely empty gaps, which is what actually reads as "this pattern is marked, that's safe."
+    /// </summary>
+    private List<VisualElement> BuildZonePositionalCellElements(IReadOnlyList<ZoneCell> cells, Color initialColor)
+    {
+        var elements = new List<VisualElement>();
+        if (_playerStageArea == null || cells == null) return elements;
+
+        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f + LaneMovementSystem.PlayerNameplateClearanceShiftPx;
+        // Near-full cell footprint (small gap on each axis so adjacent tiles read as distinct cells
+        // even when they merge into a continuous band) instead of a small floating marker dot.
+        const float gapPx = 8f;
+        float cellWidthPx = LaneMovementSystem.PositionColumnSpacingPx - gapPx;
+        float cellHeightPx = LaneMovementSystem.LaneRowHeightPx - gapPx;
+        float centerOffsetXPx = (StageCreatureSizePx - cellWidthPx) / 2f;
+        float centerOffsetYPx = (StageCreatureSizePx - cellHeightPx) / 2f;
+
+        foreach (ZoneCell cell in cells)
+        {
+            var element = new VisualElement();
+            element.pickingMode = PickingMode.Ignore;
+            element.style.position = Position.Absolute;
+            element.style.width = cellWidthPx;
+            element.style.height = cellHeightPx;
+            element.style.top = LaneMovementSystem.GetLaneScreenTop(cell.Lane, isPlayerSide: true) + centerOffsetYPx;
+            element.style.left = LaneMovementSystem.GetPositionOffsetPx(cell.Position) + centeringCompensationPx + centerOffsetXPx;
+            element.style.backgroundColor = initialColor;
+            SetUniformBorderRadius(element, 6f); // a soft-cornered tile, not a dot or a hard rectangle
+
+            _playerStageArea.Add(element);
+            elements.Add(element);
+        }
+
+        return elements;
+    }
+
+    /// <summary>Pre-attack telegraph — see BuildZonePositionalCellElements. Sent to back so marked cells never render on top of a stage creature standing in one of them.</summary>
+    private List<VisualElement> ShowZonePositionalHighlightCells(IReadOnlyList<ZoneCell> markedCells)
+    {
+        List<VisualElement> elements = BuildZonePositionalCellElements(markedCells, ZoneHighlightGreyColor);
+        foreach (VisualElement element in elements) element.SendToBack();
+        return elements;
+    }
+
+    private void HideZonePositionalHighlightCells(List<VisualElement> highlightCells)
+    {
+        RemoveZonePositionalCellElements(highlightCells);
+    }
+
+    /// <summary>Shared cleanup for both ShowZonePositionalHighlightCells's telegraph and PlayZonePositionalGroundStrikeVfx's impact flash.</summary>
+    private void RemoveZonePositionalCellElements(List<VisualElement> elements)
+    {
+        if (elements == null) return;
+        foreach (VisualElement element in elements) element.RemoveFromHierarchy();
+    }
+
+    /// <summary>
+    /// Ground-strike impact flash (2026-08-20, user-requested — "show a strike on the areas that are
+    /// targeted even if there's no player") — plays on EVERY marked cell once the response window
+    /// closes and the attack actually resolves, regardless of whether anyone is standing there. Empty
+    /// marked cells previously got zero visual payoff at all; this makes the attack visibly land on
+    /// the ground itself, with a caught defender's own FlashStageCreatureHit (BattleManager.
+    /// ApplyZonePositionalHit) layering on top as the extra "you got hit" signal. A bright white-hot
+    /// version of the same danger-red accent family (Color.Lerp toward white) — distinct from the
+    /// pre-attack telegraph's red/grey blink, reading as "impact," not "warning" — that punches in
+    /// then fades and shrinks over ZoneStrikeVfxDurationSeconds. Rendered ON TOP (not sent to back,
+    /// unlike the telegraph) so the flash is never hidden behind a stage creature standing in that cell.
+    /// </summary>
+    private static readonly Color ZoneStrikeFlashColor = Color.Lerp(MissFlashColor, Color.white, 0.6f);
+    private const float ZoneStrikeVfxDurationSeconds = 0.3f;
+
+    public IEnumerator PlayZonePositionalGroundStrikeVfx(IReadOnlyList<ZoneCell> markedCells)
+    {
+        List<VisualElement> strikeElements = BuildZonePositionalCellElements(markedCells, ZoneStrikeFlashColor);
+        foreach (VisualElement element in strikeElements) element.BringToFront();
+
+        float elapsed = 0f;
+        while (elapsed < ZoneStrikeVfxDurationSeconds)
+        {
+            float t = elapsed / ZoneStrikeVfxDurationSeconds;
+            Color fadedColor = new Color(ZoneStrikeFlashColor.r, ZoneStrikeFlashColor.g, ZoneStrikeFlashColor.b, Mathf.Lerp(1f, 0f, t));
+            float scale = Mathf.Lerp(1.15f, 0.85f, t); // a quick punch-in-then-shrink impact shape
+            foreach (VisualElement element in strikeElements)
+            {
+                element.style.backgroundColor = fadedColor;
+                element.style.scale = new Scale(new Vector3(scale, scale, 1f));
+            }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        RemoveZonePositionalCellElements(strikeElements);
+    }
+
+    /// <summary>
+    /// Direct visual marker on the locked target's OWN stage element (2026-08-20 playtest follow-up
+    /// — the announcement text alone wasn't enough for the player to tell at a glance which creature
+    /// on the stage is theirs to move). A bright pulsing border, cleared alongside everything else
+    /// once the response window closes.
+    /// </summary>
+    private void HighlightZonePositionalLockedTarget(VisualElement targetElement, bool isHighlighted)
+    {
+        if (targetElement == null) return;
+
+        Color color = isHighlighted ? ZoneLockedTargetOutlineColor : new Color(0f, 0f, 0f, 0.4f); // matches .stage-creature's own default border-color
+        float width = isHighlighted ? 5f : 3f; // matches .stage-creature's own default border-width when cleared
+
+        targetElement.style.borderTopColor = color;
+        targetElement.style.borderRightColor = color;
+        targetElement.style.borderBottomColor = color;
+        targetElement.style.borderLeftColor = color;
+        targetElement.style.borderTopWidth = width;
+        targetElement.style.borderRightWidth = width;
+        targetElement.style.borderBottomWidth = width;
+        targetElement.style.borderLeftWidth = width;
     }
 
     /// <summary>One ring's resolution outcome, filled in by RunVolleyRingOffense/Defense as it runs (2026-08-14) — a plain mutable holder (not a return value) so BattleManager can read it after `yield return StartCoroutine(...)` completes, the same pattern CombatVfxController.HeldProjectile already uses.</summary>

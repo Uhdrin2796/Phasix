@@ -3,10 +3,18 @@ using UnityEngine;
 
 /// <summary>
 /// Maps PrimalType to a placeholder display color, per the placeholder-first art pipeline
-/// (DECISIONS.md → [Art] Placeholder-first pipeline). The 8 base colors are transcribed
-/// verbatim from that locked table (itself sourced from the GDD's Primal wheel diagram,
-/// §9). The 28 duo-merge parent pairs are transcribed verbatim from the GDD §9 "All 28 duo
+/// (DECISIONS.md → [Art] Placeholder-first pipeline). The 8 base colors were originally
+/// transcribed verbatim from a locked table sourced from the GDD's Primal wheel diagram
+/// (§9). The 28 duo-merge parent pairs are transcribed verbatim from the GDD §9 "All 28 duo
 /// merged types" table — not invented.
+///
+/// 2026-08-20 (Attack_Pattern_Directive Part 5 Group 3, Zone/Positional VFX pass — user-directed
+/// deliberate content change, not a Claude-invented override of locked values): Fire and Water's
+/// base hex values were RAISED in saturation/luminance — see DECISIONS.md -> [Art] for the full
+/// before/after and rationale (a 60/30/10 contrast pass across the battle stage: PrimalType colors
+/// are the "30%" identity layer and needed more pop against the near-black "60%" stage background,
+/// distinct from the "10%" accent reds Zone/Positional's danger signals now use). Every other base
+/// color and all 28 duo-merge pairs are untouched.
 ///
 /// Duo-merge colors are computed (50/50 blend of the two parents), never hand-authored, so
 /// this stays cheap to extend if triple merges are ever added post-roster.
@@ -15,8 +23,8 @@ public static class PrimalTypeColor
 {
     private static readonly Dictionary<PrimalType, Color> BaseColors = new Dictionary<PrimalType, Color>
     {
-        { PrimalType.Fire,      HexColor("#C04020") },
-        { PrimalType.Water,     HexColor("#1A6A9A") },
+        { PrimalType.Fire,      HexColor("#E8511A") },
+        { PrimalType.Water,     HexColor("#1E90D4") },
         { PrimalType.Earth,     HexColor("#7A5A20") },
         { PrimalType.Wind,      HexColor("#207A40") },
         { PrimalType.Light,     HexColor("#807010") },

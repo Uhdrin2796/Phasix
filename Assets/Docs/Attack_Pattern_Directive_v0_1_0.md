@@ -41,6 +41,17 @@ glance; see the tuning-knobs section below) — see `SkillData.VolleyRingSequenc
 dispatch-wired but blocked on `CombatVfxController._held`
 being a single-slot field; see CHANGELOG.md's matching entry for full detail. Not reflected in Part
 5's archetype table below (left as historical design-intent record).
+**Errata (2026-08-20):** Group 3 started — Zone/Positional built as three worked skills (Row,
+Column, DiagonalX; see CHANGELOG.md's matching entry for full detail). Part 8's opening paragraph
+below was stale — it still described lane occupancy as "non-exclusive," the pre-2026-08-12 model,
+contradicting Part 8's own later "Occupancy model — resolved (7 lanes × 5 positions)" subsection.
+Corrected in place (not silently — this note records the fix) to match that subsection instead of
+contradicting it. Separately, Part 8's "Occupancy model — resolved" subsection's claim that
+Zone/Positional "operates at lane granularity... position is a layer beneath lane" turned out not
+to hold once real skills were authored: Row is lane-only, but Column and DiagonalX both need true
+per-(Lane, Position)-cell marking to work at all — see `ZonePositionalPatternResolver.cs`. Corrected
+in place below as well. Split Attention (Part 5/1's item 8) remains unbuilt, deferred to a follow-up
+pass that reuses this same infrastructure. Addition/correction only — no version bump.
 **Errata (2026-08-17):** Group 2 finished — Charge & Release + Sustained Pressure built together as
 planned, sharing a new `BattleHUDController.RunHoldGesture` press-and-hold-then-release primitive
 (the first mechanic in this codebase to use `PointerUpEvent` as a real release signal rather than
@@ -90,7 +101,8 @@ For each system: build one deliberately **minimal** example and one deliberately
 | Telegraph Knob Schema | **Built 2026-08-11** — minimal version: `SkillData.BeatSequence` (ordered `BeatType[]`) plus `BeatSequenceConfig.cs` for shared timing constants. Full Part 2 knob table (input verb, tell predictability, area shape, etc.) NOT built — only what Slash needed | — | One SkillData asset, knobs filled — done (`Melee_Slash`) | — |
 | Beat Sequence | **Built 2026-08-11** — `BeatSequenceRunner.cs` (Approach/Windup/Return), `BattleManager.ResolveMeleeBeatSequence`/`ResolveMeleeAttackBeatOffense`/`Defense` | Lane Movement | Slash — done, live in `SkillDatabase` | Shadow teleport-strike — not built |
 | Strike Points | Spec'd (Part 9) — not built | Beat Sequence, Lane Movement | Single Front strike | Front→Rear→Flank chain |
-| Zone/Positional & Split Attention | Not designed | Lane Movement | — | — |
+| Zone/Positional | **Built 2026-08-20** — no timing roll at all (`ZonePositionalPatternType`, `BattleManager.ResolveZonePositionalAttack`, `BattleHUDController.RunZonePositionalWarning`) | Lane Movement | `Ranged_ZoneRow`/`Ranged_ZoneColumn`/`Ranged_ZoneDiagonalX` — done, live in `SkillDatabase` | — |
+| Split Attention | Deferred — reuses Zone/Positional's infrastructure unchanged, not yet built | Zone/Positional | — | — |
 | Charge & Release | **Built 2026-08-17** — offense, `BattleManager.ResolveChargeReleaseAttack`, shares `BattleHUDController.RunHoldGesture` with Sustained Pressure below | — | `Ranged_ChargeRelease` ("Magma Burst") — done, live in `SkillDatabase` | — |
 | Sustained Pressure | **Built 2026-08-17** — defense (new `DefenseOutcome.Guard`), `BattleHUDController.RunSustainedPressureInput`, integrated into `ResolveEnemyDamageAction`'s existing Dodge/Parry/Miss flow | — | `Ranged_SustainedPressure` ("Flame Breath") — done, live in `SkillDatabase` | — |
 | Multi-Turn Buildup | Not designed | — | — | — |
@@ -231,11 +243,24 @@ way of moving between them. A miss on EITHER instant skips this entirely and dea
 `TimedInputConfig.MissDamageMultiplier`'s usual reduced-but-nonzero rule everywhere else.
 
 **Group 3 — one dedicated pass, builds directly on the 2026-08-12 formation grid work:**
-7. **Zone/Positional** — the Lane Selection input model (no timing, just picking lanes) plus a
-   visible "marked lanes" tell. The defender's Evade/Tank response reuses the player position system
-   already built this session (`FormationSystem.cs`, `LaneMovementSystem.cs`).
+7. **Zone/Positional** — **BUILT 2026-08-20** as `Ranged_ZoneRow`/`Ranged_ZoneColumn`/
+   `Ranged_ZoneDiagonalX` (see CHANGELOG.md's matching entry for full detail). The Lane Selection
+   input model (no timing at all) plus a warning-glow-then-highlight tell
+   (`BattleHUDController.RunZonePositionalWarning`). The defender's response is real-time arrow-key
+   movement of the enemy's single locked target, reusing `LaneMovementSystem`/
+   `FormationSystem.IsSlotOccupied` for the actual step/occupancy math but a NEW reactive entry
+   point — the existing in-battle Move skill's drag flow (`BeginMoveDrag`/`MoveConfirmed`) is
+   player-turn-initiated and turn-consuming, wrong shape for an opponent-turn reactive window.
+   Deliberately no separate "Tank" button — with arrow-key movement as the only response, "don't
+   move" is already always available with no further mechanic needed; full damage applies to
+   whoever's still in a marked cell regardless of intent. Player-side offense use of this archetype
+   is out of scope this pass, matching every other archetype's initial single-direction ship
+   pattern.
 8. **Split Attention** — build immediately after #7, not standalone — it's Zone/Positional with two
-   simultaneous marks (one or both fake), same infrastructure.
+   simultaneous marks (one or both fake), same infrastructure. **Deferred** — not built alongside
+   Zone/Positional this pass (see CHANGELOG.md's matching entry for why); should cost close to zero
+   new code once picked up, reusing `RunZonePositionalWarning`/`ResolveZonePositionalAttack`
+   unchanged apart from iterating two cell sets instead of one.
 
 **Group 4 — small, isolate to verify no regression:**
 9. **Counter-Bait** — needs tracking "did the player just guard" as a trigger condition. Small, but
@@ -409,7 +434,7 @@ A simple brawler and a stalking Shadow creature are the same state machine — o
 
 ## Part 8 — Lane Movement & Zone Targeting
 
-**Lane occupancy and the movement cost model are now locked in Combat_Directive_v0_1_0.md** (Part 3 — Tactical Positioning → Lane Movement): occupancy is non-exclusive (combatants can share a lane, spaced apart visually to read as a line), and movement cost is decided by the calling context rather than one fixed rule. This section covers what's specific to attack-triggered movement and targeting.
+**Lane occupancy and the movement cost model are now locked in Combat_Directive_v0_1_0.md** (Part 3 — Tactical Positioning → Lane Movement, refined 2026-08-12/17): lane-level occupancy is non-exclusive (combatants can share a lane), but **position-level occupancy is exclusive** — each lane holds 5 discrete positions, and at most one combatant may occupy a given (lane, position) slot at a time. See the "Occupancy model — resolved" subsection below for the full model. Movement cost is decided by the calling context rather than one fixed rule. This section covers what's specific to attack-triggered movement and targeting.
 
 ### Pre-Battle Party Placement
 - Players can assign a starting lane (L1–L7) to each party member before battle begins — not a fixed default per creature. Since occupancy is non-exclusive, multiple party members can share a lane at placement, subject to the same in-lane spacing rule.
@@ -433,7 +458,7 @@ Once an attacker's zone skill activates, the defender must see which lanes are a
 The contradiction is resolved by refinement, not reversal — see Combat_Directive's 2026-08-12 errata. Each lane holds up to **5 discrete positions**, mirrored on both player and enemy sides. Lane-level occupancy stays non-exclusive (unchanged, still true, still built); **position-level occupancy is exclusive** — one combatant per (lane, position) slot. This means:
 - A reactive dodge has **two options**: move to an adjacent **lane**, or move to an adjacent **position** within the current lane. Either can be blocked if the destination slot is occupied.
 - "Trapped" (Part 5's Lane Displacement Attack) now means both options are blocked — adjacent lane's relevant slot occupied *and* adjacent position(s) within the current lane occupied — not just one axis.
-- Everything that operates at lane granularity (damage/Primal typing, Territory AoE, Zone/Positional, Split Attention) is unchanged — position is a layer beneath lane, for movement/collision/spacing only.
+- Damage/Primal typing and Territory AoE still operate at lane granularity, position remaining a layer beneath lane for movement/collision/spacing only. **Correction (2026-08-20):** Zone/Positional does NOT universally hold to this — once real skills were authored (Row, Column, DiagonalX), Column and DiagonalX both needed true per-(Lane, Position)-cell marking to work at all (Row is the only lane-only case). See `ZonePositionalPatternResolver.cs` — every pattern expands to a shared `ZoneCell` (Lane, Position) list, not a lane-only list.
 - **Un-defers the enemy side:** the 2026-08-11 errata deferred enemy-side visual spacing until multi-enemy battles exist. Since positions are now confirmed symmetric, enemy-side position support needs building alongside player-side, not deferred.
 
 **Resolved:** Strike Points stay independent of the position grid — no change to Part 9's model. Position-grid slots are persistent and occupancy-exclusive; Strike Points are transient (the attacker always returns to its real lane per Part 7's automatic return-to-origin) and purpose-built for animator-driven visual placement, which the proportional offset system already serves well. Snapping to 5 discrete slots would tie animation values to a number that belongs to calibration, and would fight the "place a marker where it looks right" authoring workflow. Loose naming convention worth keeping in mind during authoring: `Front`/`Rear` read as depth-axis (lane), `Flank-Near`/`Flank-Far` read as lateral-axis (position) — a naming echo of the grid's two axes, not a mechanical link to it.
