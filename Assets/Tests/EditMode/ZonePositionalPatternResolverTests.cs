@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Phasix.Tests.EditMode
 {
-    /// <summary>Covers ZonePositionalPatternResolver.GetMarkedCells — the pure Row/Column/DiagonalX expansion (Attack_Pattern_Directive Part 5 Group 3, 2026-08-20).</summary>
+    /// <summary>Covers ZonePositionalPatternResolver.GetMarkedCells — the pure Row/Column/DiagonalX expansion plus SurroundingBurst/FacingArrowhead's target-relative real/fake cell math (Attack_Pattern_Directive Part 5 Group 3, 2026-08-20, Split Attention follow-up).</summary>
     public class ZonePositionalPatternResolverTests
     {
         private static SkillData MakeSkill()
@@ -92,6 +92,75 @@ namespace Phasix.Tests.EditMode
 
             Assert.AreEqual(5, cells.Count);
             Assert.IsTrue(cells.All(c => c.Lane == BattleLaneLayout.LaneCount));
+        }
+
+        [Test]
+        public void GetMarkedCells_SurroundingBurst_CenterAndDiagonalsAreReal_EdgesAreFake()
+        {
+            var skill = MakeSkill();
+            SetPrivateField(skill, "_zonePositionalPattern", ZonePositionalPatternType.SurroundingBurst);
+
+            IReadOnlyList<ZoneCell> cells = ZonePositionalPatternResolver.GetMarkedCells(skill, targetLane: 4, targetPosition: 3);
+
+            Assert.AreEqual(9, cells.Count); // full 3x3, no clamping needed away from any edge
+            Assert.AreEqual(5, cells.Count(c => c.IsReal)); // center + 4 diagonals
+            Assert.AreEqual(4, cells.Count(c => !c.IsReal)); // 4 orthogonal edges
+
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 3 && c.IsReal)); // center is damaging
+            Assert.IsTrue(cells.Any(c => c.Lane == 3 && c.Position == 2 && c.IsReal)); // diagonal
+            Assert.IsTrue(cells.Any(c => c.Lane == 5 && c.Position == 4 && c.IsReal)); // diagonal
+            Assert.IsTrue(cells.Any(c => c.Lane == 3 && c.Position == 3 && !c.IsReal)); // orthogonal edge, safe
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 2 && !c.IsReal)); // orthogonal edge, safe
+        }
+
+        [Test]
+        public void GetMarkedCells_SurroundingBurst_DropsOutOfRangeCellsNearCorner()
+        {
+            var skill = MakeSkill();
+            SetPrivateField(skill, "_zonePositionalPattern", ZonePositionalPatternType.SurroundingBurst);
+
+            // Target at the exact (Lane 1, Position 1) corner — half the 3x3 falls off the grid.
+            IReadOnlyList<ZoneCell> cells = ZonePositionalPatternResolver.GetMarkedCells(skill, targetLane: 1, targetPosition: 1);
+
+            Assert.AreEqual(4, cells.Count); // only the (lane 1-2, position 1-2) quadrant survives
+            Assert.IsTrue(cells.All(c => c.Lane >= 1 && c.Position >= 1));
+            Assert.AreEqual(2, cells.Count(c => c.IsReal)); // center + the one surviving diagonal
+        }
+
+        [Test]
+        public void GetMarkedCells_FacingArrowhead_TenReal_TwoFake_AwayFromEdges()
+        {
+            var skill = MakeSkill();
+            SetPrivateField(skill, "_zonePositionalPattern", ZonePositionalPatternType.FacingArrowhead);
+
+            IReadOnlyList<ZoneCell> cells = ZonePositionalPatternResolver.GetMarkedCells(skill, targetLane: 4, targetPosition: 2);
+
+            Assert.AreEqual(12, cells.Count); // full shape, nothing clamped this far from any edge
+            Assert.AreEqual(10, cells.Count(c => c.IsReal));
+            Assert.AreEqual(2, cells.Count(c => !c.IsReal));
+
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 2 && !c.IsReal)); // target's own cell, safe
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 3 && !c.IsReal)); // one step toward the tip, safe
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 4 && c.IsReal)); // the tip itself, damaging
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 1 && c.IsReal)); // wall directly behind, damaging
+            Assert.IsTrue(cells.Any(c => c.Lane == 2 && c.Position == 1 && c.IsReal)); // wall's far lane edge, damaging
+            Assert.IsTrue(cells.Any(c => c.Lane == 6 && c.Position == 1 && c.IsReal)); // wall's other far lane edge, damaging
+        }
+
+        [Test]
+        public void GetMarkedCells_FacingArrowhead_DropsTipAndSafeStepNearPositionEdge()
+        {
+            var skill = MakeSkill();
+            SetPrivateField(skill, "_zonePositionalPattern", ZonePositionalPatternType.FacingArrowhead);
+
+            // Target already at Position 5 (max) — the safe step (+1) and the tip (+2) both fall off
+            // the grid, leaving only the target's own cell as the sole fake cell in what's left.
+            IReadOnlyList<ZoneCell> cells = ZonePositionalPatternResolver.GetMarkedCells(skill, targetLane: 4, targetPosition: 5);
+
+            Assert.AreEqual(8, cells.Count);
+            Assert.AreEqual(1, cells.Count(c => !c.IsReal));
+            Assert.IsTrue(cells.Any(c => c.Lane == 4 && c.Position == 5 && !c.IsReal)); // target's own cell, still safe
+            Assert.IsFalse(cells.Any(c => c.Position == 6 || c.Position == 7)); // never fabricated out-of-range cells
         }
     }
 }

@@ -16,6 +16,61 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-20] Phase 3 — Attack Pattern Directive Group 3, item 8: Split Attention
+- **Context:** Last item in Group 3's build order — "Zone/Positional with two simultaneous marks,
+  one or both fake, same infrastructure." Design converged through direct back-and-forth: first
+  confirmed the mechanic follows Zone/Positional's exact tell/response/resolution loop; then, on
+  reviewing that a purely random real/fake split gives zero learnable signal ever (a real weakness,
+  flagged before building anything), the user picked a fixed-geometric-rule approach instead —
+  mirroring this project's own established Metronome (learnable) vs. Jitter (unlearnable) pattern
+  rather than inventing a new axis. Two concrete skills were then designed collaboratively, cell by
+  cell, and confirmed via reconstructed grids before any code was written.
+- **Built:** `ZoneCell` gained `IsReal` (defaults true, so every existing 2-arg call site — Row/
+  Column/DiagonalX — is unaffected). A fake cell is highlighted/glowed/ground-struck IDENTICALLY to
+  a real one (by design — the whole point is the telegraph looks uniformly dangerous); `IsReal` is
+  only ever checked in one place, `BattleManager.ResolveZonePositionalAttack`'s damage-application
+  loop. `ZonePositionalPatternResolver.GetMarkedCells` gained `targetLane`/`targetPosition`
+  parameters (both default 0, so existing calls/tests are unaffected) and two new pattern branches —
+  the first in this codebase computed RELATIVE to a live target position rather than fixed authored
+  data. `ZonePositionalPatternType.SurroundingBurst`: a 3x3 area centered on the target — center +
+  the 4 diagonal corners are real (forces an actual move; standing still is damaging), the 4
+  orthogonal edges are safe. `ZonePositionalPatternType.FacingArrowhead`: a chevron with its tip
+  toward the target's "facing" direction — a solid 5-cell wall directly behind the target, tapering
+  through a hollow throat holding the target's own cell and one safe step toward the tip, down to a
+  single-cell point two steps out. Both hand-authored as fixed (laneOffset, positionOffset, isReal)
+  tables (`SurroundingBurstOffsets`/`FacingArrowheadOffsets`), matching DiagonalX's own "hand-
+  authored, not computed" precedent — dropped (not clamped) when an offset falls outside the real
+  1-7/1-5 grid, avoiding the duplicate-cell risk clamping would introduce near a stage edge.
+  Two new worked skills, `Ranged_ZoneBurst` ("Overcharge") and `Ranged_ZoneArrowhead` ("Bolt
+  Lance") — both Lightning-flavored, zero new SkillData fields needed since the shape is fully
+  computed from live target position. Registered in `SkillDatabase.asset` and added to
+  `EncounterTrigger`'s debug loadout alongside the three base Zone/Positional skills.
+- **Decided — no general facing-direction system:** `Combat_Directive_v0_1_0.md` Part 9 explicitly
+  notes one "doesn't exist anywhere else in the design." Rather than build one, FacingArrowhead
+  scopes "facing" to a single fixed convention: for a player-side target (this pattern's only
+  supported case, matching this pass's enemy-casts/player-defends-only scope throughout), facing is
+  toward increasing Position — the real screen-space left-to-right axis this side-profile diorama
+  actually uses (`GetPositionOffsetPx` confirmed). If this pattern is ever needed for an enemy-side
+  target, the offset table's position signs would need mirroring — flagged in the table's own doc
+  comment, not solved speculatively now.
+- **Verified:** 348/348 EditMode tests pass (8 new — pattern geometry and edge-dropping behavior for
+  both new patterns, hand-computed and cross-checked against the resolver's actual output). Live in
+  Play Mode: `EnemyAI.ChooseSkill` correctly buckets both new skills as `Damage` (the bucketing fix
+  from earlier this session generalizes automatically — it checks `ZonePositionalPattern != None`,
+  not specific enum values, so no further `EnemyAI` change was needed). `manage_ui render_ui`
+  screenshot of FacingArrowhead against a real `BattleParticipant` confirms the chevron shape reads
+  correctly on the live stage — solid wall, tapering notch with the target nested inside, matching
+  the design exactly. `read_console` clean throughout.
+- **Ref:** `ZoneCell.cs` (`IsReal`), `ZonePositionalPatternType.cs`
+  (`SurroundingBurst`/`FacingArrowhead`), `ZonePositionalPatternResolver.cs`
+  (`targetLane`/`targetPosition` params, `SurroundingBurstOffsets`/`FacingArrowheadOffsets`,
+  `BuildOffsetCells`), `BattleManager.cs` (`ResolveZonePositionalAttack`'s target-position pass-
+  through and `IsReal` skip), `SkillData.cs` (doc comment only, no new fields),
+  `Assets/Data/Skills/Ranged_ZoneBurst.asset`/`Ranged_ZoneArrowhead.asset`, `SkillDatabase.asset`,
+  `EncounterTrigger.cs`, `Assets/Tests/EditMode/ZonePositionalPatternResolverTests.cs`.
+
+---
+
 [2026-08-20] Docs — Battle stage rendering migration boundary written up (UI Toolkit now, real diorama later)
 - **Context:** While evaluating a lightning-bolt VFX proposal (LineRenderer/Physics2D-based), a
   longer Q&A followed: why the battle stage renders the way it does, whether a real diorama scene

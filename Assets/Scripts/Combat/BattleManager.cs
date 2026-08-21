@@ -2343,7 +2343,9 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ResolveZonePositionalAttack(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
         BattleParticipant target, int targetSlotIndex, bool targetIsPlayerSide, SkillData skill, bool isNamedTreeSkill)
     {
-        IReadOnlyList<ZoneCell> markedCells = ZonePositionalPatternResolver.GetMarkedCells(skill);
+        // targetLane/targetPosition are only consulted by the target-relative patterns
+        // (SurroundingBurst, FacingArrowhead, Split Attention) — a no-op for Row/Column/DiagonalX.
+        IReadOnlyList<ZoneCell> markedCells = ZonePositionalPatternResolver.GetMarkedCells(skill, target.LaneIndex, target.PositionIndex);
         float glowSeconds = skill.ZonePositionalGlowSeconds > 0f ? skill.ZonePositionalGlowSeconds : BeatSequenceConfig.ZonePositionalGlowSeconds;
         float highlightSeconds = skill.ZonePositionalHighlightSeconds > 0f ? skill.ZonePositionalHighlightSeconds : BeatSequenceConfig.ZonePositionalHighlightSeconds;
 
@@ -2363,6 +2365,11 @@ public class BattleManager : MonoBehaviour
         bool anyHit = false;
         foreach (ZoneCell cell in markedCells)
         {
+            // Split Attention (2026-08-20): a fake cell is highlighted/glowed/flashed identically to
+            // a real one (by design — see ZoneCell.IsReal's own doc comment) but never deals damage,
+            // regardless of who's standing there.
+            if (!cell.IsReal) continue;
+
             List<BattleParticipant> caught = defendingSide.FindAll(p => p.IsAlive && p.LaneIndex == cell.Lane && p.PositionIndex == cell.Position);
             foreach (BattleParticipant defender in caught)
             {

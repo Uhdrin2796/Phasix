@@ -26,7 +26,7 @@ public class EncounterTrigger : MonoBehaviour
     [SerializeField] private bool _overrideTintColor;
     [SerializeField] private Color _tintColorOverride = Color.white;
 
-    [Tooltip("DEBUG (2026-08-12, extended 2026-08-17, 2026-08-20): if checked, the spawned wild creature's entire loadout is replaced with the built-in Attack move + the 'Slash' skill + the 'Flame Breath' skill (Sustained Pressure) + all three Zone/Positional skills ('Fault Line'/Row, 'Rift Line'/Column, 'Crossfire'/DiagonalX), guaranteeing every enemy turn can trigger the old single-beat Dodge/Parry flow (Attack), the Melee Beat Sequence framework (Slash), the hold-to-guard archetype (Flame Breath), or the new Lane Selection/no-timing archetype (the three Zone skills) so all of them can be reliably playtested and compared side by side. Each new archetype gets added to this same existing override rather than a new debug flag, since this is this project's one existing enemy-side debug override mechanism. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
+    [Tooltip("DEBUG (2026-08-12, extended 2026-08-17, 2026-08-20 x2): if checked, the spawned wild creature's entire loadout is replaced with the built-in Attack move + the 'Slash' skill + the 'Flame Breath' skill (Sustained Pressure) + all five Zone/Positional skills ('Fault Line'/Row, 'Rift Line'/Column, 'Crossfire'/DiagonalX, 'Overcharge'/SurroundingBurst, 'Bolt Lance'/FacingArrowhead — the last two are Split Attention, item 8), guaranteeing every enemy turn can trigger the old single-beat Dodge/Parry flow (Attack), the Melee Beat Sequence framework (Slash), the hold-to-guard archetype (Flame Breath), or the Lane Selection/no-timing archetype (the five Zone skills) so all of them can be reliably playtested and compared side by side. Each new archetype gets added to this same existing override rather than a new debug flag, since this is this project's one existing enemy-side debug override mechanism. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
     [SerializeField] private bool _debugForceAttackAndSlash = true;
 
     private GameObject _activeInstance;
@@ -61,10 +61,11 @@ public class EncounterTrigger : MonoBehaviour
             {
                 if (skill.SkillName == "Flame Breath") { guids.Add(guid); break; }
             }
-            // 2026-08-20: Zone/Positional's three worked skills — same reasoning as Flame Breath
-            // above (no timing roll, so nothing about this archetype's live behavior can be forced/
-            // verified without a real player on the other end reacting with the arrow keys).
-            foreach (string zoneSkillName in new[] { "Fault Line", "Rift Line", "Crossfire" })
+            // 2026-08-20: Zone/Positional's five worked skills (three base patterns + two Split
+            // Attention patterns) — same reasoning as Flame Breath above (no timing roll, so nothing
+            // about this archetype's live behavior can be forced/verified without a real player on
+            // the other end reacting with the arrow keys).
+            foreach (string zoneSkillName in new[] { "Fault Line", "Rift Line", "Crossfire", "Overcharge", "Bolt Lance" })
             {
                 foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
                 {

@@ -52,6 +52,18 @@ to hold once real skills were authored: Row is lane-only, but Column and Diagona
 per-(Lane, Position)-cell marking to work at all — see `ZonePositionalPatternResolver.cs`. Corrected
 in place below as well. Split Attention (Part 5/1's item 8) remains unbuilt, deferred to a follow-up
 pass that reuses this same infrastructure. Addition/correction only — no version bump.
+**Errata (2026-08-20, later same session):** Group 3 finished — Split Attention built as two worked
+skills, `Ranged_ZoneBurst` ("Overcharge") and `Ranged_ZoneArrowhead` ("Bolt Lance"); see CHANGELOG.md's
+matching entry for full detail. Real/fake cells within one telegraphed shape use a FIXED geometric
+rule per pattern (not randomized per cast) — a deliberate departure from this Part's own "only one
+(or both) real" phrasing read as a coin flip, chosen so a player who learns the rule is rewarded,
+mirroring the Metronome (learnable)/Jitter (unlearnable) precedent rather than inventing a new axis.
+Resolves Part 8's own open item below ("does a fake tell get the same visual marking as a real one,
+or a distinguishable one?") — identical, by design; distinguishing them visually would give away the
+rule instead of requiring the player to learn it. Both new patterns
+(`ZonePositionalPatternType.SurroundingBurst`/`FacingArrowhead`) are computed relative to the
+target's live position at resolution time, the first in this codebase to work that way — see
+`ZonePositionalPatternResolver.cs`. Addition/correction only — no version bump.
 **Errata (2026-08-17):** Group 2 finished — Charge & Release + Sustained Pressure built together as
 planned, sharing a new `BattleHUDController.RunHoldGesture` press-and-hold-then-release primitive
 (the first mechanic in this codebase to use `PointerUpEvent` as a real release signal rather than
@@ -102,7 +114,7 @@ For each system: build one deliberately **minimal** example and one deliberately
 | Beat Sequence | **Built 2026-08-11** — `BeatSequenceRunner.cs` (Approach/Windup/Return), `BattleManager.ResolveMeleeBeatSequence`/`ResolveMeleeAttackBeatOffense`/`Defense` | Lane Movement | Slash — done, live in `SkillDatabase` | Shadow teleport-strike — not built |
 | Strike Points | Spec'd (Part 9) — not built | Beat Sequence, Lane Movement | Single Front strike | Front→Rear→Flank chain |
 | Zone/Positional | **Built 2026-08-20** — no timing roll at all (`ZonePositionalPatternType`, `BattleManager.ResolveZonePositionalAttack`, `BattleHUDController.RunZonePositionalWarning`) | Lane Movement | `Ranged_ZoneRow`/`Ranged_ZoneColumn`/`Ranged_ZoneDiagonalX` — done, live in `SkillDatabase` | — |
-| Split Attention | Deferred — reuses Zone/Positional's infrastructure unchanged, not yet built | Zone/Positional | — | — |
+| Split Attention | **Built 2026-08-20** — real/fake cells within one telegraphed shape, fixed geometric rule not randomized (`ZonePositionalPatternResolver`'s `SurroundingBurst`/`FacingArrowhead`) | Zone/Positional | `Ranged_ZoneBurst`/`Ranged_ZoneArrowhead` — done, live in `SkillDatabase` | — |
 | Charge & Release | **Built 2026-08-17** — offense, `BattleManager.ResolveChargeReleaseAttack`, shares `BattleHUDController.RunHoldGesture` with Sustained Pressure below | — | `Ranged_ChargeRelease` ("Magma Burst") — done, live in `SkillDatabase` | — |
 | Sustained Pressure | **Built 2026-08-17** — defense (new `DefenseOutcome.Guard`), `BattleHUDController.RunSustainedPressureInput`, integrated into `ResolveEnemyDamageAction`'s existing Dodge/Parry/Miss flow | — | `Ranged_SustainedPressure` ("Flame Breath") — done, live in `SkillDatabase` | — |
 | Multi-Turn Buildup | Not designed | — | — | — |
@@ -256,11 +268,20 @@ way of moving between them. A miss on EITHER instant skips this entirely and dea
    whoever's still in a marked cell regardless of intent. Player-side offense use of this archetype
    is out of scope this pass, matching every other archetype's initial single-direction ship
    pattern.
-8. **Split Attention** — build immediately after #7, not standalone — it's Zone/Positional with two
-   simultaneous marks (one or both fake), same infrastructure. **Deferred** — not built alongside
-   Zone/Positional this pass (see CHANGELOG.md's matching entry for why); should cost close to zero
-   new code once picked up, reusing `RunZonePositionalWarning`/`ResolveZonePositionalAttack`
-   unchanged apart from iterating two cell sets instead of one.
+8. **Split Attention** — **BUILT 2026-08-20** (same session, later pass) as `Ranged_ZoneBurst`
+   ("Overcharge") and `Ranged_ZoneArrowhead` ("Bolt Lance") — see CHANGELOG.md's matching entry for
+   full detail. Turned out to need less new code than even the "same infrastructure" framing implied
+   above, but not in the way originally sketched (two separate simultaneous mark GROUPS): instead,
+   `ZoneCell` gained a single `IsReal` flag, and both worked skills mark ONE telegraphed shape where
+   a fixed subset of cells is real — `RunZonePositionalWarning`/`ResolveZonePositionalAttack` needed
+   zero changes to their tell/highlight/movement logic, only `ZoneCell.IsReal` being checked once, at
+   the final damage-application step. Real/fake is a FIXED geometric rule per pattern (not
+   randomized per cast, and not literally "two simultaneous separate zones") — a deliberate,
+   user-directed departure from a coin-flip reading of "one or both real," so a player who learns
+   the rule (mirroring the existing Metronome/Jitter learnable-vs-not precedent) can play it
+   correctly every time. Both patterns are computed relative to the target's live position at
+   resolution — see Part 4/8's own "facing direction doesn't exist" note, resolved narrowly for
+   FacingArrowhead as a fixed player-side convention, not a general system.
 
 **Group 4 — small, isolate to verify no regression:**
 9. **Counter-Bait** — needs tracking "did the player just guard" as a trigger condition. Small, but
@@ -465,7 +486,7 @@ The contradiction is resolved by refinement, not reversal — see Combat_Directi
 
 ### Open items
 - Per-lane cost for "multi-select one at a time" zone skills — fixed lane count per skill, or scaling Aura cost per additional lane selected?
-- Interaction between zone-marking and Split Attention's fake tells — does a fake tell get the same visual marking as a real one, or a distinguishable one?
+- ~~Interaction between zone-marking and Split Attention's fake tells — does a fake tell get the same visual marking as a real one, or a distinguishable one?~~ **Resolved 2026-08-20:** identical, by design — distinguishing them visually would give away the fixed geometric rule instead of requiring the player to learn it (see the 2026-08-20 errata at the top of this doc and `ZoneCell.IsReal`'s own doc comment).
 - **New status needed:** the Lane Displacement Attack's failure state ("Displacement" — knockback/shove to a different lane) doesn't map onto any of the 28 statuses in the locked GDD §17 list. Needs either a mapping to an existing status or a proposal to add one — not invented here, since §17 is locked.
 
 ---

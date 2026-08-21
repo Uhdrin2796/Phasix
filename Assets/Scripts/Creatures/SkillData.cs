@@ -111,6 +111,13 @@ using UnityEngine;
 /// shared, hand-authored 13-cell table (ZonePositionalPatternResolver) rather than a per-skill
 /// field, since every DiagonalX skill marks the same X shape. See ZonePositionalPatternType's own
 /// doc comment and BattleManager.ResolveZonePositionalAttack.
+///
+/// 2026-08-20 follow-up (Split Attention, item 8): SurroundingBurst and FacingArrowhead reuse
+/// ZonePositionalPattern with NO new SkillData fields at all — both are computed relative to the
+/// locked target's live position at resolution time (ZonePositionalPatternResolver's
+/// targetLane/targetPosition parameters), not from any authored per-skill data, so simply setting
+/// the pattern enum is the entire asset. See ZonePositionalPatternType's own doc comment for the
+/// shape/rule each one uses.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject

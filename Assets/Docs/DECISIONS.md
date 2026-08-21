@@ -5183,3 +5183,69 @@ re-derive the reasoning from scratch before deciding whether to build these.
   intended final diorama this entry's migration would build toward), `[Art] Placeholder-first
   pipeline` above, `[UI] UI Toolkit chosen for runtime UI` above, CHANGELOG.md's matching 2026-08-20
   entries.
+
+### [Combat] Split Attention — fixed geometric real/fake rule instead of a coin flip; no general facing-direction system
+- **Decided:** Built Split Attention (Attack_Pattern_Directive Part 5 Group 3, item 8) as two worked
+  skills — `Ranged_ZoneBurst` ("Overcharge", `ZonePositionalPatternType.SurroundingBurst`: a 3x3 area
+  centered on the target, center + 4 diagonal corners real, 4 orthogonal edges safe, forcing an
+  actual move) and `Ranged_ZoneArrowhead` ("Bolt Lance", `FacingArrowhead`: a chevron with its tip
+  toward the target's facing direction, a solid 5-cell wall behind the target tapering through a
+  hollow throat holding the target's own cell and one safe step forward, down to a single-cell tip).
+  Both hand-authored as fixed relative-offset tables, same "hand-authored, not computed" precedent as
+  DiagonalX, dropped (not clamped) when an offset falls outside the grid near an edge.
+- **Real/fake is a fixed rule, not randomized per cast — a deliberate reversal of an early plan:**
+  The directive's own Part 5 phrasing ("only one (or both) real") reads naturally as a coin flip.
+  Building it that way was seriously considered, then rejected once traced through to its
+  consequence: a purely random split gives the player literally zero learnable signal, forever, no
+  matter how many times they encounter it — pure luck with no way to ever get better at it, which
+  sits awkwardly against this project's own combat philosophy ("skilled players are meaningfully
+  rewarded," Combat_Directive Part 4). Resolved by having each pattern's real/fake split follow a
+  FIXED geometric rule instead (SurroundingBurst: diagonals+center always real; FacingArrowhead: the
+  wall+tip always real, the throat always safe) — mirrors this project's own already-locked
+  Metronome (learnable, steady)/Jitter (deliberately unlearnable) distinction rather than inventing a
+  new axis. This also resolves Attack_Pattern_Directive Part 8's own open item ("does a fake tell get
+  the same visual marking as a real one?") — yes, identical, since distinguishing them visually would
+  give away the rule instead of requiring the player to learn it through repeated encounters.
+- **Data model — one shape with mixed real/fake cells, not two separate simultaneous zone groups:**
+  An earlier sketch (this doc's own Zone/Positional entry above, "Deferred" note) proposed Split
+  Attention as two independent marked-cell GROUPS, each entirely real or entirely fake. Once the two
+  concrete skills were actually designed, that turned out to be the wrong shape — both are a single
+  telegraphed area where a SUBSET of individual cells is real, decided by rule, not two areas. Landed
+  on a much smaller change than originally scoped: `ZoneCell` gained one `IsReal` bool (defaults
+  true, so Row/Column/DiagonalX and every existing call site are unaffected), checked in exactly one
+  place — `BattleManager.ResolveZonePositionalAttack`'s damage-application loop. Every visual method
+  (highlight blink, attacker glow, ground-strike flash) intentionally ignores it, since uniform
+  treatment IS the mechanic. Net effect: `RunZonePositionalWarning`/the tell/response window needed
+  ZERO changes at all — smaller than the "same infrastructure" framing in the directive's own build
+  order even implied.
+- **No general facing-direction system built:** FacingArrowhead needs to know which way the target
+  is "facing" to orient its tip. `Combat_Directive_v0_1_0.md` Part 9 already flagged, while designing
+  Strike Points, that "a facing-direction system... doesn't exist anywhere else in the design" — a
+  full angle/orientation system was deliberately avoided there for the same reason it's avoided here.
+  Scoped narrowly instead: since this pattern only ever targets player-side creatures (matching this
+  pass's enemy-casts/player-defends-only scope throughout Zone/Positional and Split Attention), and
+  since this side-profile diorama's left-right screen axis IS the Position axis (`GetPositionOffsetPx`
+  confirmed), "facing" is a single fixed constant — player creatures face toward increasing Position
+  — not per-creature state. If this pattern is ever needed for an enemy-side target, the offset
+  table's position signs would need mirroring (enemies face the opposite way); flagged in
+  `FacingArrowheadOffsets`'s own doc comment as a future TODO, not solved speculatively now.
+- **Target position captured before the response window, not after:** `ResolveZonePositionalAttack`
+  reads `target.LaneIndex`/`PositionIndex` once, at the very top, before `RunZonePositionalWarning`
+  runs — this is deliberate, not incidental. Both new patterns need to mark cells relative to where
+  the target WAS standing when the tell activated, not wherever they end up after reacting; computing
+  it any later would let the marked shape silently follow the player's own escape attempt.
+- **Verified:** 348/348 EditMode tests pass (8 new, hand-computed cell counts/IsReal flags/edge-
+  dropping behavior for both patterns, cross-checked against the resolver's real output). Live in
+  Play Mode: `EnemyAI.ChooseSkill` correctly buckets both new skills as `Damage` with no further
+  code change (the earlier bucketing fix checks `ZonePositionalPattern != None`, not specific enum
+  values). `manage_ui render_ui` screenshot of FacingArrowhead confirms the chevron shape reads
+  correctly against a real `BattleParticipant` on the live stage.
+- **Date:** 2026-08-20
+- **Ref:** `ZoneCell.cs` (`IsReal`), `ZonePositionalPatternType.cs`
+  (`SurroundingBurst`/`FacingArrowhead`), `ZonePositionalPatternResolver.cs`
+  (`targetLane`/`targetPosition`, `SurroundingBurstOffsets`/`FacingArrowheadOffsets`,
+  `BuildOffsetCells`), `BattleManager.cs` (`ResolveZonePositionalAttack`), `SkillData.cs` (doc
+  comment only), `Assets/Data/Skills/Ranged_ZoneBurst.asset`/`Ranged_ZoneArrowhead.asset`,
+  `SkillDatabase.asset`, `EncounterTrigger.cs`,
+  `Assets/Tests/EditMode/ZonePositionalPatternResolverTests.cs`,
+  `Attack_Pattern_Directive_v0_1_0.md` (2026-08-20 errata, later same session).
