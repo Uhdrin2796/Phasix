@@ -16,6 +16,28 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-21] Feature follow-up — final flash's fade-out reworked to true alpha fade, not a grey-blend
+- **Context:** Same-session follow-up. User: "tune the after blue timing to be faded out after blue.
+  It looks like rn its faded out after red." The just-shipped final beat reused the same rise-then-
+  settle-to-grey shape every red beat uses, so its down-slope faded back toward the same dull resting
+  grey every beat between flashes already used — reading as "the same red-flash cadence," not a
+  distinct reveal-and-vanish moment.
+- **Built:** The final flash now has its own shape, entirely separate from the shared red-beat
+  brightness curve: fade IN to solid, opaque blue over the first `ZoneRevealRiseFraction` (20%) of
+  the beat, HOLD there through `ZoneRevealHoldFraction` (60%), then fade to fully transparent alpha
+  (not blended toward `ZoneHighlightGreyColor`) over the remaining 40%. Fake cells stay at alpha 0
+  for the beat's entire duration, unchanged. Red beats (1 through N-1) are untouched.
+- **Verified:** 348/348 EditMode tests unaffected (pure visual change). Live in Play Mode, captured 5
+  screenshots across the full final-beat timeline as requested (per-frame, not just endpoints):
+  localT=0.0 (fully transparent, rise not yet started), 0.1 (~50% alpha, mid-rise), 0.3 (peak, solid
+  blue), 0.7 (~75% alpha, descending), 0.95 (~12% alpha, nearly gone) — confirms a clean fade-in,
+  hold, fade-to-nothing curve, with the identical 10-cell real-only shape held constant throughout
+  (fake cells never appear at any sampled point). `read_console` clean.
+- **Ref:** `BattleHUDController.cs` (`UpdateZonePositionalHighlightBlink`'s final-flash branch,
+  `ZoneRevealRiseFraction`, `ZoneRevealHoldFraction`).
+
+---
+
 [2026-08-21] Feature follow-up — Zone/Positional highlight: discrete flash beats, final flash reveals real cells in blue
 - **Context:** User: "the targeting mechanism should show a flashing for the whole 'target' area,
   then for the last flash it should only flash on the areas that do damage... flash red for all then

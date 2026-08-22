@@ -2909,8 +2909,19 @@ public class BattleHUDController : MonoBehaviour
     // pattern, not just Split Attention's — for Row/Column/DiagonalX (no fake cells at all) the last
     // flash simply recolors the same full shape blue, which is harmless and still reads as "impact
     // imminent."
+    //
+    // 2026-08-21 follow-up (user: "tune the after blue timing to be faded out after blue. It looks
+    // like rn its faded out after red") — the red beats' rise-then-settle-back-to-grey shape was
+    // being reused for the final blue beat too, so it read as "fading back to the same red-cadence
+    // resting state" instead of a distinct reveal. The final beat now has its own shape — fade IN
+    // to solid blue, HOLD there, then fade to fully TRANSPARENT (true alpha, not a color-blend back
+    // toward grey) — so the last thing the player sees is the real cells cleanly vanishing, not
+    // settling into the same dull resting tone every red beat uses. Fake cells stay fully
+    // transparent for this beat's entire duration, unchanged from before.
     private const int ZonePositionalFlashCount = 4;
     private static readonly Color ZoneRealRevealColor = new Color(0.2f, 0.55f, 1f); // blue
+    private const float ZoneRevealRiseFraction = 0.2f; // fraction of the final beat spent fading in
+    private const float ZoneRevealHoldFraction = 0.6f; // fraction spent held at full opacity (rise ends here, fade starts here)
 
     private void UpdateZonePositionalHighlightBlink(List<VisualElement> highlightCells, IReadOnlyList<ZoneCell> markedCells, float elapsedSeconds, float highlightSeconds)
     {
@@ -2919,20 +2930,32 @@ public class BattleHUDController : MonoBehaviour
         float flashDuration = highlightSeconds / ZonePositionalFlashCount;
         int flashIndex = Mathf.Clamp(Mathf.FloorToInt(elapsedSeconds / flashDuration), 0, ZonePositionalFlashCount - 1);
         bool isLastFlash = flashIndex == ZonePositionalFlashCount - 1;
-
-        // Rises 0->1 across the first half of this flash's own slice, falls 1->0 across the second
-        // half — one clean "flash up then down" beat, not a continuous back-and-forth shimmer.
         float localT = Mathf.Clamp01((elapsedSeconds - flashIndex * flashDuration) / flashDuration);
-        float brightness = 1f - Mathf.Abs(2f * localT - 1f);
 
-        Color revealColor = isLastFlash ? ZoneRealRevealColor : MissFlashColor;
-
-        for (int i = 0; i < highlightCells.Count && i < markedCells.Count; i++)
+        if (isLastFlash)
         {
-            bool visibleThisFlash = !isLastFlash || markedCells[i].IsReal;
-            highlightCells[i].style.backgroundColor = visibleThisFlash
-                ? Color.Lerp(ZoneHighlightGreyColor, revealColor, brightness)
-                : new Color(0f, 0f, 0f, 0f);
+            float alpha;
+            if (localT < ZoneRevealRiseFraction) alpha = Mathf.InverseLerp(0f, ZoneRevealRiseFraction, localT);
+            else if (localT < ZoneRevealHoldFraction) alpha = 1f;
+            else alpha = 1f - Mathf.InverseLerp(ZoneRevealHoldFraction, 1f, localT);
+
+            for (int i = 0; i < highlightCells.Count && i < markedCells.Count; i++)
+            {
+                Color color = ZoneRealRevealColor;
+                color.a = markedCells[i].IsReal ? alpha : 0f;
+                highlightCells[i].style.backgroundColor = color;
+            }
+        }
+        else
+        {
+            // Rises 0->1 across the first half of this flash's own slice, falls 1->0 across the
+            // second half — one clean "flash up then down" beat, not a continuous shimmer.
+            float brightness = 1f - Mathf.Abs(2f * localT - 1f);
+            Color blinkColor = Color.Lerp(ZoneHighlightGreyColor, MissFlashColor, brightness);
+            foreach (VisualElement cell in highlightCells)
+            {
+                cell.style.backgroundColor = blinkColor;
+            }
         }
     }
 
