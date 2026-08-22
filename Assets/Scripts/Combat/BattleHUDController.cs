@@ -2828,7 +2828,7 @@ public class BattleHUDController : MonoBehaviour
         while (highlightElapsed < highlightSeconds)
         {
             ApplyZonePositionalGlowPulse(attackerElement, attackerBaseColor, glowSeconds + highlightElapsed);
-            UpdateZonePositionalHighlightBlink(highlightCells, highlightElapsed);
+            UpdateZonePositionalHighlightBlink(highlightCells, markedCells, highlightElapsed, highlightSeconds);
 
             if (!hasMoved && lockedTarget != null && lockedTarget.IsAlive && Keyboard.current != null)
             {
@@ -2896,15 +2896,43 @@ public class BattleHUDController : MonoBehaviour
         element.style.backgroundColor = baseColor;
     }
 
-    /// <summary>Blinks every highlight cell between MissFlashColor and a neutral grey in sync (2026-08-20, user-directed — "let the highlight... blink or flash... between two colors, maybe the existing color and a grey"), rather than a static translucent fill. Same aggressive frequency as the attacker's own glow pulse.</summary>
-    private void UpdateZonePositionalHighlightBlink(List<VisualElement> highlightCells, float elapsedSeconds)
+    // 2026-08-21, user-directed: the highlight no longer shimmers continuously — it now beats in
+    // ZonePositionalFlashCount discrete flashes across the highlight window. Every flash except the
+    // last shows the FULL marked shape in red (identical treatment for real/fake cells, preserving
+    // the original "no distinguishing tell" design for the first N-1 beats). The FINAL flash shows
+    // ONLY the real/damaging cells, recolored blue — fake cells simply don't light up at all on that
+    // last beat. This doesn't undo the "learn the rule, don't just read the tell" design (Split
+    // Attention's real/fake split is still a fixed geometric rule, not randomized, and the reveal
+    // usually lands too late in the single-move window to act on for THIS cast) — it's a genuine
+    // confirmation moment that helps a player build the mental model faster across encounters, and
+    // rewards a very fast reaction on skilled/lucky play. Applied uniformly to every Zone/Positional
+    // pattern, not just Split Attention's — for Row/Column/DiagonalX (no fake cells at all) the last
+    // flash simply recolors the same full shape blue, which is harmless and still reads as "impact
+    // imminent."
+    private const int ZonePositionalFlashCount = 4;
+    private static readonly Color ZoneRealRevealColor = new Color(0.2f, 0.55f, 1f); // blue
+
+    private void UpdateZonePositionalHighlightBlink(List<VisualElement> highlightCells, IReadOnlyList<ZoneCell> markedCells, float elapsedSeconds, float highlightSeconds)
     {
-        if (highlightCells == null) return;
-        float t = Mathf.PingPong(elapsedSeconds * ZonePositionalGlowPulseFrequency, 1f);
-        Color blinkColor = Color.Lerp(ZoneHighlightGreyColor, MissFlashColor, t);
-        foreach (VisualElement cell in highlightCells)
+        if (highlightCells == null || markedCells == null) return;
+
+        float flashDuration = highlightSeconds / ZonePositionalFlashCount;
+        int flashIndex = Mathf.Clamp(Mathf.FloorToInt(elapsedSeconds / flashDuration), 0, ZonePositionalFlashCount - 1);
+        bool isLastFlash = flashIndex == ZonePositionalFlashCount - 1;
+
+        // Rises 0->1 across the first half of this flash's own slice, falls 1->0 across the second
+        // half — one clean "flash up then down" beat, not a continuous back-and-forth shimmer.
+        float localT = Mathf.Clamp01((elapsedSeconds - flashIndex * flashDuration) / flashDuration);
+        float brightness = 1f - Mathf.Abs(2f * localT - 1f);
+
+        Color revealColor = isLastFlash ? ZoneRealRevealColor : MissFlashColor;
+
+        for (int i = 0; i < highlightCells.Count && i < markedCells.Count; i++)
         {
-            cell.style.backgroundColor = blinkColor;
+            bool visibleThisFlash = !isLastFlash || markedCells[i].IsReal;
+            highlightCells[i].style.backgroundColor = visibleThisFlash
+                ? Color.Lerp(ZoneHighlightGreyColor, revealColor, brightness)
+                : new Color(0f, 0f, 0f, 0f);
         }
     }
 

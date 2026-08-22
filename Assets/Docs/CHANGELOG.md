@@ -16,6 +16,35 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-21] Feature follow-up — Zone/Positional highlight: discrete flash beats, final flash reveals real cells in blue
+- **Context:** User: "the targeting mechanism should show a flashing for the whole 'target' area,
+  then for the last flash it should only flash on the areas that do damage... flash red for all then
+  last flash blue for the damage positions." A refinement of Split Attention's real/fake design, not
+  a reversal — the split still follows a fixed geometric rule, not a per-cast coin flip, and the
+  reveal usually lands too late in the single-move window to act on THIS specific cast (arrives near
+  the very end of the highlight duration); its real value is helping a player build the mental model
+  faster across encounters, plus rewarding a genuinely fast reaction on skilled play.
+- **Built:** Replaced the highlight's continuous PingPong shimmer with `ZonePositionalFlashCount`
+  (4) discrete flash beats spread evenly across `highlightSeconds`. Each beat rises then falls in
+  brightness once (a clean flash, not an oscillation). Every beat except the last shows the FULL
+  marked-cell set in `MissFlashColor` (red) — identical treatment for real and fake cells, preserving
+  the original "no distinguishing tell" design for most of the window. The final beat shows ONLY
+  cells where `ZoneCell.IsReal` is true, recolored to a new blue (`ZoneRealRevealColor`) — fake
+  cells go fully transparent on that last beat rather than continuing to flash. Applied uniformly to
+  every Zone/Positional pattern (not gated to Split Attention specifically) — for Row/Column/
+  DiagonalX, which have no fake cells at all, the last beat just recolors the same full shape blue,
+  which is harmless and still reads as "impact imminent."
+- **Verified:** 348/348 EditMode tests unaffected (pure visual change, no resolution-logic touched).
+  Live in Play Mode against a real `BattleParticipant`: an early beat (elapsed=0.15s of 1.5s)
+  screenshot confirms all 12 `FacingArrowhead` cells lit red; the final beat (elapsed=1.3s)
+  screenshot confirms only the 10 real cells are blue, with a clean two-cell gap exactly where the
+  target's own cell and the one safe step toward the tip are hidden — matching the design precisely.
+  `read_console` clean throughout.
+- **Ref:** `BattleHUDController.cs` (`UpdateZonePositionalHighlightBlink`'s full rewrite,
+  `ZonePositionalFlashCount`, `ZoneRealRevealColor`, `RunZonePositionalWarning`'s updated call site).
+
+---
+
 [2026-08-20] Phase 3 — Attack Pattern Directive Group 3, item 8: Split Attention
 - **Context:** Last item in Group 3's build order — "Zone/Positional with two simultaneous marks,
   one or both fake, same infrastructure." Design converged through direct back-and-forth: first
