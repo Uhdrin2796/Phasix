@@ -3033,22 +3033,39 @@ public class BattleHUDController : MonoBehaviour
 
     /// <summary>
     /// Ground-strike impact flash (2026-08-20, user-requested — "show a strike on the areas that are
-    /// targeted even if there's no player") — plays on EVERY marked cell once the response window
-    /// closes and the attack actually resolves, regardless of whether anyone is standing there. Empty
-    /// marked cells previously got zero visual payoff at all; this makes the attack visibly land on
-    /// the ground itself, with a caught defender's own FlashStageCreatureHit (BattleManager.
+    /// targeted even if there's no player") — plays once the response window closes and the attack
+    /// actually resolves, regardless of whether anyone is standing there. Empty marked cells
+    /// previously got zero visual payoff at all; this makes the attack visibly land on the ground
+    /// itself, with a caught defender's own FlashStageCreatureHit (BattleManager.
     /// ApplyZonePositionalHit) layering on top as the extra "you got hit" signal. A bright white-hot
     /// version of the same danger-red accent family (Color.Lerp toward white) — distinct from the
     /// pre-attack telegraph's red/grey blink, reading as "impact," not "warning" — that punches in
     /// then fades and shrinks over ZoneStrikeVfxDurationSeconds. Rendered ON TOP (not sent to back,
     /// unlike the telegraph) so the flash is never hidden behind a stage creature standing in that cell.
+    ///
+    /// 2026-08-22 fix (user, live playtest of Overcharge — "after that all the positions highlight...
+    /// really im seeing an extra flicker at the end"): this originally played on the FULL markedCells
+    /// list, unfiltered — correct back when every cell got identical treatment throughout, but once
+    /// the highlight's final beat started revealing only the real cells in blue
+    /// (UpdateZonePositionalHighlightBlink), this ran immediately after and re-lit every cell
+    /// (including the ones the blue reveal had just shown as safe), directly contradicting the
+    /// reveal the player just saw. Now filters to ZoneCell.IsReal cells only, matching the reveal.
     /// </summary>
     private static readonly Color ZoneStrikeFlashColor = Color.Lerp(MissFlashColor, Color.white, 0.6f);
     private const float ZoneStrikeVfxDurationSeconds = 0.3f;
 
     public IEnumerator PlayZonePositionalGroundStrikeVfx(IReadOnlyList<ZoneCell> markedCells)
     {
-        List<VisualElement> strikeElements = BuildZonePositionalCellElements(markedCells, ZoneStrikeFlashColor);
+        var realCells = new List<ZoneCell>();
+        if (markedCells != null)
+        {
+            foreach (ZoneCell cell in markedCells)
+            {
+                if (cell.IsReal) realCells.Add(cell);
+            }
+        }
+
+        List<VisualElement> strikeElements = BuildZonePositionalCellElements(realCells, ZoneStrikeFlashColor);
         foreach (VisualElement element in strikeElements) element.BringToFront();
 
         float elapsed = 0f;

@@ -16,6 +16,29 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-22] Bugfix — ground-strike VFX was re-lighting fake cells right after the blue reveal, contradicting it
+- **Context:** User shared a screen recording of Overcharge in real play: "for overcharge it shows
+  the correct blue attack, but after that all the positions highlight" / "really im seeing an extra
+  flicker at the end." Found and confirmed via code review (no video-viewing tool available, but the
+  code made the cause unambiguous) rather than needing to inspect the recording frame by frame.
+- **Root cause:** `PlayZonePositionalGroundStrikeVfx` — the impact flash that plays immediately after
+  `RunZonePositionalWarning` completes — was built before the final-flash blue reveal existed, back
+  when every marked cell got identical treatment throughout. It still received the FULL `markedCells`
+  list, unfiltered, so it re-lit every cell (including the ones the blue reveal had just shown as
+  safe) the instant the reveal finished — directly contradicting the information the player just saw,
+  reading as a flicker/inconsistency between "only these 5 are real" and "wait, now all 9 flash."
+- **Fix:** `PlayZonePositionalGroundStrikeVfx` now filters to `ZoneCell.IsReal` cells only before
+  building the strike elements, matching what the blue reveal already showed.
+- **Verified:** 348/348 EditMode tests pass (pure filtering change, no resolution logic touched).
+  Live in Play Mode against Overcharge (`SurroundingBurst`, 9 marked cells, 5 real): screenshot
+  confirms the ground-strike flash now shows exactly the 5 real cells (center + 4 diagonals, reading
+  as an X) with the 4 orthogonal edges correctly empty — matches the blue reveal exactly, no more
+  contradiction. `read_console` clean (aside from an unrelated pre-existing "missing script"
+  scene-debris warning, confirmed present before this change and not caused by it).
+- **Ref:** `BattleHUDController.cs` (`PlayZonePositionalGroundStrikeVfx`'s new `IsReal` filter).
+
+---
+
 [2026-08-21] Feature follow-up — final flash's fade-out reworked to true alpha fade, not a grey-blend
 - **Context:** Same-session follow-up. User: "tune the after blue timing to be faded out after blue.
   It looks like rn its faded out after red." The just-shipped final beat reused the same rise-then-
