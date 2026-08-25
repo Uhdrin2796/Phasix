@@ -7,6 +7,19 @@ added Part 3.5 comparing full/hybrid/minimal migration paths with their actual r
 (DragLine/Ring are gameplay-critical and already tuned — that's the real cost of a full migration,
 not just line count), and cross-referenced the new `VFX_Pipeline_Directive_v0_1_0.md`, which is the
 detailed authoring companion to this doc's Phase 4. Addition/refinement only — no version bump.
+**Errata (2026-08-24):** Phase 1 BUILT, but at reduced scope. A full cross-folder reference audit
+(every folder's declared types grepped against real, non-comment usage elsewhere) disproved this
+doc's Part 2 assembly table: `Core`, `Creatures`, `Combat`, `Audio`, and `UI` are not a clean
+one-directional graph — they're one mutually-coupled cluster with real, compiling references
+running both ways across every one of those boundaries (e.g. `Core/BattleResult.cs` needs
+`Combat/BattleParticipant.cs` while `Combat/BattleManager.cs` needs `Core/EventBus.cs`;
+`Combat/BattleHUDController.cs` owns `UI/HudTooltip.cs` directly). Only `World` and `Player` were
+confirmed cycle-free, so only `Phasix.World.asmdef`/`Phasix.Player.asmdef` were actually built,
+split out of the still-intact `Phasix.Runtime.asmdef`. Full evidence and rationale in
+`DECISIONS.md` → `[Architecture]`. **This means Phase 3 and the whole `VFX_Pipeline_Directive`
+remain blocked** — both need `Combat` genuinely separated from `UI`, which requires real
+decoupling work (see Part 4 item 5, added below) that was deliberately not attempted inside this
+"mechanical" phase.
 **Related:** Combat_Directive_v0_1_0.md, Attack_Pattern_Directive_v0_1_0.md, VFX_Pipeline_Directive_v0_1_0.md, Phasix_TechnicalDirective_v0.1.0.html, LESSONS_LEARNED.md, KNOWN_ISSUES.md
 
 ---
@@ -47,7 +60,7 @@ A full-codebase review (18,812 lines across `Assets/Scripts`), assessed against 
 - **Interface layer** — uGUI Canvas (screen-space overlay) for genuine interface: Aura/HP readouts, menus, turn order, prompts. Ring, gauge, and drag-line are borderline (input-feedback UI that must track a Scene position) — resolved via the standard `Camera.WorldToScreenPoint()` pattern, not a custom coordinate bridge. This is a one-line, well-worn technique (same one every floating-health-bar implementation uses), not a fragile seam.
 - **Communication rule:** simulation never references rendering. Presentation (both layers) only ever reads simulation state via `EventBus` or exposed read-only state — never the reverse.
 
-### Assembly boundaries (proposed split, replacing the single `Phasix.Runtime`)
+### Assembly boundaries (original proposal — disproven by the 2026-08-24 audit, kept for reference)
 
 | Assembly | Contains | Depends on |
 |---|---|---|
@@ -60,7 +73,14 @@ A full-codebase review (18,812 lines across `Assets/Scripts`), assessed against 
 | `Phasix.UI` | Interface-layer controllers (uGUI) | Core, Combat, Creatures |
 | `Phasix.World` | Overworld (already-correct pattern) | Core, Creatures |
 
-Dependency direction is one-way, top-to-bottom in the table — this is what actually fixes the domain-reload issue: a compile error in `Phasix.UI` can no longer block `Phasix.Combat` from loading, since they're separate assemblies.
+Dependency direction was assumed one-way, top-to-bottom in the table. **This table does not match
+the live code** — see the 2026-08-24 errata above. `Core`, `Creatures`, `Combat`, `Audio`, and `UI`
+are real, mutually-coupled and cannot be split this way without behavior-changing decoupling work
+first. What was actually built: `Phasix.World` and a new `Phasix.Player` (not in this table — see
+Part 4 item 1, that judgment call resolved to giving Player its own assembly rather than folding it
+into World), both split out of the still-intact `Phasix.Runtime` (which continues to cover
+`Core`+`Creatures`+`Combat`+`Save`+`Audio`+`UI`). `Phasix.Presentation` remains unbuilt, blocked on
+Phase 3.
 
 ### File size discipline
 
@@ -70,7 +90,11 @@ No hard rule invented here (that's a team-taste call), but 3,387 and 2,562 lines
 
 ## Part 3 — Migration Plan, Phased by Risk
 
-**Phase 1 — Assembly split.** Mechanical, no behavior change, zero visual risk. Immediately fixes the documented domain-reload pain point. Do this first — it's the highest safety-to-value ratio in the whole plan and makes every subsequent phase easier to reason about (compiler-enforced boundaries catch mistakes the other phases might otherwise make silently).
+**Phase 1 — Assembly split. BUILT 2026-08-24, at reduced scope** (`Phasix.World`/`Phasix.Player`
+only — see the 2026-08-24 errata above and `DECISIONS.md` → `[Architecture]`). Mechanical, no
+behavior change, zero visual risk — true for the two assemblies actually built. The full 7/8-way
+split this section originally described is **not** mechanical, since `Core`/`Creatures`/`Combat`/
+`Audio`/`UI` are genuinely coupled; that remainder is now Part 4 item 5's job, not this phase's.
 
 **Phase 2 — Decompose the two god-files**, still with no behavior change — pure extraction/reorganization along the Part 2 boundaries, before any rendering migration touches them. Doing this first means Phase 3 touches several well-scoped files instead of two 3,000-line ones.
 
@@ -96,6 +120,7 @@ Phase 3 above assumes the **hybrid** path. Worth naming the alternatives explici
 2. **Spine vs Unity 2D Animation** — already open in Roadmap, directly blocks Phase 4's rigging work specifically.
 3. **Does ring/gauge/drag-line ever migrate, or stay UI Toolkit permanently?** Current recommendation is permanently — they're genuinely well-suited to Painter2D and migrating them buys nothing toward visual quality. Worth confirming this isn't just deferred by default.
 4. **`BattleManager`/`BattleHUDController`'s actual responsibility split** hasn't been read function-by-function yet — Phase 2 should start with an audit pass before extracting anything, since the assumption that they're already cleanly simulation/presentation-separated is unverified.
+5. **New, added 2026-08-24 — the `Core`/`Creatures`/`Combat`/`Audio`/`UI` decoupling this doc's Phase 1 assumed away.** This blocks Phase 3 and the whole `VFX_Pipeline_Directive` and needs its own deliberately-scoped plan, reviewed separately from any "mechanical" phase. Candidates identified by the 2026-08-24 audit (`DECISIONS.md` → `[Architecture]` has the full evidence): (a) `HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than misused — they're `BattleHUDController`/`BattleManager`'s own view-layer components, and reclassifying them into `Combat/` would likely resolve `Combat`↔`UI` as a pure file move; (b) `GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root/bootstrap type, not a `Core`-kernel type — it may need its own top-level assembly allowed to depend on everything, while `EventBus`/`GameStrings` stay a true dependency-free kernel (`BattleResult` needs the same treatment, or a move into `Combat/` — check what `EventBus`'s `Action<BattleResult>` signatures constrain first); (c) `Combat`↔`Audio` (`BattleHUDController`↔`AudioManager`/`BattleAudioVfxHooks`) is likely the easiest to fix via `BattleHUDController` raising an event `Audio/` subscribes to, instead of `BattleAudioVfxHooks` reaching back in directly.
 
 ---
 

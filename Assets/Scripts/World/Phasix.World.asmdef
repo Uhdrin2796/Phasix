@@ -1,10 +1,8 @@
 {
-    "name": "Phasix.Runtime",
+    "name": "Phasix.World",
     "rootNamespace": "",
     "references": [
-        "AstarPathfindingProject",
-        "Unity.InputSystem",
-        "Phasix.Player"
+        "Phasix.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

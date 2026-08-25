@@ -16,6 +16,40 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-24] Phase 1 (reduced scope) — Architecture Directive assembly split: Phasix.Player + Phasix.World
+- **Built:** `Phasix.Player.asmdef` (`Assets/Scripts/Player/`) and `Phasix.World.asmdef`
+  (`Assets/Scripts/World/`) — two new assemblies split out of `Phasix.Runtime.asmdef`.
+  `Phasix.Runtime` gained one new reference (`Phasix.Player`, needed by
+  `WildEncounterCreature.cs`'s real use of `PlayerTopDownController`). Zero file moves, zero
+  behavior change.
+- **Decided:** Descoped from the original 7-assembly proposal (`Architecture_Directive` Part 2)
+  after a full cross-folder reference audit found `Core`/`Creatures`/`Combat`/`Audio`/`UI` form one
+  mutually-coupled cluster with real (non-comment) circular references in both directions — not
+  just `Core`↔`Combat`. Untangling that cluster is a genuine behavior-risking refactor, out of
+  scope for a "mechanical" phase; see `DECISIONS.md` → `[Architecture]` for the full evidence and
+  `Architecture_Directive`'s errata for the corrected framing. Only `World` and `Player` were
+  confirmed cycle-free by the audit, so this phase built exactly those two and left everything else
+  in `Phasix.Runtime`.
+- **Verified:** 355/355 EditMode tests before and after. Play Mode: Save/Load across all 3 slots
+  (no exceptions), `CompanionAI`'s state machine survives 5 reflection-driven `Update()` calls,
+  player-teleport-into-`WildEncounterCreature` correctly loads `BattleScene_Main` additively (the
+  one path that now crosses the new `World`/`Runtime` boundary for real), a full skill action
+  resolved via `BattleManager.ResolveSkillAction` with no exceptions. Acceptance test: deliberately
+  broke a `World`-only file, confirmed `Phasix.Runtime` types (`GameManager`, `SaveSystem`) stayed
+  loaded/callable, reverted. `read_console` clean throughout.
+- **Blocked:** Phase 3 (battle rendering off UI Toolkit) and `VFX_Pipeline_Directive` remain
+  blocked — both need `Combat` genuinely separated from `UI`, which the audit showed isn't
+  achievable without real refactor work (see Next below).
+- **Next:** a separate, deliberately-scoped decoupling plan for `Core`/`Creatures`/`Combat`/
+  `Audio`/`UI` is needed before Phase 1 can be completed as originally proposed. Candidates
+  identified: `HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than
+  misused (they're `BattleHUDController`/`BattleManager`'s own view-layer components);
+  `GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root type, not
+  a `Core`-kernel type; `Combat`↔`Audio` (`BattleHUDController`/`AudioManager`/
+  `BattleAudioVfxHooks`) is likely the easiest of the three to fix via an event instead of a direct
+  back-reference. Real keyboard movement input (Input System polling path) was not verified by
+  automation per this project's own tooling limitation — still needs a short manual playthrough.
+
 [2026-08-24] Docs — Architecture/VFX Pipeline directive sync + DevStudio MCP verification workflow
 - **Context:** User supplied `phasix_doc_updates.zip`, a doc-sync package from a separate (no-push-access)
   Claude Code session's two-day design pass on battle-rendering architecture and skill VFX authoring.

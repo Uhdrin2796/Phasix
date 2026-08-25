@@ -5324,3 +5324,42 @@ re-derive the reasoning from scratch before deciding whether to build these.
   `ApplyEnemyLaneDepthScale`), `EnemyAI.cs` (`TryChooseDodgeStep`), `EnemyDifficultyTier.cs` (new),
   `BattleConfig.cs`, `PhasixRuntimeData.cs` (`enemyDifficultyTier`), `EncounterTrigger.cs`,
   `GameManager.cs`, `Assets/Data/Skills/Debuff_Snare.asset`, `Assets/Tests/EditMode/EnemyAITests.cs`.
+
+---
+
+## Architecture
+
+### [Architecture] Phase 1 assembly split descoped from 7 assemblies to 2 (Phasix.Player, Phasix.World)
+- **Decided:** Built only `Phasix.Player.asmdef` and `Phasix.World.asmdef`, split out of the single
+  `Phasix.Runtime.asmdef`. Everything else (`Core`, `Creatures`, `Combat`, `Save`, `Audio`, `UI`,
+  empty `Evolution/`) stays in `Phasix.Runtime`, unchanged except for one added reference to
+  `Phasix.Player` (needed by `WildEncounterCreature.cs`'s real use of `PlayerTopDownController`).
+- **Why:** `Architecture_Directive_v0_1_0.md` Part 2 proposed 7 assemblies in a clean
+  one-directional dependency graph, built via zero file moves. A full cross-folder reference audit
+  (grep every folder's declared types against real, non-comment usage in every other folder)
+  disproved that premise: `Core`↔`Combat`, `Core`↔`Creatures`, `Creatures`↔`Combat`,
+  `Combat`↔`Audio`, and `Combat`↔`UI` are all real, compiling two-way references, not the clean
+  one-way graph assumed. Concrete evidence: `Core/BattleResult.cs` stores `List<BattleParticipant>`
+  (Combat) while `Combat/BattleManager.cs` calls `EventBus.Raise_BattleWon` (Core);
+  `Core/GameManager.cs` calls `SaveSystem`/`PartySystem` directly; `Combat/BattleHUDController.cs`
+  owns a private `HudTooltip` instance and calls `BattleSummaryController.Instance.Show(...)` (both
+  filed under `UI/`) while also calling `AudioManager.Instance` (filed under `Audio/`), and
+  `Audio/BattleAudioVfxHooks.cs` calls back into `BattleHUDController`. Untangling this is a real,
+  behavior-risking refactor (rewiring `EventBus`/`SkillDatabase`/`BattleHUDController`/
+  `GameManager` call patterns) — doing that inside a phase explicitly pitched as "mechanical, zero
+  visual risk, highest safety-to-value ratio" would invert the reason the phase was attractive.
+  Only `World` and `Player` were confirmed cycle-free by the audit (nothing in the cluster
+  references them back; `Player` has zero Phasix references of its own).
+- **Alternatives rejected:** Building the original 7-assembly proposal as-is (impossible — Unity
+  assembly references cannot be circular, would fail to compile). Moving individual "hub" types
+  (e.g. `SkillDatabase`) to break specific cycles piecemeal — rejected because the naive version
+  just relocates the cycle (moving `SkillDatabase` into `Creatures/` to satisfy `GameManager` would
+  create a new `Core`↔`Creatures` cycle, since `Creatures` already has confirmed real
+  `EventBus.Raise_*` calls back into `Core`).
+- **Date:** 2026-08-24
+- **Revisit if:** A dedicated decoupling plan for the `Core`/`Creatures`/`Combat`/`Audio`/`UI`
+  cluster is scoped and executed — see `Architecture_Directive_v0_1_0.md` errata and
+  `CHANGELOG.md`'s 2026-08-24 entry for the specific candidates identified
+  (`HudTooltip`/`BattleSummaryController` likely mis-sorted into `UI/`; `GameManager` likely
+  belongs in a composition-root assembly, not a `Core` kernel; `Combat`↔`Audio` likely fixable via
+  an event instead of a direct call).
