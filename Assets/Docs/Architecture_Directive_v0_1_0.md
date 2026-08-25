@@ -7,6 +7,12 @@ added Part 3.5 comparing full/hybrid/minimal migration paths with their actual r
 (DragLine/Ring are gameplay-critical and already tuned — that's the real cost of a full migration,
 not just line count), and cross-referenced the new `VFX_Pipeline_Directive_v0_1_0.md`, which is the
 detailed authoring companion to this doc's Phase 4. Addition/refinement only — no version bump.
+**Errata (2026-08-24, second pass):** `Phasix.UI.asmdef` BUILT, split out of `Phasix.Runtime` by
+moving `HudTooltip.cs`/`BattleSummaryController.cs` into `Combat/` (they were the only real
+`Combat → UI` references — see `DECISIONS.md` → `[Architecture]`, "Phasix.UI extracted" entry).
+This does **not** unblock Phase 3 — `UI` alone was never the blocker, `Combat`'s own internal
+decomposition (Part 1 debt item 5) still is. `Combat`↔`Audio` and the `Core`/`GameManager`
+composition-root split (Part 4 item 5) remain open.
 **Errata (2026-08-24):** Phase 1 BUILT, but at reduced scope. A full cross-folder reference audit
 (every folder's declared types grepped against real, non-comment usage elsewhere) disproved this
 doc's Part 2 assembly table: `Core`, `Creatures`, `Combat`, `Audio`, and `UI` are not a clean
@@ -74,12 +80,14 @@ A full-codebase review (18,812 lines across `Assets/Scripts`), assessed against 
 | `Phasix.World` | Overworld (already-correct pattern) | Core, Creatures |
 
 Dependency direction was assumed one-way, top-to-bottom in the table. **This table does not match
-the live code** — see the 2026-08-24 errata above. `Core`, `Creatures`, `Combat`, `Audio`, and `UI`
-are real, mutually-coupled and cannot be split this way without behavior-changing decoupling work
+the live code** — see the 2026-08-24 errata above. `Core`, `Creatures`, `Combat`, and `Audio` are
+real, mutually-coupled and cannot be split this way without behavior-changing decoupling work
 first. What was actually built: `Phasix.World` and a new `Phasix.Player` (not in this table — see
 Part 4 item 1, that judgment call resolved to giving Player its own assembly rather than folding it
-into World), both split out of the still-intact `Phasix.Runtime` (which continues to cover
-`Core`+`Creatures`+`Combat`+`Save`+`Audio`+`UI`). `Phasix.Presentation` remains unbuilt, blocked on
+into World), split out first; then `Phasix.UI` — the `Combat↔UI` edge turned out to be just
+`HudTooltip`/`BattleSummaryController`, moved into `Combat/` to resolve it (see the second
+2026-08-24 errata and `DECISIONS.md` → `[Architecture]`). `Phasix.Runtime` now covers only
+`Core`+`Creatures`+`Combat`+`Save`+`Audio`. `Phasix.Presentation` remains unbuilt, blocked on
 Phase 3.
 
 ### File size discipline
@@ -120,7 +128,7 @@ Phase 3 above assumes the **hybrid** path. Worth naming the alternatives explici
 2. **Spine vs Unity 2D Animation** — already open in Roadmap, directly blocks Phase 4's rigging work specifically.
 3. **Does ring/gauge/drag-line ever migrate, or stay UI Toolkit permanently?** Current recommendation is permanently — they're genuinely well-suited to Painter2D and migrating them buys nothing toward visual quality. Worth confirming this isn't just deferred by default.
 4. **`BattleManager`/`BattleHUDController`'s actual responsibility split** hasn't been read function-by-function yet — Phase 2 should start with an audit pass before extracting anything, since the assumption that they're already cleanly simulation/presentation-separated is unverified.
-5. **New, added 2026-08-24 — the `Core`/`Creatures`/`Combat`/`Audio`/`UI` decoupling this doc's Phase 1 assumed away.** This blocks Phase 3 and the whole `VFX_Pipeline_Directive` and needs its own deliberately-scoped plan, reviewed separately from any "mechanical" phase. Candidates identified by the 2026-08-24 audit (`DECISIONS.md` → `[Architecture]` has the full evidence): (a) `HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than misused — they're `BattleHUDController`/`BattleManager`'s own view-layer components, and reclassifying them into `Combat/` would likely resolve `Combat`↔`UI` as a pure file move; (b) `GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root/bootstrap type, not a `Core`-kernel type — it may need its own top-level assembly allowed to depend on everything, while `EventBus`/`GameStrings` stay a true dependency-free kernel (`BattleResult` needs the same treatment, or a move into `Combat/` — check what `EventBus`'s `Action<BattleResult>` signatures constrain first); (c) `Combat`↔`Audio` (`BattleHUDController`↔`AudioManager`/`BattleAudioVfxHooks`) is likely the easiest to fix via `BattleHUDController` raising an event `Audio/` subscribes to, instead of `BattleAudioVfxHooks` reaching back in directly.
+5. **New, added 2026-08-24 — the `Core`/`Creatures`/`Combat`/`Audio` decoupling this doc's Phase 1 assumed away.** This blocks Phase 3 and the whole `VFX_Pipeline_Directive` and needs its own deliberately-scoped plan, reviewed separately from any "mechanical" phase. Candidates identified by the 2026-08-24 audit (`DECISIONS.md` → `[Architecture]` has the full evidence): (a) ~~`HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than misused~~ — **DONE 2026-08-24**, moved into `Combat/`, `Phasix.UI.asmdef` built; (b) `GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root/bootstrap type, not a `Core`-kernel type — it may need its own top-level assembly allowed to depend on everything, while `EventBus`/`GameStrings` stay a true dependency-free kernel (`BattleResult` needs the same treatment, or a move into `Combat/` — check what `EventBus`'s `Action<BattleResult>` signatures constrain first); (c) `Combat`↔`Audio` (`BattleHUDController`↔`AudioManager`/`BattleAudioVfxHooks`) is likely the easiest of the two remaining to fix via `BattleHUDController` raising an event `Audio/` subscribes to, instead of `BattleAudioVfxHooks` reaching back in directly — but note it won't produce a new extractable assembly until (b) is also done, since `Audio` still needs `Creatures` types that stay bundled with `Combat` until then.
 
 ---
 

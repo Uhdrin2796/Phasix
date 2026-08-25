@@ -5363,3 +5363,29 @@ re-derive the reasoning from scratch before deciding whether to build these.
   (`HudTooltip`/`BattleSummaryController` likely mis-sorted into `UI/`; `GameManager` likely
   belongs in a composition-root assembly, not a `Core` kernel; `Combat`↔`Audio` likely fixable via
   an event instead of a direct call).
+
+### [Architecture] Phasix.UI extracted by moving HudTooltip/BattleSummaryController into Combat/
+- **Decided:** Built `Phasix.UI.asmdef` (`OverworldMenuController.cs`, `SkillWebEdgeVisual.cs`
+  only), split out of `Phasix.Runtime`. Moved `HudTooltip.cs` and `BattleSummaryController.cs` from
+  `UI/` into `Combat/` first (via `AssetDatabase.MoveAsset`, preserving GUIDs — not a raw filesystem
+  move, since `BattleSummaryController` is a `MonoBehaviour` already attached to a GameObject in
+  `BattleScene_Main` and a raw move would have orphaned that reference).
+- **Why:** Re-investigation of the `Combat`↔`UI` cycle found `Combat`'s only real reference into
+  `UI/` was exactly those two files (`BattleHUDController.cs` owning a `HudTooltip` instance,
+  `BattleManager.cs:2566` calling `BattleSummaryController.Instance.Show(...)`) — and nothing else
+  in the codebase referenced `UI/` at all. Both files read as `BattleHUDController`/`BattleManager`'s
+  own view-layer components (same convention, same lifecycle, same scene) rather than independent
+  `UI`-layer consumers of `Combat`, so relocating them resolves the cycle with a pure file move —
+  `HudTooltip.cs` itself has zero Phasix type dependencies, and `OverworldMenuController.cs`
+  (staying in `UI/`) picking up a `HudTooltip` reference from `Combat/` afterward is harmless, since
+  `UI → Combat` was already the established, expected direction for everything else it needs
+  (`SkillDatabase`, `BattleHUDController`, `SkillTreeColor`, etc.). Chosen to do before the
+  `Combat`↔`Audio` fix (discussed as "do first" in the prior entry) because this one immediately
+  unlocks a real extractable assembly, while `Combat`↔`Audio` doesn't yet — `Audio` still needs
+  `Creatures` types, which stay bundled with `Combat` in `Phasix.Runtime` until the larger
+  `Core`↔`Creatures`↔`Combat` cycle is separately resolved.
+- **Alternatives rejected:** Doing `Combat`↔`Audio` first as originally sequenced — rejected once
+  re-investigation showed it wouldn't produce a new assembly on its own, unlike this one.
+- **Date:** 2026-08-24
+- **Revisit if:** Never for this specific fix — it's complete. The remaining `Combat`↔`Audio` and
+  `Core`/`GameManager` composition-root work stays tracked under the entry above.

@@ -16,6 +16,35 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-24] Phase 1b — Architecture Directive assembly split: Phasix.UI extracted
+- **Built:** `Phasix.UI.asmdef` (`Assets/Scripts/UI/`), split out of `Phasix.Runtime.asmdef`.
+  Contains only `OverworldMenuController.cs` and `SkillWebEdgeVisual.cs` — `HudTooltip.cs` and
+  `BattleSummaryController.cs` were moved (via `AssetDatabase.MoveAsset`, GUIDs preserved) from
+  `UI/` into `Combat/` first, since they're really `BattleHUDController`/`BattleManager`'s own
+  view-layer components, not independent `UI`-layer consumers. `Phasix.Runtime.asmdef` needed no
+  reference changes. Zero behavior change; the two file moves are the only content change.
+- **Decided:** Did the `Combat`↔`UI` decoupling before `Combat`↔`Audio`, reversing the order first
+  discussed — re-investigation found `Combat`'s *only* real reference into `UI/` was
+  `HudTooltip`/`BattleSummaryController` (3 call sites total), and nothing else anywhere in the
+  codebase referenced `UI/` at all, so fixing it immediately unlocks a real, extractable assembly —
+  unlike the `Combat`↔`Audio` cycle, which stays blocked until the larger `Core`↔`Creatures`↔
+  `Combat` cycle is also resolved (Audio still needs `Creatures` types, which remain bundled with
+  `Combat` in `Phasix.Runtime`). See `DECISIONS.md` → `[Architecture]` for the full reasoning.
+- **Verified:** 355/355 EditMode tests before and after. Play Mode: `OverworldMenuController`
+  (now `Phasix.UI`) successfully constructs a real `HudTooltip` instance (now `Phasix.Runtime`) —
+  confirmed both via reflection and structurally in the live visual tree (`manage_ui
+  get_visual_tree` shows the `hud-tooltip` Label element correctly built into
+  `UIRoot_OverworldMenu`'s document). `BattleSummaryController.Instance.Show(...)` — the exact call
+  site `BattleManager.cs:2566` uses — invoked with no exception post-move. Acceptance test:
+  deliberately broke `SkillWebEdgeVisual.cs` (`Phasix.UI`-only), confirmed `Phasix.Runtime` types
+  (`GameManager`, `BattleManager`) stayed loaded/callable, reverted. `read_console` clean
+  throughout.
+- **Blocked:** Phase 3 / `VFX_Pipeline_Directive` remain blocked — `UI` alone wasn't their blocker;
+  `Combat`'s own internal decomposition (Architecture_Directive Part 1 debt item 5) is.
+- **Next:** `Combat`↔`Audio` (smaller, no new assembly yet) and the `Core`/`GameManager`
+  composition-root split (largest, unlocks the rest) remain as separate follow-ups — see
+  `Architecture_Directive_v0_1_0.md` Part 4 item 5.
+
 [2026-08-24] Phase 1 (reduced scope) — Architecture Directive assembly split: Phasix.Player + Phasix.World
 - **Built:** `Phasix.Player.asmdef` (`Assets/Scripts/Player/`) and `Phasix.World.asmdef`
   (`Assets/Scripts/World/`) — two new assemblies split out of `Phasix.Runtime.asmdef`.
