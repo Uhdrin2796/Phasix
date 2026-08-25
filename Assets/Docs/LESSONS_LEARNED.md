@@ -693,6 +693,17 @@ Issues that required significant investigation to resolve. Read before debugging
 - **Fix:** Ask the user to click into/focus the Unity Editor window (resolves issue 1). Create a trivial empty stub for any type still blocking full-assembly compilation, even if it's out of scope for the current task — the project's own "Stub rule" (in `Evolution_System_Directive_v1_1_0.md`) explicitly sanctions this: forward-referenced types only need to exist, not be fully implemented, for the rest of the assembly to compile.
 - **Date:** July 2026
 - **Key rule:** `read_console` showing "only N pre-existing errors" is not proof the rest of your new code loaded successfully — in a project with no assembly definition splitting, any error anywhere blocks domain reload for everything. Cross-check with `unity_reflect search` (or an actual asset-creation attempt) before trusting a clean-looking error diff. Also check `editor.is_focused` in `mcpforunity://editor/state` before assuming a stuck domain reload is a code problem.
+- **Update (2026-08-24/25):** The "no assembly definition splitting" premise is now only partially
+  true. `Phasix.Runtime.asmdef` was split into 4 assemblies (`Phasix.Runtime`, `Phasix.Player`,
+  `Phasix.World`, `Phasix.UI` — see `CHANGELOG.md`'s Phase 1/1b/1c entries and `DECISIONS.md` →
+  `[Architecture]`). A compile error confined to `Player`, `World`, or `UI` no longer blocks
+  `Phasix.Runtime` from reloading — verified directly, three times, by deliberately breaking a file
+  in each and confirming `GameManager`/`BattleManager`/`SaveSystem` stayed loaded and callable. But
+  `Core`, `Creatures`, `Combat`, `Save`, and `Audio` are still all bundled inside `Phasix.Runtime`
+  itself (a real, confirmed circular-reference cluster prevents splitting them further today), so
+  the original rule still fully applies *within* that group — an error in, say, `Combat` still
+  blocks `Core`, `Creatures`, `Save`, and `Audio` exactly as before. Don't assume the blanket rule
+  is gone; it's just narrower now.
 
 ### [Tooling] SceneView.RepaintAll() called from inside OnDrawGizmosSelected does not chain into continuous repaints
 - **Symptom:** `CompanionAI`'s new per-pattern Scene-view gizmos (Orbit/HiddenShadow/Blink)
