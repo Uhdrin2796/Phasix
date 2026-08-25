@@ -16,6 +16,37 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-25] Phase 1c — Architecture Directive: Combat↔Audio back-reference closed
+- **Built:** `Combat/BattleVfxEventHooks.cs` — new static class, same
+  `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` sole-subscriber pattern
+  `Combat/SkillTreeUnlockSystem.cs` already establishes, subscribing to `EventBus.OnBattleWon`/
+  `OnBattleLost`/`OnBondMilestoneReached`/`OnPhasixCaptured` and calling
+  `BattleHUDController.Instance?.PlayXVfx(...)` — the exact 4 calls `Audio/BattleAudioVfxHooks.cs`
+  used to make directly. Trimmed those 4 lines out of `BattleAudioVfxHooks.cs` (its `AudioManager`
+  calls are untouched) and corrected its class doc comment. Added 4 EditMode tests
+  (`BattleVfxEventHooksTests.cs`) confirming the handlers don't throw with
+  `BattleHUDController.Instance` null, mirroring `SkillTreeUnlockSystemTests.cs`'s existing pattern.
+- **Decided:** New file in `Combat/` rather than having `BattleHUDController` subscribe to these
+  events itself in its own `Awake`/`OnDestroy` — matches the codebase's own established "permanent
+  static subscriber" convention (per `SkillTreeUnlockSystem.cs`'s own doc comment, which explicitly
+  frames itself as establishing that pattern) and avoids touching `BattleHUDController.cs`
+  (3,387 lines, flagged in `Architecture_Directive_v0_1_0.md` Part 1 debt item 5 as the project's
+  single highest-risk file by surface area) for a change that doesn't need to touch it at all.
+- **Verified:** 359/359 EditMode tests (355 + 4 new). Play Mode, with a real `BattleScene_Main`
+  loaded: reflection on `EventBus.OnBattleWon`/`OnPhasixCaptured`'s invocation lists confirmed
+  exactly 2 subscribers each (`BattleAudioVfxHooks` + `BattleVfxEventHooks`) — direct proof both
+  halves of the split are wired, not inferred from side effects. Fired `Raise_BattleWon`/
+  `Raise_BondMilestoneReached`/`Raise_PhasixCaptured` for real with a live `BattleHUDController`
+  present — no exceptions — and confirmed `BattleHUDController`'s `_vfxController` field is a real,
+  non-null `CombatVfxController` (not silently no-opping on a null internal reference).
+  `read_console` clean throughout.
+- **Not built:** `Phasix.Audio.asmdef` — as flagged before starting this fix, `Audio` still needs
+  `Creatures` types for its other 6 event handlers, so it stays bundled in `Phasix.Runtime` until
+  the `GameManager` composition-root split (the one remaining item) is done. This was pure
+  decoupling/code-quality work, no new assembly.
+- **Next:** the `GameManager`/`Core` composition-root split — Architecture_Directive Part 4 item
+  5(b) — is the one remaining piece, and the largest.
+
 [2026-08-24] Phase 1b — Architecture Directive assembly split: Phasix.UI extracted
 - **Built:** `Phasix.UI.asmdef` (`Assets/Scripts/UI/`), split out of `Phasix.Runtime.asmdef`.
   Contains only `OverworldMenuController.cs` and `SkillWebEdgeVisual.cs` — `HudTooltip.cs` and

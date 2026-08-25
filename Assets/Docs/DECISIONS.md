@@ -5389,3 +5389,32 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Date:** 2026-08-24
 - **Revisit if:** Never for this specific fix — it's complete. The remaining `Combat`↔`Audio` and
   `Core`/`GameManager` composition-root work stays tracked under the entry above.
+
+### [Architecture] Combat↔Audio back-reference closed via Combat/BattleVfxEventHooks.cs
+- **Decided:** Built `Combat/BattleVfxEventHooks.cs`, a new static class subscribing to
+  `EventBus.OnBattleWon`/`OnBattleLost`/`OnBondMilestoneReached`/`OnPhasixCaptured` and calling
+  `BattleHUDController.Instance?.PlayXVfx(...)` — the 4 calls `Audio/BattleAudioVfxHooks.cs` used to
+  make directly. Trimmed those calls out of `BattleAudioVfxHooks.cs`, leaving it audio-only.
+- **Why:** `BattleAudioVfxHooks.cs` (in `Audio/`) calling into `BattleHUDController` (in `Combat/`)
+  was the entire real `Audio → Combat` reference — re-verified directly against the earlier
+  full-audit hit that also listed `PlaceholderSkillResolver`/`PrimalTypeChart`, both confirmed to be
+  comment/tooltip-string false positives, not real references. Combined with the pre-existing
+  `Combat → Audio` edge (`BattleHUDController` calling `AudioManager.PlayVolleyRingPromoted`, a
+  legitimate one-way service call, left untouched), this closes the cycle.
+- **Alternatives rejected:** Having `BattleHUDController` subscribe to these events itself in its
+  own `Awake`/`OnDestroy` — rejected because it doesn't match this codebase's own established
+  "permanent static subscriber" convention (`Combat/SkillTreeUnlockSystem.cs`'s own doc comment
+  explicitly frames itself as establishing that pattern for exactly this kind of subscriber with no
+  natural `MonoBehaviour` home), and because it would mean editing `BattleHUDController.cs`
+  (3,387 lines, the project's flagged highest-risk file) for a change that doesn't need to touch it.
+- **Verified:** 359/359 EditMode tests. Reflection on `EventBus`'s event fields confirmed both
+  `BattleAudioVfxHooks` and `BattleVfxEventHooks` are correctly subscribed (2 invocation-list
+  entries per event, not inferred from side effects). Fired the real events with a live
+  `BattleHUDController` present in `BattleScene_Main` — no exceptions, `_vfxController` confirmed
+  non-null so the VFX calls aren't silently no-opping.
+- **Does not produce a new assembly:** `Audio` still needs `Creatures` types (via its other 6
+  `EventBus` handlers), which stay bundled with `Combat` in `Phasix.Runtime` until the `GameManager`
+  composition-root split below is done. Pure decoupling, no `Phasix.Audio.asmdef` yet.
+- **Date:** 2026-08-25
+- **Revisit if:** The `GameManager` composition-root split lands and `Audio` becomes worth
+  extracting as its own assembly — at that point this fix is already the prerequisite it needed.

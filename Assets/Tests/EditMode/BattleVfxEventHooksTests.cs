@@ -1,0 +1,46 @@
+using System.Collections.Generic;
+using NUnit.Framework;
+
+namespace Phasix.Tests.EditMode
+{
+    /// <summary>
+    /// Covers BattleVfxEventHooks' public handlers (2026-08-25, split out of
+    /// Audio/BattleAudioVfxHooks.cs to close the Combat&lt;-&gt;Audio assembly cycle — see
+    /// DECISIONS.md -> [Architecture]). EditMode tests run with no scene loaded, so
+    /// BattleHUDController.Instance is always null here — these confirm the null-conditional guard
+    /// holds and none of the handlers throw when called directly, the same condition
+    /// SkillTreeUnlockSystemTests.cs already covers for the sibling static-subscriber pattern.
+    /// </summary>
+    public class BattleVfxEventHooksTests
+    {
+        private static PhasixRuntimeData MakePhasix() => new PhasixRuntimeData("test-node-guid");
+
+        [Test]
+        public void OnBattleWon_NoBattleHUDController_DoesNotThrow()
+        {
+            var result = new BattleResult(true, new List<BattleParticipant>(), new List<BattleParticipant>());
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleWon(result));
+        }
+
+        [Test]
+        public void OnBattleLost_NoBattleHUDController_DoesNotThrow()
+        {
+            var result = new BattleResult(false, new List<BattleParticipant>(), new List<BattleParticipant>());
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleLost(result));
+        }
+
+        [Test]
+        public void OnBondMilestoneReached_NoBattleHUDController_DoesNotThrow()
+        {
+            var phasix = MakePhasix();
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBondMilestoneReached(phasix, BondZone.Familiar));
+        }
+
+        [Test]
+        public void OnPhasixCaptured_NoBattleHUDController_DoesNotThrow()
+        {
+            var phasix = MakePhasix();
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnPhasixCaptured(phasix));
+        }
+    }
+}

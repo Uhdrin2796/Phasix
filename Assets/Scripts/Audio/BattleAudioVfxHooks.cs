@@ -1,15 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// Sole EventBus subscriber for battle audio/VFX (2026-08-10 — Phase 3 close-out pass). Fans out
-/// to AudioManager (all 9 events) and, for the single-participant-or-none events only,
-/// BattleHUDController's whole-Stage VFX passthroughs (per-hit projectile/flash VFX instead goes
-/// through BattleHUDController.PlayHitVfx, called directly by BattleManager — see
-/// CombatVfxController.cs's class doc comment for why). Kept as the sole subscriber here rather
-/// than a battle-scene-local component because some of these events (OnBondMilestoneReached) can
-/// fire from OUTSIDE battle entirely — every BattleHUDController.Instance call below is
-/// null-conditional for exactly that reason (BattleHUDController only exists while
-/// BattleScene_Main is loaded).
+/// Sole EventBus subscriber for battle audio (2026-08-10 — Phase 3 close-out pass; trimmed
+/// 2026-08-25 to audio-only — see Combat/BattleVfxEventHooks.cs's class doc comment). Fans out to
+/// AudioManager (all 9 events). The whole-Stage VFX passthroughs this class used to also drive
+/// directly on BattleHUDController were split into Combat/BattleVfxEventHooks.cs, since a
+/// Combat-folder file calling back into an Audio-folder file created a real assembly cycle once
+/// Phasix.Combat/Phasix.Audio needed to become separate assemblies — see DECISIONS.md ->
+/// [Architecture]. Per-hit projectile/flash VFX still goes through BattleHUDController.PlayHitVfx,
+/// called directly by BattleManager — see CombatVfxController.cs's class doc comment for why.
 ///
 /// GDD §27 "Audio Design" is still tagged Pending in its entirety ("Design work not yet started")
 /// — every clip played here is placeholder-quality generated audio (AudioCueCatalog), not real
@@ -37,17 +36,9 @@ public static class BattleAudioVfxHooks
         EventBus.OnPhasixCaptured += OnPhasixCaptured;
     }
 
-    private static void OnBattleWon(BattleResult result)
-    {
-        AudioManager.Instance?.PlayBattleWon();
-        BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: true);
-    }
+    private static void OnBattleWon(BattleResult result) => AudioManager.Instance?.PlayBattleWon();
 
-    private static void OnBattleLost(BattleResult result)
-    {
-        AudioManager.Instance?.PlayBattleLost();
-        BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: false);
-    }
+    private static void OnBattleLost(BattleResult result) => AudioManager.Instance?.PlayBattleLost();
 
     private static void OnBattleFled(BattleResult result) => AudioManager.Instance?.PlayBattleFled();
 
@@ -63,17 +54,9 @@ public static class BattleAudioVfxHooks
         AudioManager.Instance?.PlayHitImpact(phasix.speciesData != null ? phasix.speciesData.PrimalType : PrimalType.Fire);
     }
 
-    private static void OnBondMilestoneReached(PhasixRuntimeData phasix, BondZone zone)
-    {
-        AudioManager.Instance?.PlayBondMilestone();
-        BattleHUDController.Instance?.PlayBondMilestoneVfx();
-    }
+    private static void OnBondMilestoneReached(PhasixRuntimeData phasix, BondZone zone) => AudioManager.Instance?.PlayBondMilestone();
 
     private static void OnEvolved(PhasixRuntimeData phasix, PhasixData newForm) => AudioManager.Instance?.PlayEvolved();
 
-    private static void OnPhasixCaptured(PhasixRuntimeData phasix)
-    {
-        AudioManager.Instance?.PlayCaptured();
-        BattleHUDController.Instance?.PlayCaptureVfx();
-    }
+    private static void OnPhasixCaptured(PhasixRuntimeData phasix) => AudioManager.Instance?.PlayCaptured();
 }
