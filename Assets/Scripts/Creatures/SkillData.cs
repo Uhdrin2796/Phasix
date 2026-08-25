@@ -118,6 +118,18 @@ using UnityEngine;
 /// targetLane/targetPosition parameters), not from any authored per-skill data, so simply setting
 /// the pattern enum is the entire asset. See ZonePositionalPatternType's own doc comment for the
 /// shape/rule each one uses.
+///
+/// 2026-08-21 follow-up (Zone/Positional offense direction + Root): _hasForcedAppliedStatus/
+/// _forcedAppliedStatus is a SEVENTH structural field. PlaceholderSkillResolver's tree->status
+/// heuristic (GetStatusCategory) can never actually select a Physical-category status (Bleed,
+/// Fracture, Weaken, Stun, Root, Exposed, Slow) — its Physical branch is unreachable dead code,
+/// since it only runs when IsDamageSkill(tree) is false, but IsDamageSkill is exactly what's true
+/// for the Force/Guard-attribute trees that would otherwise map to Physical. A skill whose entire
+/// purpose is applying a specific status (e.g. a "hold them in place" Root skill) therefore needs
+/// an explicit override, same tier as BuiltInMove/ZonePositionalPattern: ForcedAppliedStatus, when
+/// set, is checked BEFORE PlaceholderSkillResolver in both ResolveSkillAction's and
+/// ResolveEnemyDebuffAction's status branch, falling back to the heuristic unchanged when unset —
+/// zero behavior change for every existing skill.
 /// </summary>
 [CreateAssetMenu(fileName = "New SkillData", menuName = "Phasix/Combat/Skill Data (Stub)", order = 10)]
 public class SkillData : ScriptableObject
@@ -257,6 +269,17 @@ public class SkillData : ScriptableObject
              "0 (default) falls back to BeatSequenceConfig.ZonePositionalHighlightSeconds.")]
     [SerializeField] private float _zonePositionalHighlightSeconds;
 
+    [Header("Forced Applied Status (overrides PlaceholderSkillResolver's tree/status heuristic)")]
+    [Tooltip("When true, this skill always applies _forcedAppliedStatus instead of whatever " +
+             "PlaceholderSkillResolver's tree-based heuristic would have picked. Needed because " +
+             "that heuristic can never actually select a Physical-category status (see this " +
+             "file's own class doc comment) — a purpose-built status skill (e.g. Root) has to " +
+             "override it explicitly. Ignored for damage-dealing trees.")]
+    [SerializeField] private bool _hasForcedAppliedStatus;
+
+    [Tooltip("The status applied when _hasForcedAppliedStatus is true. Ignored otherwise.")]
+    [SerializeField] private StatusEffectType _forcedAppliedStatus;
+
     public string SkillName => _skillName;
     public string Description => _description;
     public SkillTreeType TreeType => _treeType;
@@ -281,4 +304,5 @@ public class SkillData : ScriptableObject
     public IReadOnlyList<int> ZonePositionalColumnPositions => _zonePositionalColumnPositions;
     public float ZonePositionalGlowSeconds => _zonePositionalGlowSeconds;
     public float ZonePositionalHighlightSeconds => _zonePositionalHighlightSeconds;
+    public StatusEffectType? ForcedAppliedStatus => _hasForcedAppliedStatus ? _forcedAppliedStatus : (StatusEffectType?)null;
 }

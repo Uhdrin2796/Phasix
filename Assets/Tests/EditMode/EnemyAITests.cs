@@ -258,5 +258,130 @@ namespace Phasix.Tests.EditMode
             Object.DestroyImmediate(charge);
             Object.DestroyImmediate(database);
         }
+
+        // --- TryChooseDodgeStep (2026-08-21, Zone/Positional offense-direction follow-up) ---
+
+        private static BattleParticipant MakeDefender(int instinct = 10, int lane = 4, int position = 3)
+        {
+            var phasix = new PhasixRuntimeData("test-defender") { baseStats = new StatBlock { Vitality = 20, Aura = 10, Instinct = instinct } };
+            var participant = new BattleParticipant(phasix, isPlayerSide: false) { LaneIndex = lane, PositionIndex = position };
+            return participant;
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_NullDefender_ReturnsFalse()
+        {
+            bool result = EnemyAI.TryChooseDodgeStep(null, new List<ZoneCell>(), new List<BattleParticipant>(),
+                EnemyDifficultyTier.AlwaysDodges, out int laneDelta, out int positionDelta);
+
+            Assert.IsFalse(result);
+            Assert.AreEqual(0, laneDelta);
+            Assert.AreEqual(0, positionDelta);
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_DeadDefender_ReturnsFalse()
+        {
+            BattleParticipant defender = MakeDefender();
+            defender.ApplyDamage(defender.MaxHP);
+
+            bool result = EnemyAI.TryChooseDodgeStep(defender, new List<ZoneCell>(), new List<BattleParticipant> { defender },
+                EnemyDifficultyTier.AlwaysDodges, out _, out _);
+
+            Assert.IsFalse(result);
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_Rooted_NeverMoves()
+        {
+            BattleParticipant defender = MakeDefender();
+            defender.ApplyStatus(StatusEffectType.Root, durationTurns: 2);
+            var defendingSide = new List<BattleParticipant> { defender };
+            var markedCells = new List<ZoneCell> { new ZoneCell(defender.LaneIndex, defender.PositionIndex) };
+
+            // AlwaysDodges would guarantee a successful roll if the root check were missing —
+            // asserting False here specifically proves Root is checked before the roll, not just
+            // that no safe cell happened to exist.
+            for (int i = 0; i < 20; i++)
+            {
+                bool result = EnemyAI.TryChooseDodgeStep(defender, markedCells, defendingSide,
+                    EnemyDifficultyTier.AlwaysDodges, out _, out _);
+                Assert.IsFalse(result);
+            }
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_AlwaysDodgesTier_PicksFirstSafeOrthogonalCandidate()
+        {
+            BattleParticipant defender = MakeDefender(lane: 4, position: 3);
+            var defendingSide = new List<BattleParticipant> { defender };
+            var markedCells = new List<ZoneCell> { new ZoneCell(4, 3) }; // only the defender's own cell is marked
+
+            bool result = EnemyAI.TryChooseDodgeStep(defender, markedCells, defendingSide,
+                EnemyDifficultyTier.AlwaysDodges, out int laneDelta, out int positionDelta);
+
+            Assert.IsTrue(result);
+            // Fixed candidate order (lane+1, lane-1, position+1, position-1) — lane+1 is unmarked
+            // and unoccupied, so it's picked first.
+            Assert.AreEqual(1, laneDelta);
+            Assert.AreEqual(0, positionDelta);
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_AllFourNeighborsMarkedReal_ReturnsFalse()
+        {
+            BattleParticipant defender = MakeDefender(lane: 4, position: 3);
+            var defendingSide = new List<BattleParticipant> { defender };
+            var markedCells = new List<ZoneCell>
+            {
+                new ZoneCell(5, 3), new ZoneCell(3, 3), new ZoneCell(4, 4), new ZoneCell(4, 2),
+            };
+
+            bool result = EnemyAI.TryChooseDodgeStep(defender, markedCells, defendingSide,
+                EnemyDifficultyTier.AlwaysDodges, out int laneDelta, out int positionDelta);
+
+            Assert.IsFalse(result);
+            Assert.AreEqual(0, laneDelta);
+            Assert.AreEqual(0, positionDelta);
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_FirstCandidateOccupied_SkipsToNextSafeCandidate()
+        {
+            BattleParticipant defender = MakeDefender(lane: 4, position: 3);
+            BattleParticipant ally = MakeDefender(lane: 5, position: 3); // occupies the lane+1 candidate
+            var defendingSide = new List<BattleParticipant> { defender, ally };
+            var markedCells = new List<ZoneCell> { new ZoneCell(4, 3) };
+
+            bool result = EnemyAI.TryChooseDodgeStep(defender, markedCells, defendingSide,
+                EnemyDifficultyTier.AlwaysDodges, out int laneDelta, out int positionDelta);
+
+            Assert.IsTrue(result);
+            Assert.AreEqual(-1, laneDelta); // lane+1 was occupied, lane-1 is the next candidate in order
+            Assert.AreEqual(0, positionDelta);
+        }
+
+        [Test]
+        public void TryChooseDodgeStep_EliteTier_DodgesMoreOftenThanWeakTier()
+        {
+            const int trials = 300;
+            int weakSuccesses = 0;
+            int eliteSuccesses = 0;
+
+            for (int i = 0; i < trials; i++)
+            {
+                BattleParticipant weakDefender = MakeDefender(instinct: 10);
+                if (EnemyAI.TryChooseDodgeStep(weakDefender, new List<ZoneCell>(), new List<BattleParticipant> { weakDefender },
+                        EnemyDifficultyTier.Weak, out _, out _))
+                    weakSuccesses++;
+
+                BattleParticipant eliteDefender = MakeDefender(instinct: 10);
+                if (EnemyAI.TryChooseDodgeStep(eliteDefender, new List<ZoneCell>(), new List<BattleParticipant> { eliteDefender },
+                        EnemyDifficultyTier.Elite, out _, out _))
+                    eliteSuccesses++;
+            }
+
+            Assert.Greater(eliteSuccesses, weakSuccesses);
+        }
     }
 }

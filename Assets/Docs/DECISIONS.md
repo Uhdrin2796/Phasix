@@ -5249,3 +5249,78 @@ re-derive the reasoning from scratch before deciding whether to build these.
   `SkillDatabase.asset`, `EncounterTrigger.cs`,
   `Assets/Tests/EditMode/ZonePositionalPatternResolverTests.cs`,
   `Attack_Pattern_Directive_v0_1_0.md` (2026-08-20 errata, later same session).
+
+### [Combat] Zone/Positional offense direction — Instinct/bond-scaled AI dodge + difficulty tier, Root's first mechanical wiring
+- **Decided:** Zone/Positional had only ever run enemy-casts/player-dodges. User: "I should be able
+  to attack the enemy too... maybe the enemy ai will have difficulty level or some may always be able
+  to dodge but i need to set it up with another skill to hold them in place." Player-cast Zone/
+  Positional now dispatches through `ResolveSkillAction` into the exact same
+  `ResolveZonePositionalAttack`/`RunZonePositionalWarning` the enemy-cast direction already used —
+  no new resolution logic, only a new dispatch branch and a `targetIsPlayerSide` param.
+- **Enemy dodge chance = Instinct/bond scaling (chosen over difficulty-only):** Presented as an
+  explicit tradeoff (`AskUserQuestion`) between pure difficulty-tier, pure stat-scaling, or both — the
+  user picked both. Reuses `TimedInputConfig.ComputeWindowPercent`'s existing curve (the same one
+  Dodge/Parry tolerance already scales off Instinct/bond with) rather than inventing a second
+  stat-scaling formula, read directly as a percent chance. `EnemyDifficultyTier`
+  (`Weak`/`Standard`/`Elite`/`AlwaysDodges`) layers a multiplier on top, set per-encounter via
+  `EncounterTrigger`; `AlwaysDodges` is a hard 100% bypass of the roll entirely, not a multiplier
+  large enough to round to it — a real, exact answer to "some may always be able to dodge."
+- **`ForcedAppliedStatus` override field, not a PlaceholderSkillResolver fix:** Investigating how to
+  build a "Root" skill surfaced a real, pre-existing dead-code path:
+  `PlaceholderSkillResolver.GetStatusCategory`'s Physical branch (Bleed/Fracture/Weaken/Stun/Root/
+  Exposed/Slow) can never be reached — it only runs when `IsDamageSkill(tree)` is false, but
+  `IsDamageSkill` is exactly true for the Force/Guard-attribute trees that would otherwise map to
+  Physical. Fixing the heuristic itself was considered and rejected — the heuristic's whole point is
+  deriving mechanically-generic behavior for the 36 placeholder skills from already-locked tree/
+  category data, not being a general skill-authoring tool; a purpose-built "always applies exactly
+  this status" skill is a different kind of thing and gets its own explicit override field, matching
+  the existing precedent (`BuiltInMove`, `ZonePositionalPattern` — both already bypass this resolver
+  entirely for their own skills).
+- **Root's first mechanical use:** Every status effect before this ticked down and logged only —
+  `BattleParticipant.HasStatus` and the Root check in `RunZonePositionalWarning` are the first place
+  any status actually gates gameplay. Checked generically (works for either side) rather than
+  special-cased to "enemy defending against player," since the mechanism itself is symmetric even
+  though the only skill that currently applies Root (Snare) is player-cast.
+- **Cell-highlight grid VFX now renders on the enemy side too — reversed mid-session:** First pass
+  skipped `BuildZonePositionalCellElements` (the marked-cell highlight AND the ground-strike VFX)
+  when targeting the enemy, since it's hardcoded to `_playerStageArea`'s grid geometry and the
+  single-slot enemy side had no equivalent rendering surface. User immediately caught the gap: "i
+  dont see any of the targetting like i did when the enemy attacks me. I want to be able to see
+  those." Fixed properly instead of reintroducing the mis-render risk: `ApplyEnemyLaneDepthScale`
+  now sizes `_enemyStageArea` to the full `PositionRangeWidthPx` spread (matching
+  `LayoutPlayerStageCreaturesByLane` exactly) and positions the lone enemy creature with the same
+  `PositionRangeWidthPx/2f` centering term the player side uses (minus
+  `PlayerNameplateClearanceShiftPx`, a player-nameplate-specific term with no confirmed enemy-side
+  equivalent — revisit if playtesting finds a real collision there). `BuildZonePositionalCellElements`
+  gained a `targetIsPlayerSide` param and now parents/positions against either stage area correctly.
+  Confirmed safe to widen `_enemyStageArea` before doing it: `BattleHUD.uss`'s `.stage-side-enemy`
+  anchors via a true center pin (`right: 20%; translate: 50% -50%`), so growing its width doesn't
+  shift its visual center — verified live via `manage_ui render_ui` (full 4-row × 5-column Row
+  pattern grid rendered correctly positioned around the enemy, unmarked lane showing as a real gap).
+  This still doesn't build the bigger multi-enemy rendering gap (array-ified stage creatures,
+  multi-enemy spawning, target-select UI) — it's still exactly one enemy on stage, just with a real
+  grid surface to show the marked shape against now that it needs one.
+- **Enemy position given real visual meaning for the first time:** `ApplyEnemyLaneDepthScale`
+  previously pinned the lone enemy's `left` to a fixed baseline ("single occupant, no spread needed")
+  since `PositionIndex` never mattered visually before AI dodging existed. Now offsets by
+  `GetPositionOffsetPx(PositionIndex)` on top of the same `PositionRangeWidthPx/2f` centering term the
+  player side uses — `PhasixRuntimeData.preferredPositionIndex` defaults to the center column, whose
+  offset is exactly 0, so an enemy that never dodges still renders exactly where it always has.
+- **Debug loadout swap, not addition:** `GameManager.ApplyDebugPlaytestLoadout`'s player list was
+  already at its tier's 12-slot cap. Rather than raise the cap or drop skills silently, swapped out
+  six already-validated skills (Slash/Instant Strike/Feint/Metronome/Magma Burst/Volley) for the 5
+  Zone/Positional skills + Snare — same pattern this method's own doc comment already establishes for
+  the earlier Jitter → Charge & Release swap. Flag if any of the six need to come back onto the list.
+- **Verified:** 355/355 EditMode tests (7 new — `EnemyAI.TryChooseDodgeStep`'s candidate selection,
+  Root-blocks-movement, occupied-candidate skipping, Weak-vs-Elite dodge-rate difference). Live in
+  Play Mode via a manually-driven `ResolveSkillAction` call against a real `BattleManager`/
+  `BattleState`: a rooted enemy standing in Overcharge's real center cell never moved and took the
+  hit (110 → 97 HP); the same enemy with Root cleared successfully dodged (lane 4 → 5, visibly
+  repositioned, 0 damage) on its very next cast. `read_console` clean throughout.
+- **Date:** 2026-08-21
+- **Ref:** `SkillData.cs` (`ForcedAppliedStatus`), `BattleParticipant.cs` (`HasStatus`,
+  `DifficultyTier`), `BattleManager.cs` (`ResolveSkillAction`, `ResolveEnemyDebuffAction`),
+  `BattleHUDController.cs` (`RunZonePositionalWarning`, `TryStepZonePositionalTarget`,
+  `ApplyEnemyLaneDepthScale`), `EnemyAI.cs` (`TryChooseDodgeStep`), `EnemyDifficultyTier.cs` (new),
+  `BattleConfig.cs`, `PhasixRuntimeData.cs` (`enemyDifficultyTier`), `EncounterTrigger.cs`,
+  `GameManager.cs`, `Assets/Data/Skills/Debuff_Snare.asset`, `Assets/Tests/EditMode/EnemyAITests.cs`.

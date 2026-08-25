@@ -679,6 +679,17 @@ public class BattleManager : MonoBehaviour
             yield return StartCoroutine(ResolveMeleeBeatSequence(attacker, attackerSlotIndex, true, target, meleeTargetSlotIndex, false, skill));
             timedInputHappened = true;
         }
+        else if (skill.ZonePositionalPattern != ZonePositionalPatternType.None)
+        {
+            // Offense direction (2026-08-21 follow-up to Attack_Pattern_Directive Group 3 item 7) —
+            // the player casting a Zone/Positional skill AT the enemy. Reuses
+            // ResolveZonePositionalAttack/RunZonePositionalWarning unchanged; the only new thing is
+            // this dispatch branch and RunZonePositionalWarning's own targetIsPlayerSide-aware AI
+            // dodge path (see that method's doc comment).
+            int zoneTargetSlotIndex = _state.EnemySide.IndexOf(target);
+            yield return StartCoroutine(ResolveZonePositionalAttack(attacker, attackerSlotIndex, true, target, zoneTargetSlotIndex, false, skill, isNamedTreeSkill: true));
+            timedInputHappened = true;
+        }
         else
         {
             PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
@@ -747,7 +758,10 @@ public class BattleManager : MonoBehaviour
             }
             else
             {
-                StatusEffectType status = resolution.AppliedStatus.Value;
+                // ForcedAppliedStatus (2026-08-21, Root) overrides the heuristic pick when set —
+                // see SkillData's own class doc comment for why the heuristic alone can never
+                // produce a Physical-category status.
+                StatusEffectType status = skill.ForcedAppliedStatus ?? resolution.AppliedStatus.Value;
                 StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
                 int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
                     attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);
@@ -2352,12 +2366,15 @@ public class BattleManager : MonoBehaviour
         List<BattleParticipant> defendingSide = targetIsPlayerSide ? _state.PlayerSide : _state.EnemySide;
 
         yield return StartCoroutine(BattleHUDController.Instance.RunZonePositionalWarning(
-            attacker, attackerSlotIndex, attackerIsPlayerSide, markedCells, glowSeconds, highlightSeconds, targetSlotIndex, defendingSide));
+            attacker, attackerSlotIndex, attackerIsPlayerSide, markedCells, glowSeconds, highlightSeconds, targetSlotIndex, defendingSide, targetIsPlayerSide));
 
         // Ground-strike impact flash on EVERY marked cell (2026-08-20, user-requested) — plays before
         // damage application so the attack visibly lands on the ground itself even where nobody's
-        // standing, not just as a byproduct of a creature's own hit-flash.
-        yield return StartCoroutine(BattleHUDController.Instance.PlayZonePositionalGroundStrikeVfx(markedCells));
+        // standing, not just as a byproduct of a creature's own hit-flash. Renders on either side
+        // (2026-08-21 follow-up — see BattleHUDController.ApplyEnemyLaneDepthScale/
+        // BuildZonePositionalCellElements' own doc comments: the enemy stage area is now sized with
+        // the same math the player side uses, specifically so this lines up correctly there too).
+        yield return StartCoroutine(BattleHUDController.Instance.PlayZonePositionalGroundStrikeVfx(markedCells, targetIsPlayerSide));
 
         DamageCategory category = isNamedTreeSkill ? PlaceholderSkillResolver.Resolve(skill).Category : DamageCategory.Physical;
         int power = isNamedTreeSkill ? BattleConfig.PlaceholderSkillPower : DamageCalculator.BasicAttackPower;
@@ -2474,8 +2491,11 @@ public class BattleManager : MonoBehaviour
     {
         attacker.SpendAura(BattleConfig.PlaceholderSkillAuraCost);
 
-        PlaceholderSkillResolver.SkillResolution resolution = PlaceholderSkillResolver.Resolve(skill);
-        StatusEffectType status = resolution.AppliedStatus.Value;
+        // ForcedAppliedStatus (2026-08-21, Root) overrides PlaceholderSkillResolver's heuristic when
+        // set — see SkillData's own class doc comment for why the heuristic alone can never produce
+        // a Physical-category status.
+        StatusEffectType status = skill.ForcedAppliedStatus
+            ?? PlaceholderSkillResolver.Resolve(skill).AppliedStatus.Value;
         StatusEffectCatalog.Entry entry = StatusEffectCatalog.Get(status);
         int duration = StatusDurationCalculator.ComputeDuration(entry.MinDurationTurns,
             attacker.RuntimeData.EffectiveStat(StatType.Resonance), target.RuntimeData.EffectiveStat(StatType.Resolve), entry.IsPositive);

@@ -140,6 +140,21 @@ public static class BattleConfig
     public const float EnemySelfCareChance = 0.5f;
 
     /// <summary>
+    /// Enemy Zone/Positional dodge chance (2026-08-21, offense-direction follow-up to
+    /// Attack_Pattern_Directive Group 3 item 7 — see EnemyAI.TryChooseDodgeStep). Base window
+    /// percent fed into TimedInputConfig.ComputeWindowPercent (the SAME Instinct/bond-scaling curve
+    /// Dodge/Parry already use — "higher Instinct = larger window", CLAUDE.md), then read as a
+    /// direct percent-chance (5-60% range, matching ComputeWindowPercent's own clamp) rather than a
+    /// ring-ratio tolerance. Multiplied by the encounter's EnemyDifficultyTier before rolling.
+    /// AlwaysDodges bypasses this formula entirely (hard 100%, see EnemyAI.TryChooseDodgeStep).
+    /// TODO: pending NumericalCalibration.md.
+    /// </summary>
+    public const float ZoneDodgeBaseWindowPercent = 20f;
+    public const float ZoneDodgeDifficultyMultiplierWeak = 0.5f;
+    public const float ZoneDodgeDifficultyMultiplierStandard = 1f;
+    public const float ZoneDodgeDifficultyMultiplierElite = 1.75f;
+
+    /// <summary>
     /// Placeholder projectile travel speed, in Stage-local pixels/second (2026-08-11 — combat
     /// feedback timing-sync pass). Combined with the real edge-to-edge distance between attacker
     /// and target, this derives how long a hit's timing-ring sweep needs to be

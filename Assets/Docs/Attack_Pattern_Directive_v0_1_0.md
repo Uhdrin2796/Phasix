@@ -64,6 +64,19 @@ rule instead of requiring the player to learn it. Both new patterns
 (`ZonePositionalPatternType.SurroundingBurst`/`FacingArrowhead`) are computed relative to the
 target's live position at resolution time, the first in this codebase to work that way — see
 `ZonePositionalPatternResolver.cs`. Addition/correction only — no version bump.
+**Errata (2026-08-21):** Zone/Positional follow-up — offense direction. Both Groups 1-3 shipped
+enemy-casts/player-dodges only; the player can now cast any Zone/Positional skill (Row/Column/
+DiagonalX/SurroundingBurst/FacingArrowhead) AT the enemy too, via the exact same
+`ResolveZonePositionalAttack`/`RunZonePositionalWarning` infrastructure. The enemy's response is a
+single `EnemyAI.TryChooseDodgeStep` decision (Instinct/bond-scaled chance × a new per-encounter
+`EnemyDifficultyTier`) instead of human keyboard input. A new "hold them in place" skill (Snare,
+`ForcedAppliedStatus = Root`) guarantees the enemy never attempts to move — the first time any status
+effect in this codebase actually gates gameplay rather than just ticking down and logging. The
+marked-cell grid highlight and ground-strike VFX now render on the enemy side too (the single-slot
+enemy stage area is sized/positioned with the same math the player side uses), so the player sees the
+same targeting telegraph casting Zone/Positional AT the enemy that they'd see defending against one.
+See CHANGELOG.md's and DECISIONS.md's matching entries for full detail. Addition only — no version
+bump.
 **Errata (2026-08-17):** Group 2 finished — Charge & Release + Sustained Pressure built together as
 planned, sharing a new `BattleHUDController.RunHoldGesture` press-and-hold-then-release primitive
 (the first mechanic in this codebase to use `PointerUpEvent` as a real release signal rather than

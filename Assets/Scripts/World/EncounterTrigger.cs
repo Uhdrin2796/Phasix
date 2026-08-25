@@ -26,6 +26,13 @@ public class EncounterTrigger : MonoBehaviour
     [SerializeField] private bool _overrideTintColor;
     [SerializeField] private Color _tintColorOverride = Color.white;
 
+    [Tooltip("How reliably THIS encounter's enemy dodges a player-cast Zone/Positional skill " +
+             "(EnemyAI.TryChooseDodgeStep) — see EnemyDifficultyTier's own doc comment. Standard " +
+             "layers a pure multiplier on top of the enemy's own Instinct/bond; AlwaysDodges is a " +
+             "hard 100% regardless of stats. Plumbed onto the spawned PhasixRuntimeData, read once " +
+             "at battle start.")]
+    [SerializeField] private EnemyDifficultyTier _enemyDifficultyTier = EnemyDifficultyTier.Standard;
+
     [Tooltip("DEBUG (2026-08-12, extended 2026-08-17, 2026-08-20 x2): if checked, the spawned wild creature's entire loadout is replaced with the built-in Attack move + the 'Slash' skill + the 'Flame Breath' skill (Sustained Pressure) + all five Zone/Positional skills ('Fault Line'/Row, 'Rift Line'/Column, 'Crossfire'/DiagonalX, 'Overcharge'/SurroundingBurst, 'Bolt Lance'/FacingArrowhead — the last two are Split Attention, item 8), guaranteeing every enemy turn can trigger the old single-beat Dodge/Parry flow (Attack), the Melee Beat Sequence framework (Slash), the hold-to-guard archetype (Flame Breath), or the Lane Selection/no-timing archetype (the five Zone skills) so all of them can be reliably playtested and compared side by side. Each new archetype gets added to this same existing override rather than a new debug flag, since this is this project's one existing enemy-side debug override mechanism. See WildSpawnSystem.ApplyDebugSkillsOverride. Not for real species content — leave unchecked once the framework is done being tested.")]
     [SerializeField] private bool _debugForceAttackAndSlash = true;
 
@@ -38,6 +45,7 @@ public class EncounterTrigger : MonoBehaviour
 
         PhasixData species = _possibleSpecies[Random.Range(0, _possibleSpecies.Length)];
         PhasixRuntimeData runtimeData = WildSpawnSystem.CreateWildInstance(species, _skillDatabase);
+        runtimeData.enemyDifficultyTier = _enemyDifficultyTier;
 
         // KNOWN_ISSUES.md [DEBUG-001] fix (was missing entirely — the checkbox looked functional
         // but silently did nothing): resolves Attack by BuiltInMoveType (its SkillName is the short
@@ -71,6 +79,13 @@ public class EncounterTrigger : MonoBehaviour
                 {
                     if (skill.SkillName == zoneSkillName) { guids.Add(guid); break; }
                 }
+            }
+            // 2026-08-21: Snare (ForcedAppliedStatus = Root) — this enemy needs its own Root skill
+            // equipped too so the "cast Root, then cast a Zone/Positional skill" combo can actually
+            // be playtested against a live enemy.
+            foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)
+            {
+                if (skill.SkillName == "Snare") { guids.Add(guid); break; }
             }
             WildSpawnSystem.ApplyDebugSkillsOverride(runtimeData, _skillDatabase, guids);
         }

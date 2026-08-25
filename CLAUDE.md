@@ -222,6 +222,13 @@ At the start of every planning session, run these three calls **before writing a
   the live Unity Editor (scene state, console, GameObjects). Requires Unity Editor open.
 - Config: Window → MCP for Unity → Configure All Detected Clients
 - See DECISIONS.md → [Tooling] for why this was chosen over AnkleBreaker / Unity's official beta
+- **DevStudio MCP:** `nihitgupta2/DevStudio`, installed via `uvx devstudio-mcp` (published on PyPI,
+  no local clone needed) — registered in `.mcp.json`. Standard verification tool for any
+  VFX/skill/effect change: record one full cycle (`start_recording`/`stop_recording` targeting the
+  Game view) instead of relying on a single screenshot, and save/present the clip in-session so it
+  can be reviewed directly rather than only summarized in text. Screenshots remain fine for
+  non-time-varying checks (e.g. confirming a property changed). See
+  `Assets/Docs/VFX_Pipeline_Directive_v0_1_0.md` Part 2 for the full rationale.
 
 ## Reference Files in This Project
 ```
@@ -232,6 +239,10 @@ Assets/Docs/Evolution_System_Directive_v1_1_0.pdf   ← Supersedes GDD §3 (evol
 Assets/Docs/Progression_Directive_v0_1_0.md         ← Supersedes GDD §21 (XP/leveling)
 Assets/Docs/WorldDesign_Directive_v0_1_0.md         ← Supplements GDD §19, §24 (world, calendar, factions)
 Assets/Docs/Combat_Directive_v0_1_0.md              ← Supplements GDD §18 (combat, 7-lane stage, action commands)
+Assets/Docs/Attack_Pattern_Directive_v0_1_0.md      ← Telegraph framework, attack archetypes, Beat Sequence, Strike Points — Part 1 is the build order
+Assets/Docs/Architecture_Directive_v0_1_0.md        ← Codebase architecture review + migration plan (UI Toolkit vs Scene rendering, assembly split, god-files) — Part 3 is the phase sequencing
+Assets/Docs/VFX_Pipeline_Directive_v0_1_0.md        ← Skill/spell VFX authoring (Shader Graph/Rigging/Sprite Shape/LineRenderer) — companion to Architecture_Directive Phase 4, blocked on its Phase 3
+Assets/Docs/VFX_WorkedExamples_v0_1_0.md            ← Two tutorials: text-only default (Fireball) + hybrid exception (Corruption), with buildable code
 Assets/Docs/Phasix_TechnicalDirective_v0.1.0.html  ← Implementation patterns
 Assets/Docs/CHANGELOG.md                            ← Session log
 Assets/Docs/DECISIONS.md                            ← Implementation decisions not in GDD

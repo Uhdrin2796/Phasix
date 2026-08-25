@@ -103,6 +103,9 @@ public class BattleParticipant
     /// <summary>Convenience projection for ChainResultCatalog.TryResolve/MasteryBonusCatalog.EvaluateAll, which take a plain type collection.</summary>
     public List<StatusEffectType> ActiveStatusTypes => _activeStatuses.Select(s => s.Type).ToList();
 
+    /// <summary>True if `type` is currently active. First real gameplay-gating use: Root, checked by BattleHUDController.RunZonePositionalWarning to skip a rooted participant's dodge attempt entirely (2026-08-21).</summary>
+    public bool HasStatus(StatusEffectType type) => _activeStatuses.Exists(s => s.Type == type);
+
     /// <summary>
     /// MasteryBonusCatalog's own doc comment states it does NOT track "already triggered this
     /// battle" itself — this is that caller-side bookkeeping, per bonus, per battle.
@@ -257,7 +260,16 @@ public class BattleParticipant
         // per-side branch and produces the same result for enemies either way.
         LaneIndex = LaneMovementSystem.ClampLane(runtimeData.preferredLaneIndex);
         PositionIndex = LaneMovementSystem.ClampPosition(runtimeData.preferredPositionIndex);
+
+        // Zone/Positional offense-direction follow-up (2026-08-21) — only meaningful when this
+        // participant is the enemy defending against a player-cast Zone/Positional skill (see
+        // EnemyAI.TryChooseDodgeStep); applied unconditionally to both sides, same convention as
+        // LaneIndex/PositionIndex above.
+        DifficultyTier = runtimeData.enemyDifficultyTier;
     }
+
+    /// <summary>See PhasixRuntimeData.enemyDifficultyTier's doc comment.</summary>
+    public EnemyDifficultyTier DifficultyTier { get; }
 
     /// <summary>Applies damage, clamped so HP never goes negative. Negative/zero amounts are ignored.</summary>
     public void ApplyDamage(int amount)

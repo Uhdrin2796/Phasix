@@ -868,6 +868,55 @@ Issues that required significant investigation to resolve. Read before debugging
   reflection as a workaround, and don't conclude "never ticks" from a check made in the first
   few seconds after `play`.
 
+### [Tooling] Simulated OS-level clicks/keystrokes (computer-use) don't reach Unity's Game view during Play Mode — drive the action through `execute_code` instead
+- **Symptom:** Trying to live-verify a skill's VFX by simulating a real player: clicked the battle
+  HUD's skill wheel icon, then the enemy target, via computer-use's `left_click` at coordinates read
+  directly off a screenshot (visually correct — zoomed in and confirmed the click landed exactly on
+  the "A" (Attack) icon). Nothing happened — no highlight, no Battle Log entry, no animation. Ruled
+  out "wrong coordinate" by testing the large, unambiguous `Flee` button next: also completely
+  unresponsive. Confirmed directly by video (DevStudio MCP capture of the whole attempt showed
+  literally nothing changing across multiple clicks), not just inferred from silence. `Escape` had
+  separately stopped Play Mode entirely during the same session — initially looked like proof input
+  *was* reaching the game (a pause-menu "quit" handler, maybe), but this was misleading: `Escape` is
+  Unity's own editor-level shortcut for stopping Play Mode, firing at the Editor/OS level regardless
+  of whether the running game's Input System ever saw it. Don't treat one working key as evidence
+  the input pipeline is fine.
+- **Root cause (assessed, not fully proven):** the Game view most likely only processes real input
+  when it holds genuine low-level OS focus, and computer-use's simulated `left_click`/`key` calls
+  visually land on the right pixels without transferring that specific kind of focus — a different
+  failure mode than the already-documented "ticks don't advance" issue above (that's about
+  `Time.frameCount` not moving; this is about pointer/keyboard events never reaching the UI Toolkit
+  event system at all, regardless of ticking).
+- **Fix — don't fight simulated input, bypass it entirely:** drive the actual game logic directly
+  via `execute_code`, the same "reflection-invoke the real method" pattern already established
+  above for frame-ticking, applied to input instead:
+  1. `BattleManager.ResolveSkillAction(BattleParticipant attacker, int attackerSlotIndex, SkillData
+     skill, BattleParticipant target)` is private, but it's the *same* single dispatch point the
+     real click-driven pipeline calls — get it via `GetMethod(..., BindingFlags.NonPublic |
+     BindingFlags.Instance)`, `Invoke` it (returns `IEnumerator`), then
+     `battleManager.StartCoroutine(thatIEnumerator)`. This raises the identical `EventBus` events
+     (`Raise_SkillUsed`, projectile launch, etc.) `BattleHUDController` already subscribes to for
+     animations — confirmed working end-to-end (Battle Log updated with real damage math, animation
+     played, all captured on video).
+  2. Get the attacker/target `BattleParticipant` references via reflection on the live
+     `BattleHUDController` instance's private `_self` and `_enemyTargets` fields — no UI needed to
+     find them.
+  3. To get into a battle at all first (no working movement input either): teleport the player onto
+     an already-spawned `WildEncounterCreature` via `player.transform.position =
+     target.transform.position` in `execute_code` — this still fires a real `OnTriggerEnter2D`
+     contact (identical to walking into it), just without needing input to move there.
+  4. `execute_code`'s Codedom compiler (C# 6 only) doesn't support local functions, tuple
+     deconstruction in `foreach`, or `using` directives mid-snippet — use fully-qualified names and
+     manual stack/list-based traversal instead.
+- **Date:** August 2026
+- **Key rule:** Never attempt to verify player-facing interaction (skill casts, menu navigation,
+  target selection) via computer-use clicks/keys against Unity's Play Mode Game view — confirm first
+  with a trivial, unambiguous control (a big always-visible button) before trusting any click
+  result, and if that control doesn't respond either, stop immediately and switch to driving the
+  same code path directly via `execute_code` reflection instead of debugging the input simulation
+  further. Full recipe and rationale: `Assets/Docs/VFX_Pipeline_Directive_v0_1_0.md` → "Triggering
+  the action, not just capturing it" (Part 2).
+
 ### [Tooling] Spin-waiting on `AsyncOperation.isDone` inside a synchronous `execute_code` call permanently deadlocks the Editor's main thread — not a "slow tick," a real hang requiring a process kill
 - **Symptom:** While live-verifying the `UIRoot_BattleSummary` component-cleanup fix (see
   `KNOWN_ISSUES.md` → `[UI-002]`), called `SceneManager.LoadSceneAsync("BattleScene_Main",

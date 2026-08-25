@@ -183,6 +183,17 @@ public class PhasixRuntimeData
     /// <summary>See preferredLaneIndex's doc comment. Defaults to the center column (3 of 5).</summary>
     public int preferredPositionIndex = LaneMovementSystem.DefaultStartingPosition;
 
+    /// <summary>
+    /// Zone/Positional offense-direction follow-up (2026-08-21) — per-encounter multiplier on this
+    /// creature's own Instinct/bond-scaled dodge chance when it's the enemy defending against a
+    /// player-cast Zone/Positional skill (EnemyAI.TryChooseDodgeStep, BattleParticipant.
+    /// DifficultyTier). Set by EncounterTrigger's Inspector field for wild spawns; meaningless for
+    /// player-side participants (no code path ever reads it there), same "applies to both sides
+    /// uniformly, harmless no-op for the side that never uses it" convention as preferredLaneIndex/
+    /// preferredPositionIndex above.
+    /// </summary>
+    public EnemyDifficultyTier enemyDifficultyTier = EnemyDifficultyTier.Standard;
+
     public PhasixRuntimeData(string nodeGuid)
     {
         instanceId = Guid.NewGuid().ToString();

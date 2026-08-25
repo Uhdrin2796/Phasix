@@ -28,6 +28,11 @@ offset (`LaneMovementSystem.GetPositionOffsetPx`), a pure function of position i
 `PositionColumnSpacingPx = 150f`) is fully implemented and live; only the specific numeric constants
 remain placeholders pending `NumericalCalibration.md`, same status as every other tuning value in
 this project, not an unbuilt system. Addition/clarification only — no version bump.
+**Errata (2026-08-23):** Part 4's Dodge/Parry section gained an explicit scope note — it is not the
+universal defense mechanic, only applies to 3 of the 5 non-melee skill families (see
+`VFX_Pipeline_Directive_v0_1_0.md` Part 5's 9-family breakdown). Also confirmed the multi-beat
+`RunTimedInput` note is the intended shape for Multi-Hit Volley specifically (one check per hit).
+Clarification only — no version bump.
 **Errata (2026-08-20):** Part 1's "side-profile diorama view... real background art" describes the
 **intended final** perspective — worth flagging clearly that the CURRENT implementation
 (`BattleHUDController`) is not that yet: it's a flat UI Toolkit Screen Space Overlay panel over the
@@ -146,12 +151,25 @@ Combat uses **action commands** — timed button presses during attacks and inco
   Both options fail the same way as a total miss on offense: the hit lands at full damage, no
   extra penalty for attempting the harder Parry and missing ("reward, don't punish").
 
+**Scope [2026-08-23]:** Dodge/Parry is **not** the universal defense mechanic — it's one of several,
+by skill family (see `VFX_Pipeline_Directive_v0_1_0.md` Part 5 for the full breakdown):
+- **Applies:** Traveling Projectile, Instant/Pre-Emptive, and Multi-Hit Volley families (one
+  Dodge/Parry check per hit for the latter — see the multi-beat note below).
+- **Does not apply:** Charge & Release / Zone-Positional skills resolve via **Lane Movement
+  escape** instead (did the defender's final lane position, checked at resolve time, fall inside
+  the marked area) — there is no timing-window check at all for these. Sustained/Hold skills use
+  their own **Hold-Duration match** input, a different mechanic from Dodge/Parry's pick-one-then-
+  time-it model.
+A reader of this section alone, without that scoping, would reasonably assume Dodge/Parry applies
+to every attack — it doesn't.
+
 Some attacks/skills may eventually require **multiple action-command beats** in a single
 attack — e.g. a multi-hit offensive skill with several timed presses, or a defensive sequence with
 more than one Dodge/Parry check. Not built yet (skill tree framework, Step 4, is still scaffold
 content only), but `BattleHUDController.RunTimedInput` is deliberately a single-window primitive
 so a future multi-beat attack/skill can just call it multiple times in sequence rather than needing
-a rewrite.
+a rewrite. **This is the intended shape for Multi-Hit Volley skills specifically** — one
+`RunTimedInput` call per hit in the sequence, not one check covering the whole volley.
 
 Exact timing windows, success thresholds, and damage modifiers are **pending numerical calibration** (NumericalCalibration.md).
 

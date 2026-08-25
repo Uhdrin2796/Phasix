@@ -182,4 +182,87 @@ public static class EnemyAI
         intent = EnemyMoveIntent.Damage;
         return null;
     }
+
+    /// <summary>
+    /// Zone/Positional offense-direction follow-up (2026-08-21, Attack_Pattern_Directive Group 3
+    /// item 7) — the enemy-side equivalent of a human player's real-time arrow-key dodge during
+    /// BattleHUDController.RunZonePositionalWarning's response window. Pure/deterministic given a
+    /// Random roll; no MonoBehaviour, EditMode-testable like the rest of this class.
+    ///
+    /// Rooted (StatusEffectType.Root) defenders never attempt to move — checked here rather than by
+    /// the caller so this method is a single, honest "can/did this defender dodge" answer. Dodge
+    /// chance reuses TimedInputConfig.ComputeWindowPercent's Instinct/bond-scaling curve (the SAME
+    /// formula Dodge/Parry's own tolerance already uses — "higher Instinct = larger window",
+    /// CLAUDE.md), read directly as a percent chance rather than a ring-ratio tolerance, then scaled
+    /// by the encounter's EnemyDifficultyTier. AlwaysDodges skips the roll entirely — a hard 100%,
+    /// giving the "some enemies always dodge" case directly rather than relying on a multiplier
+    /// large enough to round to it.
+    ///
+    /// On a successful roll, checks the 4 orthogonal single-step candidates (fixed order: lane+1,
+    /// lane-1, position+1, position-1) via LaneMovementSystem.ClampLane/ClampPosition +
+    /// FormationSystem.IsSlotOccupied (same occupancy rule BattleHUDController.
+    /// TryStepZonePositionalTarget already enforces for the human path), taking the first that both
+    /// isn't occupied and doesn't land on a REAL marked cell (ZoneCell.IsReal — Split Attention's
+    /// fake cells are safe to step onto, matching the player-side rule). No candidate found (or the
+    /// roll failed, or rooted) returns false and the defender doesn't move.
+    /// </summary>
+    public static bool TryChooseDodgeStep(BattleParticipant defender, IReadOnlyList<ZoneCell> markedCells,
+        List<BattleParticipant> defendingSide, EnemyDifficultyTier tier, out int laneDelta, out int positionDelta)
+    {
+        laneDelta = 0;
+        positionDelta = 0;
+
+        if (defender == null || !defender.IsAlive) return false;
+        if (defender.HasStatus(StatusEffectType.Root)) return false;
+
+        if (tier != EnemyDifficultyTier.AlwaysDodges)
+        {
+            float windowPercent = TimedInputConfig.ComputeWindowPercent(BattleConfig.ZoneDodgeBaseWindowPercent,
+                defender.RuntimeData.EffectiveStat(StatType.Instinct), defender.RuntimeData.bondPercent);
+            float multiplier = tier switch
+            {
+                EnemyDifficultyTier.Weak => BattleConfig.ZoneDodgeDifficultyMultiplierWeak,
+                EnemyDifficultyTier.Elite => BattleConfig.ZoneDodgeDifficultyMultiplierElite,
+                _ => BattleConfig.ZoneDodgeDifficultyMultiplierStandard
+            };
+            float chance = Mathf.Clamp01((windowPercent / 100f) * multiplier);
+            if (Random.value >= chance) return false;
+        }
+
+        var others = new List<(int, int)>();
+        if (defendingSide != null)
+        {
+            foreach (BattleParticipant p in defendingSide)
+            {
+                if (p == defender || !p.IsAlive) continue;
+                others.Add((p.LaneIndex, p.PositionIndex));
+            }
+        }
+
+        (int lane, int position)[] candidates = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+        foreach ((int laneStep, int positionStep) in candidates)
+        {
+            int newLane = LaneMovementSystem.ClampLane(defender.LaneIndex + laneStep);
+            int newPosition = LaneMovementSystem.ClampPosition(defender.PositionIndex + positionStep);
+            if (newLane == defender.LaneIndex && newPosition == defender.PositionIndex) continue; // clamped to same spot — not a real step
+            if (FormationSystem.IsSlotOccupied(others, newLane, newPosition)) continue;
+            if (IsCellMarkedReal(markedCells, newLane, newPosition)) continue; // still dangerous, keep looking
+
+            laneDelta = laneStep;
+            positionDelta = positionStep;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsCellMarkedReal(IReadOnlyList<ZoneCell> markedCells, int lane, int position)
+    {
+        if (markedCells == null) return false;
+        foreach (ZoneCell cell in markedCells)
+        {
+            if (cell.IsReal && cell.Lane == lane && cell.Position == position) return true;
+        }
+        return false;
+    }
 }

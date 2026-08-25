@@ -233,7 +233,14 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        var desiredNames = new[] { "C1", "Slash", "Instant Strike", "Feint", "Metronome", "Magma Burst", "Volley" };
+        // 2026-08-21: swapped out Slash/Instant Strike/Feint/Metronome/Magma Burst/Volley (all
+        // fully built and playtested in earlier sessions) for the 5 Zone/Positional skills + Snare
+        // (Root) — same "swap out validated stuff for what needs live validation right now" pattern
+        // this method's own class doc comment already establishes for the Jitter->Charge & Release
+        // swap. Slot count unchanged (still 7 named + 5 built-ins = 12, this tier's own cap — see
+        // maxSlots below), so nothing needed reshuffling elsewhere. Flag to the user if any of the
+        // swapped-out six need to come back onto this list later.
+        var desiredNames = new[] { "C1", "Fault Line", "Rift Line", "Crossfire", "Overcharge", "Bolt Lance", "Snare" };
         foreach (string name in desiredNames)
         {
             foreach ((SkillData skill, string guid) in _skillDatabase.AllSkills)

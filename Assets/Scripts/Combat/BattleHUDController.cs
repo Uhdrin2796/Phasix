@@ -1464,20 +1464,37 @@ public class BattleHUDController : MonoBehaviour
     /// Single-slot equivalent of LayoutPlayerStageCreaturesByLane + ApplyLaneLayout for the lone
     /// enemy stage slot — no in-row spacing needed since multi-enemy battles don't have per-enemy
     /// stage creatures yet (see class doc comment). Called from Initialize once the enemy side's row
-    /// is known. `left` stays at the compensation baseline (single occupant, no spread needed) rather
-    /// than 0, matching the player side's own baseline so a lone enemy isn't visually offset from
-    /// where a lone player creature would sit.
+    /// is known, and again by RunZonePositionalWarning after an AI dodge step actually moves the
+    /// enemy (2026-08-21, offense-direction follow-up), so the step is visible immediately.
+    ///
+    /// 2026-08-21 follow-up #2 (user: "i dont see any of the targetting like i did when the enemy
+    /// attacks me. I want to be able to see those"): _enemyStageArea is now sized to the FULL
+    /// PositionRangeWidthPx spread (matching LayoutPlayerStageCreaturesByLane exactly) instead of
+    /// the earlier narrower InLaneSpacingPx-based margin, and `left` uses the same
+    /// PositionRangeWidthPx/2f centering term the player side uses (minus
+    /// PlayerNameplateClearanceShiftPx, a player-nameplate-specific term with no confirmed
+    /// enemy-side equivalent) — so BuildZonePositionalCellElements' marked-cell highlight can render
+    /// correctly against this side too, not just the lone creature's own dodge step. Safe to widen:
+    /// BattleHUD.uss's `.stage-side-enemy` anchors via `right: 20%; translate: 50% -50%` — a true
+    /// center pin, so growing the area's width doesn't shift its visual center, confirmed against the
+    /// identical player-side anchor pattern (`left: 20%; translate: -50% -50%`) already proven safe
+    /// by LayoutPlayerStageCreaturesByLane's own width changes. PhasixRuntimeData.
+    /// preferredPositionIndex defaults to the center column (LaneMovementSystem.
+    /// DefaultStartingPosition), whose offset is exactly 0, so an enemy that's never dodged still
+    /// renders dead center, unaffected by the wider margin now reserved around it.
     /// </summary>
     private void ApplyEnemyLaneDepthScale(BattleParticipant enemyParticipant)
     {
+        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f;
+
         if (_enemyStageArea != null)
         {
-            _enemyStageArea.style.width = 2 * LaneMovementSystem.InLaneSpacingPx + StageCreatureSizePx;
+            _enemyStageArea.style.width = LaneMovementSystem.PositionRangeWidthPx + StageCreatureSizePx;
             _enemyStageArea.style.height = LaneMovementSystem.RowRangeHeightPx + StageCreatureSizePx;
         }
 
         int lane = enemyParticipant.LaneIndex;
-        _enemyStageCreature.style.left = LaneMovementSystem.InLaneSpacingPx;
+        _enemyStageCreature.style.left = LaneMovementSystem.GetPositionOffsetPx(enemyParticipant.PositionIndex) + centeringCompensationPx;
         _enemyStageCreature.style.top = LaneMovementSystem.GetLaneScreenTop(lane, isPlayerSide: false);
         float scale = LaneMovementSystem.GetDepthScale(lane);
         _enemyStageCreature.style.scale = new Scale(new Vector3(scale, scale, 1f));
@@ -2779,27 +2796,38 @@ public class BattleHUDController : MonoBehaviour
     /// Zone/Positional's entire tell + response window. Three stages: (1) the attacker's stage
     /// element pulses toward MissFlashColor (the shared danger-red accent) for glowSeconds with no
     /// location revealed yet (announcement names the attacker); (2) every marked cell BLINKS between
-    /// MissFlashColor and a neutral grey on the live player-side stage for highlightSeconds (glow
-    /// keeps pulsing throughout; announcement switches to naming the locked target and the
-    /// Arrow-Keys/WASD prompt), during which the single locked target (lockedTargetSlotIndex, within
-    /// defendingSide) gets exactly ONE accepted lane/position step (Up/W /Down/S = lane, Left/A/
-    /// Right/D = position — matches LaneMovementSystem's real screen mapping), blocked by
-    /// FormationSystem.IsSlotOccupied the same way the in-battle Move skill already is — a blocked
-    /// attempt (destination occupied) doesn't burn the one chance, only a genuinely accepted move
-    /// does; (3) cleanup. BattleManager checks final occupancy against markedCells itself once this
-    /// coroutine completes — this method never applies damage, only the tell and window.
+    /// MissFlashColor and a neutral grey on the live stage for highlightSeconds (glow keeps pulsing
+    /// throughout; announcement switches to naming the locked target), during which the single
+    /// locked target (lockedTargetSlotIndex, within defendingSide) gets exactly ONE accepted lane/
+    /// position step; (3) cleanup. BattleManager checks final occupancy against markedCells itself
+    /// once this coroutine completes — this method never applies damage, only the tell and window.
+    ///
+    /// 2026-08-21 follow-up (offense direction — player casts AT the enemy): targetIsPlayerSide
+    /// selects which stage element/response path the locked target uses. When true (the original,
+    /// enemy-casts-at-player direction): a human response window — Up/W/Down/S = lane, Left/A/
+    /// Right/D = position (matches LaneMovementSystem's real screen mapping), blocked by
+    /// FormationSystem.IsSlotOccupied the same way the in-battle Move skill already is (a blocked
+    /// attempt doesn't burn the one chance, only a genuinely accepted move does). When false (the
+    /// new direction): a single EnemyAI.TryChooseDodgeStep decision, rolled once at a reaction-delay
+    /// instant partway through the window rather than every frame — an instant roll at frame 0 would
+    /// read as the AI reacting to a tell that hasn't displayed yet. Either path is skipped entirely
+    /// if the locked target HasStatus(Root) — a rooted defender never attempts to move, checked once
+    /// here rather than duplicated in both branches.
     /// </summary>
     public IEnumerator RunZonePositionalWarning(BattleParticipant attacker, int attackerSlotIndex, bool attackerIsPlayerSide,
         IReadOnlyList<ZoneCell> markedCells, float glowSeconds, float highlightSeconds,
-        int lockedTargetSlotIndex, List<BattleParticipant> defendingSide)
+        int lockedTargetSlotIndex, List<BattleParticipant> defendingSide, bool targetIsPlayerSide = true)
     {
         VisualElement attackerElement = GetStageCreatureElement(attackerSlotIndex, attackerIsPlayerSide);
         Color attackerBaseColor = attackerElement != null ? attackerElement.style.backgroundColor.value : Color.white;
         BattleParticipant lockedTarget = (defendingSide != null && lockedTargetSlotIndex >= 0 && lockedTargetSlotIndex < defendingSide.Count)
             ? defendingSide[lockedTargetSlotIndex] : null;
-        // Highlight visuals are player-side-only this pass (see this method's own class doc comment)
-        // — lockedTarget is always drawn from the player's own stage slots.
-        VisualElement lockedTargetElement = lockedTarget != null ? GetStageCreatureElement(lockedTargetSlotIndex, isPlayerSide: true) : null;
+        VisualElement lockedTargetElement = lockedTarget != null ? GetStageCreatureElement(lockedTargetSlotIndex, targetIsPlayerSide) : null;
+        bool isRooted = lockedTarget != null && lockedTarget.HasStatus(StatusEffectType.Root);
+        // Reaction-delay instant for the AI path — a fraction of highlightSeconds, not frame 0 (see
+        // this method's own doc comment). Picked once per call so the roll happens exactly once.
+        float aiReactionInstant = highlightSeconds * UnityEngine.Random.Range(0.35f, 0.55f);
+        bool aiHasActed = false;
 
         _actionAnnouncementLabel.text = $"{attacker.DisplayName} is charging a zone attack...";
         _actionAnnouncement.EnableInClassList("action-announcement-offense", false);
@@ -2815,13 +2843,17 @@ public class BattleHUDController : MonoBehaviour
             yield return null;
         }
 
-        // Stage 2: glow continues + blinking cell highlights + single-target, single-move response window.
-        List<VisualElement> highlightCells = ShowZonePositionalHighlightCells(markedCells);
+        // Stage 2: glow continues + blinking cell highlights + single-target, single-move response
+        // window. Cell-shape highlight now renders on either side (2026-08-21 follow-up — see
+        // ApplyEnemyLaneDepthScale/BuildZonePositionalCellElements' own doc comments: the enemy
+        // stage area is sized/positioned with the same PositionRangeWidthPx math the player side
+        // uses, specifically so this lines up correctly on that side too).
+        List<VisualElement> highlightCells = ShowZonePositionalHighlightCells(markedCells, targetIsPlayerSide);
         HighlightZonePositionalLockedTarget(lockedTargetElement, isHighlighted: true);
 
-        _actionAnnouncementLabel.text = lockedTarget != null
-            ? $"ZONE ATTACK — Move {lockedTarget.DisplayName}! (Arrow Keys / WASD)"
-            : "ZONE ATTACK!";
+        _actionAnnouncementLabel.text = lockedTarget == null ? "ZONE ATTACK!"
+            : targetIsPlayerSide ? $"ZONE ATTACK — Move {lockedTarget.DisplayName}! (Arrow Keys / WASD)"
+            : $"ZONE ATTACK — {lockedTarget.DisplayName}!";
 
         bool hasMoved = false; // 2026-08-20, user-directed: exactly one accepted step this window, not free-roam repositioning
         float highlightElapsed = 0f;
@@ -2830,24 +2862,39 @@ public class BattleHUDController : MonoBehaviour
             ApplyZonePositionalGlowPulse(attackerElement, attackerBaseColor, glowSeconds + highlightElapsed);
             UpdateZonePositionalHighlightBlink(highlightCells, markedCells, highlightElapsed, highlightSeconds);
 
-            if (!hasMoved && lockedTarget != null && lockedTarget.IsAlive && Keyboard.current != null)
+            if (!hasMoved && !isRooted && lockedTarget != null && lockedTarget.IsAlive)
             {
-                // Arrow keys and WASD both accepted (2026-08-20, user-requested) — either convention
-                // steps the same lane/position delta, so a player can use whichever hand position
-                // they're already in.
-                int laneDelta = 0;
-                if (Keyboard.current.upArrowKey.wasPressedThisFrame || Keyboard.current.wKey.wasPressedThisFrame) laneDelta = 1;
-                else if (Keyboard.current.downArrowKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame) laneDelta = -1;
-                if (laneDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, laneDelta, 0))
-                    hasMoved = true;
-
-                if (!hasMoved)
+                if (targetIsPlayerSide)
                 {
-                    int positionDelta = 0;
-                    if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Keyboard.current.dKey.wasPressedThisFrame) positionDelta = 1;
-                    else if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Keyboard.current.aKey.wasPressedThisFrame) positionDelta = -1;
-                    if (positionDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, 0, positionDelta))
-                        hasMoved = true;
+                    if (Keyboard.current != null)
+                    {
+                        // Arrow keys and WASD both accepted (2026-08-20, user-requested) — either
+                        // convention steps the same lane/position delta, so a player can use
+                        // whichever hand position they're already in.
+                        int laneDelta = 0;
+                        if (Keyboard.current.upArrowKey.wasPressedThisFrame || Keyboard.current.wKey.wasPressedThisFrame) laneDelta = 1;
+                        else if (Keyboard.current.downArrowKey.wasPressedThisFrame || Keyboard.current.sKey.wasPressedThisFrame) laneDelta = -1;
+                        if (laneDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, laneDelta, 0, targetIsPlayerSide))
+                            hasMoved = true;
+
+                        if (!hasMoved)
+                        {
+                            int positionDelta = 0;
+                            if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Keyboard.current.dKey.wasPressedThisFrame) positionDelta = 1;
+                            else if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Keyboard.current.aKey.wasPressedThisFrame) positionDelta = -1;
+                            if (positionDelta != 0 && TryStepZonePositionalTarget(lockedTarget, defendingSide, 0, positionDelta, targetIsPlayerSide))
+                                hasMoved = true;
+                        }
+                    }
+                }
+                else if (!aiHasActed && highlightElapsed >= aiReactionInstant)
+                {
+                    aiHasActed = true; // exactly one decision this window, win or lose
+                    if (EnemyAI.TryChooseDodgeStep(lockedTarget, markedCells, defendingSide, lockedTarget.DifficultyTier, out int aiLaneDelta, out int aiPositionDelta))
+                    {
+                        if (TryStepZonePositionalTarget(lockedTarget, defendingSide, aiLaneDelta, aiPositionDelta, targetIsPlayerSide))
+                            hasMoved = true;
+                    }
                 }
             }
 
@@ -2861,8 +2908,8 @@ public class BattleHUDController : MonoBehaviour
         _actionAnnouncement.style.display = DisplayStyle.None;
     }
 
-    /// <summary>Attempts to move lockedTarget by exactly one lane/position step, rejected if the destination is occupied by another living defendingSide member — same "recheck live, don't trust anything cached" posture OnMoveDragPointerUp/ResolveBuiltInMove's Move case already use. Applies the move and refreshes the visible stage layout immediately if accepted, so the player sees themselves actually move during the window, not just at the end. Returns whether the move was actually applied — a blocked/no-op attempt (destination occupied, or already at the clamped edge) doesn't count against the caller's one-move budget.</summary>
-    private bool TryStepZonePositionalTarget(BattleParticipant lockedTarget, List<BattleParticipant> defendingSide, int laneDelta, int positionDelta)
+    /// <summary>Attempts to move lockedTarget by exactly one lane/position step, rejected if the destination is occupied by another living defendingSide member — same "recheck live, don't trust anything cached" posture OnMoveDragPointerUp/ResolveBuiltInMove's Move case already use. Applies the move and refreshes the visible stage layout immediately if accepted (targetIsPlayerSide selects RefreshPlayerLaneLayout vs. ApplyEnemyLaneDepthScale — 2026-08-21, offense direction — routing to the wrong one would silently reposition the wrong side's stage element), so the mover is seen actually moving during the window, not just at the end. Returns whether the move was actually applied — a blocked/no-op attempt (destination occupied, or already at the clamped edge) doesn't count against the caller's one-move budget.</summary>
+    private bool TryStepZonePositionalTarget(BattleParticipant lockedTarget, List<BattleParticipant> defendingSide, int laneDelta, int positionDelta, bool targetIsPlayerSide)
     {
         int newLane = LaneMovementSystem.ClampLane(lockedTarget.LaneIndex + laneDelta);
         int newPosition = LaneMovementSystem.ClampPosition(lockedTarget.PositionIndex + positionDelta);
@@ -2878,7 +2925,8 @@ public class BattleHUDController : MonoBehaviour
 
         lockedTarget.LaneIndex = newLane;
         lockedTarget.PositionIndex = newPosition;
-        RefreshPlayerLaneLayout(defendingSide);
+        if (targetIsPlayerSide) RefreshPlayerLaneLayout(defendingSide);
+        else ApplyEnemyLaneDepthScale(lockedTarget);
         return true;
     }
 
@@ -2978,12 +3026,24 @@ public class BattleHUDController : MonoBehaviour
     /// same row/column now visually MERGE into one continuous band, and unmarked rows/columns show as
     /// genuinely empty gaps, which is what actually reads as "this pattern is marked, that's safe."
     /// </summary>
-    private List<VisualElement> BuildZonePositionalCellElements(IReadOnlyList<ZoneCell> cells, Color initialColor)
+    /// 2026-08-21 follow-up (offense direction, user: "i dont see any of the targetting like i did
+    /// when the enemy attacks me. I want to be able to see those"): gained a targetIsPlayerSide
+    /// param so this can render against EITHER stage side. The enemy side previously had no grid to
+    /// render cells against at all (ApplyEnemyLaneDepthScale pinned the lone enemy to a fixed
+    /// baseline) — that method now sizes/positions _enemyStageArea/its stage creature with the exact
+    /// same PositionRangeWidthPx-based math the player side already uses (see that method's own doc
+    /// comment), so this method's cell math lines up with it directly, just swapping which stage
+    /// area/centering constant it reads. The enemy side skips PlayerNameplateClearanceShiftPx (a
+    /// player-nameplate-specific compensation with no confirmed enemy-side equivalent) — revisit if
+    /// live playtesting finds an enemy-side nameplate collision.
+    private List<VisualElement> BuildZonePositionalCellElements(IReadOnlyList<ZoneCell> cells, Color initialColor, bool targetIsPlayerSide)
     {
         var elements = new List<VisualElement>();
-        if (_playerStageArea == null || cells == null) return elements;
+        VisualElement stageArea = targetIsPlayerSide ? _playerStageArea : _enemyStageArea;
+        if (stageArea == null || cells == null) return elements;
 
-        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f + LaneMovementSystem.PlayerNameplateClearanceShiftPx;
+        float centeringCompensationPx = LaneMovementSystem.PositionRangeWidthPx / 2f
+            + (targetIsPlayerSide ? LaneMovementSystem.PlayerNameplateClearanceShiftPx : 0f);
         // Near-full cell footprint (small gap on each axis so adjacent tiles read as distinct cells
         // even when they merge into a continuous band) instead of a small floating marker dot.
         const float gapPx = 8f;
@@ -2999,12 +3059,12 @@ public class BattleHUDController : MonoBehaviour
             element.style.position = Position.Absolute;
             element.style.width = cellWidthPx;
             element.style.height = cellHeightPx;
-            element.style.top = LaneMovementSystem.GetLaneScreenTop(cell.Lane, isPlayerSide: true) + centerOffsetYPx;
+            element.style.top = LaneMovementSystem.GetLaneScreenTop(cell.Lane, targetIsPlayerSide) + centerOffsetYPx;
             element.style.left = LaneMovementSystem.GetPositionOffsetPx(cell.Position) + centeringCompensationPx + centerOffsetXPx;
             element.style.backgroundColor = initialColor;
             SetUniformBorderRadius(element, 6f); // a soft-cornered tile, not a dot or a hard rectangle
 
-            _playerStageArea.Add(element);
+            stageArea.Add(element);
             elements.Add(element);
         }
 
@@ -3012,9 +3072,9 @@ public class BattleHUDController : MonoBehaviour
     }
 
     /// <summary>Pre-attack telegraph — see BuildZonePositionalCellElements. Sent to back so marked cells never render on top of a stage creature standing in one of them.</summary>
-    private List<VisualElement> ShowZonePositionalHighlightCells(IReadOnlyList<ZoneCell> markedCells)
+    private List<VisualElement> ShowZonePositionalHighlightCells(IReadOnlyList<ZoneCell> markedCells, bool targetIsPlayerSide)
     {
-        List<VisualElement> elements = BuildZonePositionalCellElements(markedCells, ZoneHighlightGreyColor);
+        List<VisualElement> elements = BuildZonePositionalCellElements(markedCells, ZoneHighlightGreyColor, targetIsPlayerSide);
         foreach (VisualElement element in elements) element.SendToBack();
         return elements;
     }
@@ -3054,7 +3114,7 @@ public class BattleHUDController : MonoBehaviour
     private static readonly Color ZoneStrikeFlashColor = Color.Lerp(MissFlashColor, Color.white, 0.6f);
     private const float ZoneStrikeVfxDurationSeconds = 0.3f;
 
-    public IEnumerator PlayZonePositionalGroundStrikeVfx(IReadOnlyList<ZoneCell> markedCells)
+    public IEnumerator PlayZonePositionalGroundStrikeVfx(IReadOnlyList<ZoneCell> markedCells, bool targetIsPlayerSide = true)
     {
         var realCells = new List<ZoneCell>();
         if (markedCells != null)
@@ -3065,7 +3125,7 @@ public class BattleHUDController : MonoBehaviour
             }
         }
 
-        List<VisualElement> strikeElements = BuildZonePositionalCellElements(realCells, ZoneStrikeFlashColor);
+        List<VisualElement> strikeElements = BuildZonePositionalCellElements(realCells, ZoneStrikeFlashColor, targetIsPlayerSide);
         foreach (VisualElement element in strikeElements) element.BringToFront();
 
         float elapsed = 0f;

@@ -8,6 +8,13 @@
       "command": "uvx",
       "args": ["--from", "mcpforunityserver==10.1.0", "mcp-for-unity", "--transport", "stdio"],
       "type": "stdio"
-    }
+    },
+    "devstudio": {
+      "command": "uvx",
+      "args": ["devstudio-mcp"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+  }
+}
   }
 }

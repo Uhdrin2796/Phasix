@@ -16,6 +16,121 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-24] Docs — Architecture/VFX Pipeline directive sync + DevStudio MCP verification workflow
+- **Context:** User supplied `phasix_doc_updates.zip`, a doc-sync package from a separate (no-push-access)
+  Claude Code session's two-day design pass on battle-rendering architecture and skill VFX authoring.
+  Reviewed and merged rather than blindly overwritten, since two of the zip's files
+  (`Attack_Pattern_Directive_v0_1_0.md`, `DOCUMENT_INDEX.md`) predate this session's own 2026-08-21
+  uncommitted work on the same files.
+- **Added:**
+  - `Assets/Docs/Architecture_Directive_v0_1_0.md` — full-codebase architecture review (18,812 lines
+    assessed against official Unity 2D guidance) and a 5-phase migration plan moving battle creatures/
+    projectiles off UI Toolkit `Painter2D` onto real Scene GameObjects, plus a new `Phasix.Presentation`
+    assembly. Design capture only, nothing built yet.
+  - `Assets/Docs/VFX_Pipeline_Directive_v0_1_0.md` — Shader Graph/2D Rigging/Sprite Shape/LineRenderer
+    tool comparison (confirms Shader Graph node authoring is a permanent CoplayDev dead end; text-only
+    hand-coded shaders are the stated default), plus a 9-family Skill Execution & Resolution Lifecycle
+    breakdown (Part 5) covering all 21 real skills in `Assets/Data/Skills/`. Blocked on
+    Architecture_Directive Phase 3.
+  - `Assets/Docs/VFX_WorkedExamples_v0_1_0.md` — two buildable tutorials (text-only Fireball dissolve,
+    hybrid Custom-Function-Node Corruption status visual); supersedes the never-committed
+    `ShaderGraph_WorkedExample_Fireball_v0_1_0.md`.
+- **Decided:**
+  - Merged, not overwritten: kept this session's 2026-08-21 Attack_Pattern_Directive/DOCUMENT_INDEX
+    additions rather than replacing them with the zip's (older) versions of those two files.
+  - Did not delete `Assets/Docs/melee_beat_sequence.mermaid` — the zip's `README_PLACEMENT.txt` said to,
+    but `Attack_Pattern_Directive_v0_1_0.md` itself (in both the zip's copy and this repo's) still
+    actively references it as current. Treated as a mistake in the zip, not acted on.
+  - Installed **DevStudio MCP** (`nihitgupta2/DevStudio`, `uvx devstudio-mcp` — published on PyPI, no
+    local clone needed despite the directive's own git-clone instructions) and registered it in
+    `.mcp.json`. Per user instruction, video-capture verification (record one full cycle, save and
+    present the clip) is now the standing practice for VFX/skill/effect review, not just a directive
+    proposal — documented in `CLAUDE.md`'s Tooling section.
+- **Live-tested DevStudio MCP against a real battle** (not just installed): hit a Windows-only startup
+  crash (Unicode checkmark in a log line can't encode on the default cp1252 console codepage) — fixed
+  via `PYTHONIOENCODING=utf-8` in the `.mcp.json` server entry's `env` block, no code change. Then
+  confirmed the directive's own open caveat the hard way: simulated OS clicks/keystrokes
+  (computer-use tooling) do **not** reliably reach Unity's Game view during Play mode — the battle
+  HUD's buttons never responded despite landing on correct coordinates, confirmed by watching the
+  resulting (empty) recording. Working alternative found and verified: trigger the action via
+  `unity-mcp execute_code` calling `BattleManager.ResolveSkillAction` directly through reflection
+  (same dispatch point the real click path uses, same `EventBus` events, same animations) instead of
+  simulating UI input — full recipe documented in `VFX_Pipeline_Directive_v0_1_0.md`'s new
+  "Triggering the action, not just capturing it" subsection (Part 2) and in memory
+  (`feedback_video_verification.md`) so this doesn't need re-discovering next session.
+- **Next:** Nothing in Architecture_Directive/VFX_Pipeline_Directive is buildable yet — both are gated
+  on Architecture_Directive Phase 1 (assembly split) starting.
+
+[2026-08-21] Phase 3 — Zone/Positional offense direction + AI dodge + Root's first mechanical wiring
+- **Context:** All Zone/Positional work to this point only ran enemy-casts/player-dodges. User:
+  "the last zone attacks have been me dodging the enemy. I should be able to attack the enemy too...
+  we can allow the enemy to also respond, maybe the enemy ai will have difficulty level or some may
+  always be able to dodge but i need to set it up with another skill to hold them in place."
+- **Built:**
+  - `SkillData.ForcedAppliedStatus` (`_hasForcedAppliedStatus`/`_forcedAppliedStatus`) — an explicit
+    override checked before `PlaceholderSkillResolver`'s tree/status heuristic in both
+    `ResolveSkillAction`'s and `ResolveEnemyDebuffAction`'s status branch. Needed because that
+    heuristic's Physical-category branch (`GetStatusCategory`) is unreachable dead code — it only
+    runs when `IsDamageSkill(tree)` is false, but `IsDamageSkill` is exactly true for the
+    Force/Guard-attribute trees that would otherwise map to Physical — so no placeholder skill could
+    ever apply a Physical status (Bleed/Fracture/Weaken/Stun/Root/Exposed/Slow), even by luck.
+  - `BattleParticipant.HasStatus(StatusEffectType)` — the first place any status effect actually
+    gates gameplay behavior. Every status before this ticked down and logged only.
+  - New `SkillData` asset **Snare** (`Assets/Data/Skills/Debuff_Snare.asset`, `SkillTreeType.Testing`,
+    `ForcedAppliedStatus = Root`) — applies Root through the ordinary status-skill path, no new
+    resolution code needed. Registered in `SkillDatabase.asset`.
+  - `ResolveSkillAction` gained a `ZonePositionalPattern != None` dispatch branch (mirrors the
+    existing enemy-side one), so the player can now cast any of the 5 Zone/Positional skills AT the
+    enemy — reuses `ResolveZonePositionalAttack`/`RunZonePositionalWarning` unchanged.
+  - `RunZonePositionalWarning` gained a `targetIsPlayerSide` param: when the defender is the enemy,
+    a single `EnemyAI.TryChooseDodgeStep` decision replaces the human keyboard-poll loop, rolled once
+    at a randomized reaction-delay instant (35-55% into the highlight window) rather than frame 0.
+    Movement is skipped entirely for either side when `HasStatus(Root)` is true.
+  - `EnemyAI.TryChooseDodgeStep` (new, pure/EditMode-testable) — dodge chance = Instinct/bond-scaled
+    base (`TimedInputConfig.ComputeWindowPercent`, same curve Dodge/Parry already use) × a new
+    `EnemyDifficultyTier` (`Weak`/`Standard`/`Elite`/`AlwaysDodges`, the last a hard 100% bypass) —
+    directly satisfies the user's "difficulty level... or some may always be able to dodge" ask. On a
+    successful roll, checks the 4 orthogonal single-step candidates and takes the first that's both
+    unoccupied and not a REAL marked cell (Split Attention's fake cells are safe to step onto).
+  - `EnemyDifficultyTier` set per-encounter via a new `EncounterTrigger` Inspector field, carried on
+    `PhasixRuntimeData.enemyDifficultyTier` → `BattleParticipant.DifficultyTier`.
+  - `ApplyEnemyLaneDepthScale` (`BattleHUDController`) now also offsets the lone enemy stage
+    element's `left` by `PositionIndex` (previously pinned to a fixed baseline — "single occupant, no
+    spread needed" — since position never had visual meaning for a lone enemy before AI dodging
+    existed) so a dodge is actually visible on stage.
+  - `GameManager.ApplyDebugPlaytestLoadout`'s player debug loadout swapped 6 already-validated
+    skills (Slash/Instant Strike/Feint/Metronome/Magma Burst/Volley) for the 5 Zone/Positional skills
+    + Snare, same slot count (12, this tier's cap) — same "swap out validated stuff for what needs
+    live validation now" pattern already used for the earlier Jitter→Charge & Release swap.
+- **Decided (see DECISIONS.md -> [Combat]):** `BuildZonePositionalCellElements` (the marked-cell
+  grid highlight AND the ground-strike VFX) now renders on either stage side, not player-only — user,
+  after the first pass shipped without it: "i dont see any of the targetting like i did when the
+  enemy attacks me. I want to be able to see those." `ApplyEnemyLaneDepthScale` now sizes/positions
+  `_enemyStageArea` and the lone enemy creature with the exact same `PositionRangeWidthPx`-based math
+  the player side already uses (confirmed safe to widen — `BattleHUD.uss`'s `.stage-side-enemy`
+  anchors via a true center pin, `right: 20%; translate: 50% -50%`, so growing the area's width
+  doesn't shift its visual center), so the cell grid lines up correctly there too. This still doesn't
+  touch the bigger multi-enemy rendering gap (array-ified stage creatures, multi-enemy spawning) —
+  it's still exactly one enemy, just with a real grid to show the marked shape against.
+- **Verified:** 355/355 EditMode tests (7 new, covering `TryChooseDodgeStep`'s candidate selection,
+  Root-blocks-movement, occupied-candidate skipping, and Weak-vs-Elite dodge-rate difference). Live
+  in Play Mode: applied Root, then cast "Overcharge" (SurroundingBurst, marks the target's own
+  current cell as real) — enemy never moved, took the hit (110 → 97 HP). Cleared Root, re-cast
+  Overcharge — enemy successfully dodged (lane 4 → 5, visibly repositioned via the extended
+  `ApplyEnemyLaneDepthScale`, 0 damage). `read_console` clean throughout every cast. After the
+  highlight-visibility fix: cast "Fault Line" (Row) at the enemy with the skill's own timing
+  temporarily stretched for screenshot capture — `manage_ui render_ui` confirms the full 4-row x
+  5-column marked grid renders correctly positioned around the enemy's stage area, with the enemy's
+  own (unmarked) lane correctly showing as a gap, and the cyan locked-target outline on the enemy
+  itself.
+- **Ref:** `SkillData.cs`, `BattleParticipant.cs`, `BattleManager.cs` (`ResolveSkillAction`,
+  `ResolveEnemyDebuffAction`), `BattleHUDController.cs` (`RunZonePositionalWarning`,
+  `TryStepZonePositionalTarget`, `ApplyEnemyLaneDepthScale`), `EnemyAI.cs`, `EnemyDifficultyTier.cs`
+  (new), `BattleConfig.cs`, `EncounterTrigger.cs`, `GameManager.cs`, `PhasixRuntimeData.cs`,
+  `Assets/Data/Skills/Debuff_Snare.asset`, `Assets/Tests/EditMode/EnemyAITests.cs`.
+
+---
+
 [2026-08-22] Bugfix — ground-strike VFX was re-lighting fake cells right after the blue reveal, contradicting it
 - **Context:** User shared a screen recording of Overcharge in real play: "for overcharge it shows
   the correct blue attack, but after that all the positions highlight" / "really im seeing an extra
