@@ -232,6 +232,54 @@ Issues that required significant investigation to resolve. Read before debugging
 
 ---
 
+## Rendering & Cameras
+
+### [Rendering] Direct camera-to-screen compositing is a dead end on Main Camera — two separate confirmed URP bugs
+- **Symptom:** Building Architecture Directive Phase 3's first real Scene stage creature (a
+  `SpriteRenderer` meant to render behind the UI Toolkit battle HUD), two different direct
+  camera-compositing approaches both silently failed — the new content never appeared on screen,
+  with no console errors, even though the camera/layer/sprite setup was independently verified
+  correct at every step (culling mask matched the object's layer, world position was inside the
+  camera's frustum, the sprite rendered fine when captured by the SAME camera in isolation).
+- **Root cause:** Two unrelated, confirmed Unity/URP platform bugs, both triggered because
+  Phasix's Main Camera carries a 2D Renderer, a Pixel Perfect Camera, AND a Cinemachine Brain
+  together:
+  1. **URP's 2D Renderer does not support Camera Stacking at all.** Adding a second camera as a
+     proper URP Overlay and stacking it onto Main Camera (`UniversalAdditionalCameraData.
+     cameraStack`) produced a solid-black frame on a direct `RenderTexture` readback of Main
+     Camera, confirmed via WebSearch against Unity's own docs/community reports — not a
+     configuration mistake, a hard pipeline limitation for this renderer type.
+  2. **Pixel Perfect Camera has a known, tracked bug where it doesn't reliably respect
+     `cullingMask`.** Reusing Main Camera's own cullingMask (swapping which layer it renders,
+     instead of adding a second camera) also failed — confirmed by moving the test object to
+     dead-center at 3x scale (ruling out any position/framing math error) and it still never
+     appeared. This matches a real, open GitHub issue:
+     `Unity-Technologies/2d-pixel-perfect#10`.
+  A third, smaller issue surfaced once an isolated off-screen capture camera (see Fix) was tried:
+  a `Sprite-Lit-Default` material rendered solid opaque black through that camera specifically,
+  despite a correctly-configured `Global Light 2D` covering the right sorting layer at full
+  intensity — confirmed via direct RenderTexture pixel readback (`RGBA(0,0,0,1)` exactly at the
+  sprite's position). Root cause not fully chased down (a URP 2D Lighting + off-screen-
+  RenderTexture-target interaction is the leading suspect).
+- **Fix:** Don't attempt direct camera compositing against Main Camera in this project at all. Use
+  a RenderTexture bridge instead — a dedicated capture camera with NO Pixel Perfect Camera and NO
+  Cinemachine Brain renders off-screen into a `RenderTexture`, which then becomes a UI Toolkit
+  `VisualElement`'s `background-image` (`Background.FromRenderTexture`). This is exactly
+  `DissolveVfxBridge.cs`'s existing, already-proven technique — it was never doing direct camera
+  compositing to begin with. For the Lit-shader-goes-black issue, give the off-screen-rendered
+  object's materials `Sprite-Unlit-Default` instead of `Sprite-Lit-Default`; it doesn't depend on
+  any light contribution and matches the source color exactly (verified via readback:
+  `RGBA(0.514, 0.443, 0.467, 1.0)`, an exact match for the expected computed `PrimalTypeColor`).
+- **Date:** 2026-08-26
+- **Key rule:** If a camera/layer/sprite setup checks out correct at every individual step but
+  content still doesn't appear on screen, suspect the CAMERA's own attached components (Pixel
+  Perfect Camera, Cinemachine Brain, custom Renderer Data) before re-checking culling masks or
+  positions again — and verify with a direct `RenderTexture` pixel readback (bypasses whatever the
+  Game View/screenshot tooling is actually capturing) rather than trusting a screenshot alone. Full
+  investigation: `Assets/Docs/DECISIONS.md` → `[Architecture]` "Phase 3 first slice" entry.
+
+---
+
 ## 2D IK (LimbSolver2D)
 
 ### [IK] LimbSolver2D set up via C# produces no bone movement
