@@ -1,3 +1,18 @@
 {
-  "enabledMcpjsonServers": ["context7", "unity-mcp"]
+  "enabledMcpjsonServers": ["context7", "unity-mcp"],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); raw=$(printf '%s' \"$input\" | grep -o '\"file_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | head -1 | sed -E 's/.*:[[:space:]]*\"(.*)\"/\\1/'); path=$(printf '%s' \"$raw\" | sed 's/\\\\\\\\/\\//g'); case \"$path\" in *Assets*Scripts*.cs) if [ -f \"$path\" ]; then lines=$(wc -l < \"$path\" | tr -d ' '); if [ \"$lines\" -gt 800 ] 2>/dev/null; then printf '{\"systemMessage\": \"File %s is now %s lines (over the 800-line guideline in CLAUDE.md Architecture Guardrails) - consider a decomposition discussion before adding more.\"}' \"$path\" \"$lines\"; fi; fi ;; esac",
+            "timeout": 10,
+            "statusMessage": "Checking file size against the 800-line guideline..."
+          }
+        ]
+      }
+    ]
+  }
 }

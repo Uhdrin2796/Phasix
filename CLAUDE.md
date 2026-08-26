@@ -30,6 +30,31 @@ Senior Unity Developer and C# Architect. Every response: real scripts, real Insp
 - **World = GameObject Chunks.** Toggle `SetActive(false)` for distant chunks — never destroy them.
 - **Pathfinding = A* Pathfinding Project (free/Lite).**
 
+## Architecture Guardrails (added 2026-08-25, after a 4-phase session untangling a real circular
+dependency and two ~3,000-line files — read this before adding a new file or growing an existing
+one; the goal is to never need a session like that again)
+
+- **One mechanic/feature = one file, from the start.** Don't add a new combat archetype, skill
+  resolver, or UI mini-system as another method appended to an existing dispatcher class
+  (`BattleManager.cs`, `BattleHUDController.cs` grew to 2,562/3,387 lines exactly this way — see
+  `DECISIONS.md` → `[Architecture]` and `Architecture_Directive_v0_1_0.md` Part 1 debt item 5). New
+  archetype → new file, wired into the existing dispatcher with a single call/case, not pasted in.
+- **Flag any script past ~600–800 lines** for a decomposition discussion before adding more to it —
+  don't wait until it's 2,500+ lines to notice. A `PostToolUse` hook now warns automatically when a
+  `.cs` file crosses this after an edit (see `.claude/settings.json`); the number itself isn't sacred,
+  the earlier-not-later habit is what matters.
+- **Assembly dependency graph — a hard constraint, not just a folder map.** As of Phase 1d
+  (2026-08-25), the graph is: `Phasix.Player` (leaf, zero Phasix deps) ← `Phasix.World` ←
+  `Phasix.Runtime` (bundles `Core`-kernel + `Creatures` + `Combat` + `Save` + `Audio`, internally
+  one-way: `Core` ← `Creatures` ← `Save`/`Audio`, `Core`+`Creatures`+`Audio` ← `Combat`) ←
+  `Phasix.Bootstrap` (`GameManager`) ← `Phasix.UI`. **Before adding a reference or a new
+  cross-folder call, check it doesn't point the wrong way** (e.g. anything in `Core/` calling into
+  `Creatures/`, `Combat/`, or `Save/` is exactly the mistake that took 4 phases to unwind — see
+  `DECISIONS.md` → `[Architecture]` for the full evidence of why each direction is what it is).
+  When genuinely unsure which folder new code belongs in, err toward the *narrowest* dependency
+  direction (does it really need to look inward toward `Core`, or is it something `Core` would need
+  to look outward at?) rather than guessing.
+
 ## Code Style
 ```csharp
 [SerializeField] private float _moveSpeed = 5f;   // private fields: _camelCase
