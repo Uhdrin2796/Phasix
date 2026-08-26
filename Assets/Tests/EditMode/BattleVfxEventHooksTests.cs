@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace Phasix.Tests.EditMode
@@ -18,15 +17,13 @@ namespace Phasix.Tests.EditMode
         [Test]
         public void OnBattleWon_NoBattleHUDController_DoesNotThrow()
         {
-            var result = new BattleResult(true, new List<BattleParticipant>(), new List<BattleParticipant>());
-            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleWon(result));
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleWon());
         }
 
         [Test]
         public void OnBattleLost_NoBattleHUDController_DoesNotThrow()
         {
-            var result = new BattleResult(false, new List<BattleParticipant>(), new List<BattleParticipant>());
-            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleLost(result));
+            Assert.DoesNotThrow(() => BattleVfxEventHooks.OnBattleLost());
         }
 
         [Test]

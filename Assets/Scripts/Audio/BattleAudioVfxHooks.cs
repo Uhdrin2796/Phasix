@@ -36,11 +36,11 @@ public static class BattleAudioVfxHooks
         EventBus.OnPhasixCaptured += OnPhasixCaptured;
     }
 
-    private static void OnBattleWon(BattleResult result) => AudioManager.Instance?.PlayBattleWon();
+    private static void OnBattleWon() => AudioManager.Instance?.PlayBattleWon();
 
-    private static void OnBattleLost(BattleResult result) => AudioManager.Instance?.PlayBattleLost();
+    private static void OnBattleLost() => AudioManager.Instance?.PlayBattleLost();
 
-    private static void OnBattleFled(BattleResult result) => AudioManager.Instance?.PlayBattleFled();
+    private static void OnBattleFled() => AudioManager.Instance?.PlayBattleFled();
 
     private static void OnSkillUsed(PhasixRuntimeData phasix, SkillData skill) => AudioManager.Instance?.PlaySkillUsed();
 

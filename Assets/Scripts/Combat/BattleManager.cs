@@ -2543,9 +2543,9 @@ public class BattleManager : MonoBehaviour
     {
         var result = new BattleResult(outcome == BattleOutcome.Won, _state.PlayerSide, _state.EnemySide);
 
-        if (outcome == BattleOutcome.Won) EventBus.Raise_BattleWon(result);
-        else if (outcome == BattleOutcome.Fled) EventBus.Raise_BattleFled(result);
-        else EventBus.Raise_BattleLost(result);
+        if (outcome == BattleOutcome.Won) EventBus.Raise_BattleWon();
+        else if (outcome == BattleOutcome.Fled) EventBus.Raise_BattleFled();
+        else EventBus.Raise_BattleLost();
 
         if (outcome == BattleOutcome.Won)
         {

@@ -32,6 +32,14 @@ composition-root split (Part 4 item 5) remain open.
 bundled with `Combat` inside `Phasix.Runtime` until the `GameManager` composition-root split (Part
 4 item 5(b)) lands. That split is now the **only** remaining piece blocking Phase 3 and the
 `VFX_Pipeline_Directive`.
+**Errata (2026-08-25 — Phase 1d, CLOSES this item):** `GameManager` composition-root split done —
+new `Phasix.Bootstrap.asmdef` (`Bootstrap/GameManager.cs`), referenced by `Phasix.UI` for its 2 real
+calls. Separately, `EventBus`'s `OnBattleWon`/`OnBattleLost`/`OnBattleFled` — the actual thing still
+tying `Core` to `Combat` — were simplified to parameterless, since exhaustive grep found zero real
+readers of the `BattleResult` payload they used to carry; `BattleResult.cs` moved to `Combat/` (see
+`DECISIONS.md` → `[Architecture]` for full evidence, including why a `bool` payload was rejected as
+a middle ground). **Part 4 item 5 is now fully closed. `Core`/`Creatures`/`Combat` have no
+remaining circular references. Phase 3 and the `VFX_Pipeline_Directive` are genuinely unblocked.**
 **Related:** Combat_Directive_v0_1_0.md, Attack_Pattern_Directive_v0_1_0.md, VFX_Pipeline_Directive_v0_1_0.md, Phasix_TechnicalDirective_v0.1.0.html, LESSONS_LEARNED.md, KNOWN_ISSUES.md
 
 ---
@@ -86,21 +94,20 @@ A full-codebase review (18,812 lines across `Assets/Scripts`), assessed against 
 | `Phasix.World` | Overworld (already-correct pattern) | Core, Creatures |
 
 Dependency direction was assumed one-way, top-to-bottom in the table. **This table does not match
-the live code** — see the errata above. `Core`, `Creatures`, and `Combat` remain a real,
-mutually-coupled cluster and cannot be split this way without the `GameManager` composition-root
-work (Part 4 item 5(b)) landing first. `UI` and `Audio` were both real, mutually-coupled cycles too
-— both now closed (Phase 1b/1c above) — but that alone only let one of them extract: `UI` had
-exactly one back-reference, and moving it was sufficient. `Audio`'s back-reference is gone the same
-way, but it still can't become its own assembly, because it separately needs `Creatures` types,
-which stay bundled with `Combat` in `Phasix.Runtime` until the composition-root split. What was
-actually built, in order: `Phasix.World` and a new `Phasix.Player` (not in this table — see Part 4
-item 1, that judgment call resolved to giving Player its own assembly rather than folding it into
-World); then `Phasix.UI` — the `Combat↔UI` edge turned out to be just `HudTooltip`/
-`BattleSummaryController`, moved into `Combat/` to resolve it; then the `Combat↔Audio`
-back-reference, closed via `Combat/BattleVfxEventHooks.cs` (see `DECISIONS.md` → `[Architecture]`
-for all three). `Phasix.Runtime` still covers `Core`+`Creatures`+`Combat`+`Save`+`Audio` — the
-Phase 1c fix changed what references what internally, not which assembly things live in.
-`Phasix.Presentation` remains unbuilt, blocked on Phase 3.
+the live code** — see the errata above, though as of Phase 1d every cycle it originally described
+is now closed. What was actually built, in order: `Phasix.World` and a new `Phasix.Player` (not in
+this table — see Part 4 item 1, that judgment call resolved to giving Player its own assembly
+rather than folding it into World); then `Phasix.UI` — the `Combat↔UI` edge turned out to be just
+`HudTooltip`/`BattleSummaryController`, moved into `Combat/`; then the `Combat↔Audio`
+back-reference, closed via `Combat/BattleVfxEventHooks.cs`; then the `GameManager` composition-root
+split — new `Phasix.Bootstrap` (`GameManager`, referenced by `UI`) plus simplifying `EventBus`'s
+battle-outcome events (their `BattleResult` payload, which forced `Core → Combat`, turned out to
+have zero real readers) and moving `BattleResult.cs` to `Combat/` (see `DECISIONS.md` →
+`[Architecture]` for full evidence on all four). End state: `Phasix.Runtime` covers `Core`
+(kernel)+`Creatures`+`Combat`+`Save`+`Audio` — genuinely non-circular now, not just bundled by
+default — plus `Phasix.Bootstrap`, `Phasix.UI`, `Phasix.World`, `Phasix.Player` as clean, one-way
+consumers. `Phasix.Presentation` remains unbuilt — it's the only piece of this table not yet
+started, now genuinely unblocked rather than blocked, and is Phase 3's job.
 
 ### File size discipline
 
@@ -110,13 +117,15 @@ No hard rule invented here (that's a team-taste call), but 3,387 and 2,562 lines
 
 ## Part 3 — Migration Plan, Phased by Risk
 
-**Phase 1 — Assembly split. BUILT 2026-08-24 through 2026-08-25, in three increments**
-(`Phasix.World`/`Phasix.Player`, then `Phasix.UI`, then the `Combat`↔`Audio` back-reference closed
-— see the errata above and `DECISIONS.md` → `[Architecture]`). Mechanical, no behavior change, zero
-visual risk — true for everything actually built. The one remaining piece — untangling `Core`/
-`Creatures`/`Combat` themselves via the `GameManager` composition-root split — is **not**
-mechanical, since those three are genuinely, mutually coupled; that's Part 4 item 5(b)'s job, not
-this phase's.
+**Phase 1 — Assembly split. BUILT 2026-08-24 through 2026-08-25, in four increments, COMPLETE**
+(`Phasix.World`/`Phasix.Player`, then `Phasix.UI`, then the `Combat`↔`Audio` back-reference, then
+the `GameManager` composition-root split + `EventBus`/`BattleResult` decoupling — see the errata
+above and `DECISIONS.md` → `[Architecture]`). The first three increments were mechanical, no
+behavior change; the fourth involved a narrow, fully evidence-justified event-signature
+simplification (the `BattleResult` payload it removed had zero real readers) rather than a pure
+file move, flagged as such rather than dressed up as mechanical. `Core`/`Creatures`/`Combat` are
+now genuinely non-circular. Phase 2 (god-file decomposition) and Phase 3 (world-layer migration)
+are unblocked.
 
 **Phase 2 — Decompose the two god-files**, still with no behavior change — pure extraction/reorganization along the Part 2 boundaries, before any rendering migration touches them. Doing this first means Phase 3 touches several well-scoped files instead of two 3,000-line ones.
 
@@ -142,12 +151,13 @@ Phase 3 above assumes the **hybrid** path. Worth naming the alternatives explici
 2. **Spine vs Unity 2D Animation** — already open in Roadmap, directly blocks Phase 4's rigging work specifically.
 3. **Does ring/gauge/drag-line ever migrate, or stay UI Toolkit permanently?** Current recommendation is permanently — they're genuinely well-suited to Painter2D and migrating them buys nothing toward visual quality. Worth confirming this isn't just deferred by default.
 4. **`BattleManager`/`BattleHUDController`'s actual responsibility split** hasn't been read function-by-function yet — Phase 2 should start with an audit pass before extracting anything, since the assumption that they're already cleanly simulation/presentation-separated is unverified.
-5. **New, added 2026-08-24 — the `Core`/`Creatures`/`Combat`/`Audio` decoupling this doc's Phase 1 assumed away.** This blocks Phase 3 and the whole `VFX_Pipeline_Directive` and needs its own deliberately-scoped plan, reviewed separately from any "mechanical" phase. Candidates identified by the 2026-08-24 audit (`DECISIONS.md` → `[Architecture]` has the full evidence): (a) ~~`HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than misused~~ — **DONE 2026-08-24**, moved into `Combat/`, `Phasix.UI.asmdef` built; (b) `GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root/bootstrap type, not a `Core`-kernel type — it may need its own top-level assembly allowed to depend on everything, while `EventBus`/`GameStrings` stay a true dependency-free kernel (`BattleResult` needs the same treatment, or a move into `Combat/` — check what `EventBus`'s `Action<BattleResult>` signatures constrain first); (c) ~~`Combat`↔`Audio` (`BattleHUDController`↔`AudioManager`/`BattleAudioVfxHooks`)~~ — **DONE
+5. **CLOSED 2026-08-25 — the `Core`/`Creatures`/`Combat`/`Audio` decoupling this doc's Phase 1 originally assumed away.** All three candidates identified by the 2026-08-24 audit are done (`DECISIONS.md` → `[Architecture]` has the full evidence for each): (a) ~~`HudTooltip`/`BattleSummaryController` are likely mis-sorted into `UI/` rather than misused~~ — **DONE 2026-08-24**, moved into `Combat/`, `Phasix.UI.asmdef` built; (b) ~~`GameManager`'s direct `SaveSystem`/`PartySystem` calls suggest it's a composition-root/bootstrap type~~ — **DONE 2026-08-25**, new `Phasix.Bootstrap.asmdef` (`Bootstrap/GameManager.cs`), referenced by `Phasix.UI` for its 2 real calls. `BattleResult` turned out not to need a home in `Core` at all — exhaustive grep found zero real readers of its payload on `EventBus`'s battle-outcome events, so those were simplified to parameterless instead, and `BattleResult.cs` moved to `Combat/` (its only real users, `BattleTransition`/`BattleManager`, already live there); (c) ~~`Combat`↔`Audio` (`BattleHUDController`↔`AudioManager`/`BattleAudioVfxHooks`)~~ — **DONE
 2026-08-25**, via `Combat/BattleVfxEventHooks.cs` (new static class, same sole-subscriber pattern
 `SkillTreeUnlockSystem.cs` already establishes) taking over the 4 `BattleHUDController` calls
-`BattleAudioVfxHooks.cs` used to make directly. As predicted, this did **not** produce a new
-`Phasix.Audio.asmdef` — `Audio` still needs `Creatures` types, bundled with `Combat` until (b) is
-done. Only (b), the `GameManager` composition-root split, remains open.
+`BattleAudioVfxHooks.cs` used to make directly. This did **not** produce a new `Phasix.Audio.asmdef`
+on its own — `Audio` still needs `Creatures` types — but once (b) closed the `Core`/`Creatures`/
+`Combat` cycle, `Audio` staying bundled in `Phasix.Runtime` stopped being a blocker for anything.
+**Item 5 is fully closed.**
 
 ---
 

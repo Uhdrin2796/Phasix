@@ -49,14 +49,22 @@ public static class EventBus
     // PHASE 3 — Battle System (stubs — wired when BattleManager is built, Mo 5)
     // -------------------------------------------------------------------------
 
-    /// <summary>Fires when the player wins a battle. Used by AuraManager for drop calculation.</summary>
-    public static event Action<BattleResult> OnBattleWon;
+    /// <summary>
+    /// Fires when the player wins a battle. Used by AuraManager for drop calculation.
+    /// Parameterless (2026-08-25 — see DECISIONS.md -> [Architecture]): the BattleResult payload
+    /// this used to carry was never actually read by any subscriber, and forced Core to depend on
+    /// Combat (BattleResult held List&lt;BattleParticipant&gt;). TODO: Phase 4 (Mo 8) — if
+    /// AuraManager/the loss-state handler need battle data when built, follow
+    /// Combat/BattleSummary.cs's pattern (plain primitives/Creatures-level types only) — do NOT
+    /// reintroduce a Combat-level payload (e.g. BattleParticipant) here.
+    /// </summary>
+    public static event Action OnBattleWon;
 
-    /// <summary>Fires when the player loses a battle. Loss state: currency/item cost only — no Aura/bond loss.</summary>
-    public static event Action<BattleResult> OnBattleLost;
+    /// <summary>Fires when the player loses a battle. Loss state: currency/item cost only — no Aura/bond loss. See OnBattleWon's doc comment re: parameterless.</summary>
+    public static event Action OnBattleLost;
 
-    /// <summary>Fires when the player successfully flees a battle via the Flee button (2026-08-10). Distinct from OnBattleLost — fleeing has zero cost, unlike a real loss.</summary>
-    public static event Action<BattleResult> OnBattleFled;
+    /// <summary>Fires when the player successfully flees a battle via the Flee button (2026-08-10). Distinct from OnBattleLost — fleeing has zero cost, unlike a real loss. See OnBattleWon's doc comment re: parameterless.</summary>
+    public static event Action OnBattleFled;
 
     /// <summary>Fires when any Phasix uses a skill in battle.</summary>
     public static event Action<PhasixRuntimeData, SkillData> OnSkillUsed;
@@ -67,9 +75,9 @@ public static class EventBus
     /// <summary>Fires when a Phasix takes damage. Used by bond gauge fill logic.</summary>
     public static event Action<PhasixRuntimeData, int> OnDamageTaken;
 
-    public static void Raise_BattleWon(BattleResult result)                               => OnBattleWon?.Invoke(result);
-    public static void Raise_BattleLost(BattleResult result)                              => OnBattleLost?.Invoke(result);
-    public static void Raise_BattleFled(BattleResult result)                              => OnBattleFled?.Invoke(result);
+    public static void Raise_BattleWon()                                                   => OnBattleWon?.Invoke();
+    public static void Raise_BattleLost()                                                  => OnBattleLost?.Invoke();
+    public static void Raise_BattleFled()                                                  => OnBattleFled?.Invoke();
     public static void Raise_SkillUsed(PhasixRuntimeData phasix, SkillData skill)         => OnSkillUsed?.Invoke(phasix, skill);
     public static void Raise_TimedInputSuccess(PhasixRuntimeData phasix)                  => OnTimedInputSuccess?.Invoke(phasix);
     public static void Raise_DamageTaken(PhasixRuntimeData phasix, int damage)            => OnDamageTaken?.Invoke(phasix, damage);

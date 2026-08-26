@@ -16,6 +16,58 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-25] Phase 1d — Architecture Directive: GameManager composition-root split + EventBus/BattleResult decoupling — CLOSES the assembly-split effort
+- **Built:** New `Bootstrap/` folder + `Phasix.Bootstrap.asmdef` (references `Phasix.Runtime` only).
+  `Core/GameManager.cs` moved there (`git mv`, GUID preserved — the `_GameManager` GameObject in
+  `SampleScene` re-linked correctly). `Core/BattleResult.cs` moved to `Combat/` (its real home —
+  only `BattleTransition.cs`/`BattleManager.cs` use it, both already there). `EventBus.cs`'s
+  `OnBattleWon`/`OnBattleLost`/`OnBattleFled` events and `Raise_*` methods simplified from
+  `Action<BattleResult>` to parameterless `Action`, with a `// TODO: Phase 4 (Mo 8)` comment
+  pointing any future payload need at `Combat/BattleSummary.cs`'s plain-data-DTO pattern instead of
+  reintroducing a `Combat`-level type. Updated the 3 call sites in `BattleManager.cs`, the 3
+  handlers in `BattleAudioVfxHooks.cs`, the 2 in `BattleVfxEventHooks.cs`, and the 2 affected tests
+  in `BattleVfxEventHooksTests.cs`. `Phasix.UI.asmdef` gained a reference to `Phasix.Bootstrap` (for
+  `OverworldMenuController`'s real `GameManager.Instance?.ResetToNewGame()`/`SaveToSlot()` calls).
+- **Decided:** Exhaustively grepped every `GameManager.`/`BattleResult` reference in the codebase
+  before touching anything. `GameManager`'s outbound deps (`SkillDatabase`, `SpeciesDatabase`,
+  `SaveSystem`, etc.) are genuinely load-bearing — not removable, unlike the earlier `Combat↔Audio`
+  fix. Its only real inbound caller from outside `Core/` is `OverworldMenuController.cs` (2 call
+  sites) — nothing in `Combat`/`Creatures`/`Save`/`Audio`/`World`/`Player` calls it for real. That
+  produces a clean, non-circular order: `Runtime → Bootstrap → UI`. Separately, confirmed via
+  exhaustive grep that `BattleResult`'s `.Victory`/`.PlayerParticipants`/`.EnemyParticipants` fields
+  are read by **zero** current subscribers anywhere — the entire reason `Core` needed `Combat` was
+  a speculative payload for `AuraManager`/the loss-state handler (`Roadmap_v2` Mo 8, not yet built).
+  Rejected keeping a `bool won` payload as a middle ground: checked `Combat/BattleSummary.cs`
+  (already built, already used) as the proven template for handing off battle data without
+  `Combat`-only types, and a bare `bool` wouldn't have served `AuraManager`'s actual future need
+  (per-participant drops) anyway — so it bought no real future-readiness over parameterless.
+- **Verified:** 359/359 EditMode tests (count unchanged — 2 tests modified, none added/removed).
+  Play Mode: reflection confirmed `GameManager`/`BattleResult` compiled into `Phasix.Bootstrap`/
+  `Phasix.Runtime` respectively, and `OnBattleWon`'s field type is now `System.Action`. Full boot
+  sequence (auto-load slot 0) worked post-move. The real `UI → Bootstrap` calls —
+  `GameManager.SaveToSlot(1)` (verified by reading the slot back) and `GameManager.ResetToNewGame()`
+  (triggered a real scene reload, `GameManager` survived via `DontDestroyOnLoad`, boot sequence
+  re-ran and re-seeded the party correctly) — both worked with zero exceptions. Battle-outcome
+  events: `EventBus.OnBattleWon`'s invocation list still showed exactly 2 subscribers
+  (`BattleAudioVfxHooks` + `BattleVfxEventHooks`); firing all 3 parameterless events with a live
+  `BattleHUDController` (real, non-null `_vfxController`) threw no exceptions. The still-`BattleResult`-carrying
+  path (`BattleManager` → `BattleTransition.CompleteBattle` → `WildEncounterCreature`'s callback)
+  fired end-to-end with no exceptions, confirming it's fully unaffected. Acceptance test:
+  deliberately broke `Bootstrap/GameManager.cs` — `Phasix.UI` correctly also failed to compile (a
+  real, expected dependency, not a regression), while `Phasix.Runtime`/`World`/`Player` stayed fully
+  loaded and callable. Reverted, `read_console` clean throughout.
+  (Note: the encounter's `OnTriggerEnter2D` didn't fire from a scripted teleport post-scene-reload
+  in this session — an unrelated physics-timing quirk, not a regression from this change; worked
+  around by invoking `WildEncounterCreature.HandleEngage` directly via reflection, which exercised
+  the identical downstream path.)
+- **This closes Architecture_Directive Part 4 item 5 entirely.** Phase 3 (battle rendering off UI
+  Toolkit) and `VFX_Pipeline_Directive` are now genuinely unblocked — `Core`/`Creatures`/`Combat`
+  have no remaining circular references.
+- **Deliberately not done:** further splitting `Core`/`Creatures`/`Save`/`Audio`/`Combat` into
+  individually separate assemblies. Not needed to unblock Phase 3 (a new `Presentation` assembly can
+  already sit cleanly on top of the bundled `Phasix.Runtime` now that the cycle is closed) — optional
+  future cleanup, not scoped here.
+
 [2026-08-25] Phase 1c — Architecture Directive: Combat↔Audio back-reference closed
 - **Built:** `Combat/BattleVfxEventHooks.cs` — new static class, same
   `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` sole-subscriber pattern

@@ -49,7 +49,10 @@ Assets/
   Docs/          ← All design documents (see DOCUMENT_INDEX.md)
   UI/            ← UI Toolkit assets (UXML, USS, PanelSettings) — non-script UI, distinct from Scripts/UI/
   Scripts/
-    Core/        ← GameManager, EventBus, SaveManager
+    Core/        ← EventBus, GameStrings (dependency-free kernel — see Architecture_Directive_v0_1_0.md)
+    Bootstrap/   ← GameManager ← Done (2026-08-25) — composition-root assembly (Phasix.Bootstrap),
+                   split out of Core/ once GameManager's real Save/Creatures/Combat dependencies
+                   were found to be load-bearing, not misplaced — see DECISIONS.md -> [Architecture]
     Player/      ← PlayerController, CameraFollow
     Creatures/   ← PhasixData, BondSystem, EvolutionManager, CompanionAI
     Evolution/   ← EvolutionEvaluator, EvolutionExecutor, EvolutionPathfinder, EvolutionWebController ← Phase 3, not yet created

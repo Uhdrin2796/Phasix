@@ -24,10 +24,10 @@ public static class BattleVfxEventHooks
     }
 
     /// <summary>Public so EditMode tests can call it directly without relying on RuntimeInitializeOnLoadMethod having fired.</summary>
-    public static void OnBattleWon(BattleResult result) => BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: true);
+    public static void OnBattleWon() => BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: true);
 
     /// <summary>Public so EditMode tests can call it directly without relying on RuntimeInitializeOnLoadMethod having fired.</summary>
-    public static void OnBattleLost(BattleResult result) => BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: false);
+    public static void OnBattleLost() => BattleHUDController.Instance?.PlayBattleOutcomeVfx(won: false);
 
     /// <summary>Public so EditMode tests can call it directly without relying on RuntimeInitializeOnLoadMethod having fired.</summary>
     public static void OnBondMilestoneReached(PhasixRuntimeData phasix, BondZone zone) => BattleHUDController.Instance?.PlayBondMilestoneVfx();

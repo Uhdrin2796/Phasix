@@ -5418,3 +5418,51 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Date:** 2026-08-25
 - **Revisit if:** The `GameManager` composition-root split lands and `Audio` becomes worth
   extracting as its own assembly — at that point this fix is already the prerequisite it needed.
+
+### [Architecture] GameManager composition-root split + EventBus/BattleResult decoupling — closes the assembly-split effort
+- **Decided:** Moved `GameManager.cs` from `Core/` into a new `Bootstrap/` folder/assembly
+  (`Phasix.Bootstrap.asmdef`, references `Phasix.Runtime` only). Moved `BattleResult.cs` from
+  `Core/` to `Combat/`. Simplified `EventBus.cs`'s `OnBattleWon`/`OnBattleLost`/`OnBattleFled`
+  events and `Raise_*` methods from `Action<BattleResult>` to parameterless `Action`. Added
+  `Phasix.Bootstrap` to `Phasix.UI.asmdef`'s references.
+- **Why:** Exhaustive grep of every `GameManager.`/`BattleResult` reference in the codebase (not
+  sampled) found: (1) `GameManager`'s outbound dependencies on `Save`/`Creatures`/`Combat` are
+  genuinely load-bearing (real boot-sequence/save-load logic) — it's a true composition-root type,
+  not misplaced Core-kernel code. Its only real inbound caller from outside `Core/` is
+  `UI/OverworldMenuController.cs` (`ResetToNewGame()`/`SaveToSlot()`, 2 real call sites) — nothing
+  in `Combat`/`Creatures`/`Save`/`Audio`/`World`/`Player` calls it for real, which makes
+  `Runtime → Bootstrap → UI` a clean, non-circular order. (2) `BattleResult`'s
+  `List<BattleParticipant>` payload — the thing forcing `Core` to depend on `Combat` via
+  `EventBus`'s event signatures — is read by **zero** current subscribers anywhere; every
+  subscriber to the 3 battle-outcome events ignores the parameter entirely, only caring which event
+  fired. `BattleResult.cs`'s own doc comment confirms the payload was speculative, built for
+  `AuraManager`/the loss-state handler (`Roadmap_v2` Mo 8), neither built yet. `BattleResult` isn't
+  fully dead code, though — `Combat/BattleTransition.cs` (`StartWildBattle`/`CompleteBattle`) uses
+  it as a callback payload type for real, entirely within `Combat/`, so moving it there (rather than
+  deleting it) preserves that path with zero behavior change.
+- **Alternatives rejected:** Keeping a `bool won` payload on `OnBattleWon`/`OnBattleLost` as a
+  middle ground between full removal and the original rich payload — rejected because it buys no
+  real future-readiness: `AuraManager`'s actual eventual need (per-participant Aura drops) requires
+  more than a bool anyway, so keeping one doesn't save the future implementer any real work, it just
+  keeps a redundant field (which event fired already tells you win/loss). Checked
+  `Combat/BattleSummary.cs` (already built, already used by `BattleSummaryController`) as the
+  proven precedent for the *correct* future pattern instead — plain primitives/`Creatures`-level
+  types only (`TotalDamageDealt`/`TotalHealingDone`/`TotalAuraGained`), never a `Combat`-only type
+  like `BattleParticipant`. Documented this as a `// TODO: Phase 4 (Mo 8)` comment on `EventBus.cs`
+  and here, so whoever builds `AuraManager` doesn't rediscover this same architectural mistake.
+- **Verified:** 359/359 EditMode tests. Reflection confirmed `GameManager`/`BattleResult` compiled
+  into `Phasix.Bootstrap`/`Phasix.Runtime` respectively, `OnBattleWon`'s field type is `System.Action`.
+  Real `UI → Bootstrap` calls (`SaveToSlot`, `ResetToNewGame` — the latter a full scene reload with
+  `GameManager` surviving via `DontDestroyOnLoad` and the boot sequence correctly re-running)
+  verified with zero exceptions. `EventBus.OnBattleWon`'s invocation list confirmed still exactly 2
+  subscribers post-change; fired all 3 events live with a real `BattleHUDController` present, zero
+  exceptions. The still-`BattleResult`-carrying path (`BattleManager` → `BattleTransition` →
+  `WildEncounterCreature`'s callback) fired end-to-end with zero exceptions. Acceptance test: broke
+  `Bootstrap/GameManager.cs`, confirmed `Phasix.UI` correctly also failed (real dependency, not a
+  regression) while `Phasix.Runtime`/`World`/`Player` stayed loaded and callable; reverted.
+- **This closes Architecture_Directive Part 4 item 5 entirely** — `Core`/`Creatures`/`Combat` have
+  no remaining circular references. Phase 3 and `VFX_Pipeline_Directive` are genuinely unblocked.
+- **Date:** 2026-08-25
+- **Revisit if:** `AuraManager`/the loss-state handler get built (Mo 8) — follow
+  `Combat/BattleSummary.cs`'s pattern for any new `EventBus` payload, don't reintroduce
+  `BattleParticipant` or any other `Combat`-only type into `Core/EventBus.cs`'s signatures.

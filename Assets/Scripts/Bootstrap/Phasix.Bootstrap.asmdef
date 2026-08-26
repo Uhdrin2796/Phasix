@@ -1,10 +1,8 @@
 {
-    "name": "Phasix.UI",
+    "name": "Phasix.Bootstrap",
     "rootNamespace": "",
     "references": [
-        "Phasix.Runtime",
-        "Phasix.Bootstrap",
-        "Unity.InputSystem"
+        "Phasix.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
