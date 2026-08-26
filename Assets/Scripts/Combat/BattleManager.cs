@@ -152,6 +152,19 @@ public class BattleManager : MonoBehaviour
         // layers) + clearFlags = SolidColor, so the Game View always has a valid active camera and
         // the panel's canvas size stays stable. Cache everything before touching it so EndBattle
         // can restore the overworld exactly as it was.
+        //
+        // 2026-08-26 (Architecture_Directive Part 3, first real Scene-creature slice — see
+        // DECISIONS.md -> [Architecture]): this camera is NOT how the new BattleStage-layer shadow
+        // creature gets shown, despite two attempts assuming it would be. Tried (1) a genuinely
+        // separate dedicated camera stacked as a URP Overlay onto this one — confirmed live via
+        // WebSearch + direct RenderTexture readback that URP's 2D Renderer does NOT support Camera
+        // Stacking at all (a hard platform limitation, not a config mistake); then (2) reusing THIS
+        // camera's own cullingMask (BattleStage instead of 0) — confirmed live (moved the shadow to
+        // dead-center at 3x scale, still invisible) that Pixel Perfect Camera, also on this camera,
+        // has a known, tracked bug where it doesn't reliably respect cullingMask (Unity's own
+        // Unity-Technologies/2d-pixel-perfect issue #10). Both ruled out, cullingMask stays 0 here —
+        // see BattleStageCreatureShadow.cs's class doc comment for the RenderTexture-bridge approach
+        // that actually works (a separate capture camera with neither component, off-screen only).
         _overworldCamera = Camera.main;
         if (_overworldCamera != null)
         {

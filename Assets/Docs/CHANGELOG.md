@@ -16,6 +16,59 @@ Kept in version control. Claude Code reads this to avoid re-litigating settled w
 
 ---
 
+[2026-08-26] Phase 3, first slice — one real Scene stage creature, camera/RenderTexture bridge proven end-to-end
+- **Built:** `Combat/BattleStageCreatureShadow.cs` (new plain C# helper, owned by `BattleHUDController`
+  like `CombatVfxController`) — instantiates `Prefabs/Creatures/Phasix_BattleStageShadow.prefab` (a
+  stripped `Phasix_Placeholder.prefab` variant: Body/Underglow/Shadow `SpriteRenderer`s +
+  `PhasixPlaceholderVisual` only, overworld-only components removed) for player slot 0, mirrors its
+  color/position/alive-state from the real `BattleParticipant`, and moves a dedicated capture camera
+  to follow it. `Combat/BattleLaneLayout.cs` gained `GetPositionOffset`/`GetStagePosition` — a
+  world-unit mirror of `LaneMovementSystem.GetPositionOffsetPx`'s in-lane column math, combined with
+  the existing `GetLanePosition` depth axis (lane depth = X, in-lane position = Y). New
+  `Tests/EditMode/BattleLaneLayoutTests.cs` (8 tests, mirroring `LaneMovementSystemTests`' own
+  coverage of the pixel-space equivalent) — suite now 367 (was 359).
+- **Decided (see DECISIONS.md -> [Architecture] for the full investigation):** rendering the shadow
+  creature is a **RenderTexture bridge** (`DissolveVfxBridge.cs`'s already-proven pattern — a
+  dedicated capture camera renders off-screen, the RenderTexture becomes
+  `_playerStageCreatures[0]`'s own `background-image`), NOT direct camera compositing. Two other
+  approaches were tried first and hit confirmed, unrelated Unity/URP platform bugs specific to this
+  project's Main Camera (which carries both a 2D Renderer and a Pixel Perfect Camera): (1) a second
+  camera stacked as a URP Overlay — URP's 2D Renderer does not support Camera Stacking at all; (2)
+  reusing Main Camera's own `cullingMask` — Pixel Perfect Camera has a known, tracked bug where it
+  doesn't reliably respect `cullingMask` (`Unity-Technologies/2d-pixel-perfect#10`). The dedicated
+  capture camera has neither component, sidestepping both. Also found and fixed along the way: the
+  shadow's `Sprite-Lit-Default` material rendered solid black through the off-screen capture camera
+  (a URP 2D Lighting + off-screen-RenderTexture interaction, root cause not fully chased down) — new
+  `Materials/BattleStageShadowUnlit.mat` (`Sprite-Unlit-Default`) on the shadow prefab's three
+  `SpriteRenderer`s fixed it; the live overworld `Phasix_Placeholder.prefab` is untouched and still
+  lit normally.
+- **Built (Editor-side):** New `BattleStage` Unity Layer; `_BattleStageCamera` (child of
+  `_BattleManager` in `BattleScene_Main`) — orthographic, `cullingMask` = `BattleStage` only,
+  `clearFlags` = SolidColor transparent, targets `Textures/BattleStageShadowCaptureRT.renderTexture`
+  (256×256, ARGB32) — no Pixel Perfect Camera, no Cinemachine Brain. `BattleHUDController` gained
+  three Inspector fields wiring all of this together (`_stageCreatureShadowPrefab`/`Camera`/
+  `CaptureTexture` — see its own field doc comment for the Inspector Instructions).
+- **Verified live (Unity MCP):** full EditMode suite 367/367 passing; triggered a real wild encounter
+  → battle via the proven recipe (teleport player onto a spawned `WildEncounterCreature`), confirmed
+  via direct `RenderTexture` pixel readback that the shadow renders at the exact expected
+  `PrimalTypeColor` (`RGBA(0.514, 0.443, 0.467, 1.0)` for a Fire+Water "Steam" test species,
+  matching the computed 50/50 blend exactly) with a correctly transparent surround; confirmed
+  alive/dead dimming (`SetStageCreatureAliveState`'s opacity toggle) still applies correctly to the
+  RenderTexture-backed display; confirmed every other stage element (other slots, enemy, skill
+  rings, projectile, End Turn/Flee) is pixel-identical to before this slice.
+- **Known limitation, by design (flagged in KNOWN_ISSUES.md):** the shadow only mirrors the RESTING
+  lane/position — it does not move during a Beat Sequence lunge, and slot 0's real `VisualElement`
+  hit-flash color pulse doesn't show through the RenderTexture swap. Both are accepted, temporary
+  consequences of proving infrastructure end-to-end before the real migration (retiring the
+  `VisualElement` and pointing `BattleManager`/`CombatVfxController`/`BeatSequenceRunner` at the
+  `SpriteRenderer`/`Transform` directly) — not yet attempted, next slice's work.
+- **Next:** decide the next Phase 3 increment — either extend this same shadow technique to the
+  remaining player slots + the enemy, or tackle the real migration for slot 0 alone first (retire its
+  `VisualElement`, move `BeatSequenceRunner`'s lunge math and `CombatVfxController`'s hit-flash onto
+  the `Transform`/`SpriteRenderer` directly) to prove that harder step before scaling out.
+
+---
+
 [2026-08-25] Phase 1d — Architecture Directive: GameManager composition-root split + EventBus/BattleResult decoupling — CLOSES the assembly-split effort
 - **Built:** New `Bootstrap/` folder + `Phasix.Bootstrap.asmdef` (references `Phasix.Runtime` only).
   `Core/GameManager.cs` moved there (`git mv`, GUID preserved — the `_GameManager` GameObject in

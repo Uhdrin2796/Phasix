@@ -5466,3 +5466,66 @@ re-derive the reasoning from scratch before deciding whether to build these.
 - **Revisit if:** `AuraManager`/the loss-state handler get built (Mo 8) — follow
   `Combat/BattleSummary.cs`'s pattern for any new `EventBus` payload, don't reintroduce
   `BattleParticipant` or any other `Combat`-only type into `Core/EventBus.cs`'s signatures.
+
+### [Architecture] Phase 3 first slice — real Scene stage creature rendered via a RenderTexture bridge, not direct camera compositing
+- **Decided:** The new `BattleStageCreatureShadow` (player slot 0's real `SpriteRenderer` stand-in)
+  is displayed by rendering a dedicated, off-screen-only capture camera into a `RenderTexture`, then
+  setting that texture as `_playerStageCreatures[0]`'s own `background-image` — exactly
+  `DissolveVfxBridge.cs`'s already-proven technique. The capture camera (`_BattleStageCamera`, child
+  of `_BattleManager`) carries no `PixelPerfectCamera` and no `CinemachineBrain`; it follows the
+  shadow instance's world position every `Sync` call, tightly framed (`orthographicSize` 0.5) so the
+  capture drops straight into the existing 72×72 UI box with no extra positioning math needed on the
+  UI side.
+- **Why:** Two more direct approaches were tried first and both hit real, confirmed Unity/URP
+  platform bugs specific to this project's Main Camera (which carries both the 2D Renderer and a
+  Pixel Perfect Camera):
+  1. **A second camera stacked as a URP Overlay onto Main Camera** (the original plan's assumption,
+     modeled on "Camera.depth + CameraClearFlags.Depth" — a Built-in Render Pipeline pattern).
+     Confirmed via WebSearch (Unity's own docs/community) that **URP's 2D Renderer does not support
+     Camera Stacking at all** — a hard platform limitation, not a config mistake. Corroborated live:
+     configuring the second camera as a proper URP Overlay and adding it to Main Camera's
+     `cameraStack` still produced a solid-black frame on a direct `RenderTexture` readback of Main
+     Camera, even though the same camera in isolation (not stacked) rendered the shadow correctly.
+  2. **Reusing Main Camera's own `cullingMask`** (the user's chosen fallback after (1) failed) —
+     changed `BattleManager`'s existing overworld-blanking `cullingMask = 0` to
+     `LayerMask.GetMask("BattleStage")` instead of adding a second camera at all. Confirmed live that
+     **Pixel Perfect Camera — also on this same Main Camera — has a known, tracked upstream bug
+     where it doesn't reliably respect `cullingMask`**
+     (`Unity-Technologies/2d-pixel-perfect` GitHub issue #10, corroborated by WebSearch): moved the
+     shadow to dead-center at 3x scale (ruling out any position/framing math error) and it still
+     never appeared, while cullingMask/layer/material were all independently verified correct.
+  A separate, unrelated bug surfaced along the way: the shadow's `Sprite-Lit-Default` material
+  rendered solid opaque black specifically through the off-screen capture camera (confirmed via
+  direct pixel readback — RGBA(0,0,0,1) exactly at the sprite's position, transparent everywhere
+  else), despite a correctly-configured `Global Light 2D` covering the right sorting layer at full
+  intensity. Root cause not fully chased down (a URP 2D Lighting + off-screen-RenderTexture-target
+  interaction is the leading suspect) — worked around by giving the shadow prefab's three
+  `SpriteRenderer`s a new `Sprite-Unlit-Default` material (`Materials/BattleStageShadowUnlit.mat`)
+  instead, which doesn't depend on any light contribution. Confirmed via direct pixel readback this
+  fixed it: `RGBA(0.514, 0.443, 0.467, 1.0)`, an exact match for the "Steam" (Fire+Water 50/50 blend)
+  `PrimalTypeColor` the live overworld rendering already uses — only the shadow prefab's materials
+  changed; `Phasix_Placeholder.prefab` (companions/wild encounters) keeps its original lit material.
+- **Alternatives rejected:** Debugging the Camera Stacking / cullingMask bugs further instead of
+  pivoting — rejected (user's own call, after being shown both findings plus WebSearch corroboration)
+  because both are genuine, documented upstream platform limitations, not something a local
+  config change can fix; further time there had no clear path to a working outcome. Parking the
+  whole slice as "infrastructure proven, compositing unresolved" — offered as an option but not
+  chosen; the RenderTexture bridge was available, proven elsewhere in this same codebase, and fully
+  closed the gap without either bug.
+- **Verified:** 367/367 EditMode tests (359 baseline + 8 new `BattleLaneLayoutTests`). Live in
+  `BattleScene_Main` via the proven wild-encounter → battle recipe: direct `RenderTexture` pixel
+  readback confirmed the shadow renders at the exact expected `PrimalTypeColor`, fully opaque, with
+  a correctly transparent surround (`RGBA(0,0,0,0)` at the capture's edges); confirmed
+  `SetStageCreatureAliveState`'s opacity-based dimming still applies correctly on top of the
+  RenderTexture-backed display (0.25 when the participant is downed via `ApplyDamage`, 1 restored
+  via `Heal`); confirmed every other stage element (other player slots, enemy, skill rings,
+  projectile, End Turn/Flee) is pixel-identical to before this slice.
+- **Known limitation, accepted for this slice:** the shadow only mirrors the RESTING lane/position —
+  no Beat Sequence lunge motion, no hit-flash color pulse (both still animate the now-hidden real
+  `VisualElement`, invisibly). See KNOWN_ISSUES.md. Not a regression to fix here — the real migration
+  (retiring the `VisualElement`, moving `BeatSequenceRunner`/`CombatVfxController` onto the
+  `Transform`/`SpriteRenderer` directly) is explicitly later, separately-scoped work.
+- **Date:** 2026-08-26
+- **Revisit if:** Unity/URP ships a fix for either upstream bug (2D Renderer Camera Stacking, or
+  Pixel Perfect Camera's `cullingMask` handling) — re-evaluate whether the simpler direct-compositing
+  approach becomes viable before investing further in the RenderTexture bridge for additional slots.

@@ -30,4 +30,33 @@ public static class BattleLaneLayout
         float x = isPlayerSide ? -depth : depth;
         return stageOrigin + new Vector3(x, 0f, 0f);
     }
+
+    /// <summary>Spacing between adjacent in-lane positions (columns), in world units. Placeholder — TODO: pending NumericalCalibration.md, same status as LaneSpacing/SideGapHalf above.</summary>
+    private const float PositionSpacing = 0.3f;
+
+    /// <summary>
+    /// World-space offset for a position (column) within a lane — mirrors
+    /// LaneMovementSystem.GetPositionOffsetPx's pixel-space logic in world units, reusing that
+    /// class's PositionsPerLane/DefaultStartingPosition constants as the single source of truth
+    /// for the 5-column layout itself (only the per-column spacing differs, since that's a
+    /// pixel-vs-world-unit concern).
+    /// </summary>
+    public static float GetPositionOffset(int position)
+    {
+        int clampedPosition = Mathf.Clamp(position, 1, LaneMovementSystem.PositionsPerLane);
+        return (clampedPosition - LaneMovementSystem.DefaultStartingPosition) * PositionSpacing;
+    }
+
+    /// <summary>
+    /// World-space position for a given lane AND position-within-lane — combines GetLanePosition's
+    /// depth axis (X) with GetPositionOffset's column axis (Y, perpendicular to lane depth).
+    /// Added for the first Phase 3 slice (the real Scene "shadow" stage creature) — GetLanePosition
+    /// alone (lane depth only) predates this and stays as BattleStageGizmos' Scene-view-only entry
+    /// point, unchanged.
+    /// </summary>
+    public static Vector3 GetStagePosition(Vector3 stageOrigin, int laneIndex, int positionIndex, bool isPlayerSide)
+    {
+        Vector3 lanePosition = GetLanePosition(stageOrigin, laneIndex, isPlayerSide);
+        return lanePosition + new Vector3(0f, GetPositionOffset(positionIndex), 0f);
+    }
 }

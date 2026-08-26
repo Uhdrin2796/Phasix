@@ -40,6 +40,28 @@ readers of the `BattleResult` payload they used to carry; `BattleResult.cs` move
 `DECISIONS.md` → `[Architecture]` for full evidence, including why a `bool` payload was rejected as
 a middle ground). **Part 4 item 5 is now fully closed. `Core`/`Creatures`/`Combat` have no
 remaining circular references. Phase 3 and the `VFX_Pipeline_Directive` are genuinely unblocked.**
+**Errata (2026-08-26 — Phase 3, first slice BUILT):** The first real Phase 3 slice landed — one
+player-side stage creature (slot 0) now renders as a real Scene `SpriteRenderer`, proven end-to-end
+(camera, layer, prefab, world-space position math, `SpriteRenderer` rendering) without touching
+`BattleManager`/`CombatVfxController`/`BeatSequenceRunner` at all — see `DECISIONS.md` →
+`[Architecture]`, "Phase 3 first slice" entry, and `CHANGELOG.md`'s 2026-08-26 entry. Two important
+corrections to this doc's own framing, found live during this slice:
+1. **This doc's Part 3 investigation notes previously assumed "the frozen overworld stays visible"
+   behind the battle HUD — that's wrong.** `BattleManager.Start()` sets the overworld camera's
+   `cullingMask = 0` (renders nothing at all) for the entire battle; the visual today is a flat
+   black backdrop, not a paused overworld frame. Any new Scene-rendered content needs its own
+   camera/compositing path — it does not "just show up" alongside whatever the overworld camera
+   happened to be showing.
+2. **Direct camera compositing (the pattern this doc's Part 3 investigation assumed — "Camera.depth
+   + CameraClearFlags.Depth, mirrors DissolveVfxBridge") does not work in this project at all**, for
+   two confirmed, unrelated Unity/URP platform reasons specific to this project's Main Camera (2D
+   Renderer + Pixel Perfect Camera + Cinemachine Brain, all three): URP's 2D Renderer does not
+   support Camera Stacking, and Pixel Perfect Camera has a known bug where it doesn't reliably
+   respect `cullingMask`. **`DissolveVfxBridge.cs`'s actual technique is an off-screen RenderTexture
+   bridged into a UI Toolkit `background-image` — it was never doing direct camera compositing to
+   begin with**, a distinction this doc's Part 3 notes glossed over. Any further Phase 3 work adding
+   Scene-rendered content behind the HUD should use that same RenderTexture-bridge pattern, not a
+   second on-screen-composited camera.
 **Related:** Combat_Directive_v0_1_0.md, Attack_Pattern_Directive_v0_1_0.md, VFX_Pipeline_Directive_v0_1_0.md, Phasix_TechnicalDirective_v0.1.0.html, LESSONS_LEARNED.md, KNOWN_ISSUES.md
 
 ---

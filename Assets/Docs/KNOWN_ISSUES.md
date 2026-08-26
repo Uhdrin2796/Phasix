@@ -23,6 +23,12 @@ reliably landed a non-Miss outcome to cross-check against, so the live-forced te
 evidence gathered, not a fully closed loop.
 **Next step:** Needs the user to reproduce with more detail — Dodge (left-click) or Parry (right-click)? Does the Aura bar visibly drop the instant the block resolves, or only show lower on a later turn (which could mean it's the PLAYER's own next attack spending Aura, not the block itself)? Is this specifically the "Good" tier, or does it also happen on a Perfect block?
 
+### [PRESENTATION-001] — Phase 3 shadow creature (player slot 0) doesn't move during Beat Sequence lunges or show the hit-flash pulse — accepted, by design for this slice
+**Affects:** `Assets/Scripts/Combat/BattleStageCreatureShadow.cs`, `Assets/Scripts/Combat/BattleHUDController.cs` (`ApplyStageCreatureShadowDisplay`)
+**Description:** 2026-08-26, Architecture_Directive Phase 3's first slice — player slot 0 now renders as a real Scene `SpriteRenderer` (via a RenderTexture bridge into `_playerStageCreatures[0]`'s own `background-image` — see `DECISIONS.md` → `[Architecture]`). The shadow only mirrors the RESTING lane/position (`BattleLaneLayout.GetStagePosition`), refreshed on `Initialize`/`RefreshBars`/`RefreshPlayerLaneLayout`/`UpdatePlayerStageCreatureLane`. It does NOT move during a Beat Sequence's transient lunge/windup/dash offsets (`BeatSequenceRunner` still animates the real, now-hidden `VisualElement`'s `style.left/top/scale` directly), and the real `VisualElement`'s hit-flash color pulse (`CombatVfxController.FlashStageElement`) isn't mirrored onto the shadow either — so during a real attack/hit on slot 0, the shadow stays visually frozen at its resting spot while the actual animation happens invisibly underneath.
+**Status:** Not a bug to fix — an explicitly scoped-out consequence of this slice proving infrastructure (camera/layer/prefab/position math/RenderTexture bridge) before attempting the real migration. The real fix is the NEXT Phase 3 increment: retire `_playerStageCreatures[0]` entirely and point `BattleManager`/`CombatVfxController`/`BeatSequenceRunner` at the shadow's own `Transform`/`SpriteRenderer` directly, rather than trying to keep two parallel visual representations in sync.
+**Next step:** Scope and execute that migration for slot 0 (or decide to extend the shadow technique to more slots first — see `CHANGELOG.md`'s 2026-08-26 entry, "Next").
+
 ---
 
 ## Closed Issues

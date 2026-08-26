@@ -515,6 +515,31 @@ public class BattleHUDController : MonoBehaviour
     /// </summary>
     private CombatVfxController _vfxController;
 
+    /// <summary>
+    /// First Phase 3 slice (2026-08-26 — see Architecture_Directive_v0_1_0.md Part 3 / DECISIONS.md
+    /// -> [Architecture]) — real Scene "shadow" creature for player slot 0 only, mirroring
+    /// _playerStageCreatures[0]'s color/position/alive-state. Rendered via a RenderTexture bridge
+    /// (BattleStageCreatureShadow's own class doc comment explains why, not direct camera
+    /// compositing) — _stageCreatureShadowCamera is a DEDICATED capture camera (no Pixel Perfect
+    /// Camera, no Cinemachine Brain) that follows the shadow instance and renders into
+    /// _stageCreatureShadowCaptureTexture, which then becomes _playerStageCreatures[0]'s own
+    /// background-image (see ApplyStageCreatureShadowDisplay).
+    ///
+    /// Inspector Instructions:
+    ///   1. _stageCreatureShadowPrefab -> Assets/Prefabs/Creatures/Phasix_BattleStageShadow.prefab
+    ///   2. _stageCreatureShadowCamera -> the "_BattleStageCamera" GameObject's Camera component
+    ///      (child of _BattleManager in BattleScene_Main)
+    ///   3. _stageCreatureShadowCaptureTexture -> Assets/Textures/BattleStageShadowCaptureRT.
+    ///      renderTexture — must match _BattleStageCamera's own Target Texture
+    /// Left unassigned, slot 0 behaves exactly as before this slice (every Sync/display call below
+    /// no-ops without all three).
+    /// </summary>
+    [SerializeField] private GameObject _stageCreatureShadowPrefab;
+    [SerializeField] private Camera _stageCreatureShadowCamera;
+    [SerializeField] private RenderTexture _stageCreatureShadowCaptureTexture;
+
+    private BattleStageCreatureShadow _stageCreatureShadow;
+
     // Sonny 2-style click-and-drag move/target selection (2026-08-05/06, user-directed — see
     // DECISIONS.md -> [Combat]). ShowMoveSelection shows the acting player's skill ring; pressing
     // a populated slot starts a drag (DragLineVisual follows the cursor) that resolves against
@@ -762,6 +787,12 @@ public class BattleHUDController : MonoBehaviour
         _enemyStageArea = _root.Q<VisualElement>("EnemyStageArea");
         _vfxController = new CombatVfxController(this, _stage, _playerStageCreatures, _enemyStageCreature);
 
+        // Stage origin is whatever GameObject BattleStageGizmos lives on — that's already the
+        // established "stage origin" anchor (its own OnDrawGizmos uses transform.position as the
+        // basis for every lane marker), so this needs no separate Inspector wiring of its own.
+        Transform stageOrigin = FindFirstObjectByType<BattleStageGizmos>()?.transform;
+        _stageCreatureShadow = new BattleStageCreatureShadow(stageOrigin, _stageCreatureShadowPrefab, _stageCreatureShadowCamera);
+
         _actionAnnouncement = _root.Q<VisualElement>("ActionAnnouncement");
         _actionAnnouncementLabel = _root.Q<Label>("ActionAnnouncementLabel");
 
@@ -833,6 +864,7 @@ public class BattleHUDController : MonoBehaviour
     private void OnDestroy()
     {
         if (Instance == this) Instance = null;
+        _stageCreatureShadow?.Teardown();
     }
 
     /// <summary>
@@ -1065,6 +1097,11 @@ public class BattleHUDController : MonoBehaviour
         }
         LayoutPlayerStageCreaturesByLane(playerSide);
         ApplyLaneLayout(playerSide);
+        if (playerSide.Count > 0)
+        {
+            _stageCreatureShadow?.Sync(playerSide[0]);
+            ApplyStageCreatureShadowDisplay();
+        }
 
         for (int i = 0; i < MaxNameplateSlots; i++)
         {
@@ -1182,6 +1219,11 @@ public class BattleHUDController : MonoBehaviour
 
         for (int i = 0; i < BattleConfig.ActivePartySize && i < playerSide.Count; i++)
             SetStageCreatureAliveState(_playerStageCreatures[i], playerSide[i]);
+        if (playerSide.Count > 0)
+        {
+            _stageCreatureShadow?.Sync(playerSide[0]);
+            ApplyStageCreatureShadowDisplay();
+        }
 
         for (int i = 0; i < MaxNameplateSlots && i < enemySide.Count; i++)
             RefreshNameplateStats(_enemyNameplates[i], enemySide[i]);
@@ -1359,6 +1401,22 @@ public class BattleHUDController : MonoBehaviour
         creature.style.opacity = participant.IsAlive ? 1f : 0.25f;
     }
 
+    /// <summary>
+    /// Swaps _playerStageCreatures[0] from its normal flat Primal-type color to the
+    /// _stageCreatureShadowCamera's captured RenderTexture — same technique as
+    /// DissolveVfxBridge.DissolveRoutine's background-image swap. Clears backgroundColor first so
+    /// the flat color SetStageCreatureColor already applied doesn't show through the RenderTexture's
+    /// transparent regions. No-ops (leaves slot 0 on its normal flat color) unless all three
+    /// Inspector fields are wired — see this class's field doc comment. Idempotent, so it's safe to
+    /// call after every _stageCreatureShadow.Sync rather than tracking whether it already ran.
+    /// </summary>
+    private void ApplyStageCreatureShadowDisplay()
+    {
+        if (_stageCreatureShadowPrefab == null || _stageCreatureShadowCamera == null || _stageCreatureShadowCaptureTexture == null) return;
+        _playerStageCreatures[0].style.backgroundColor = Color.clear;
+        _playerStageCreatures[0].style.backgroundImage = new StyleBackground(Background.FromRenderTexture(_stageCreatureShadowCaptureTexture));
+    }
+
     /// <summary>Matches `.stage-creature`'s fixed `width: 72px; height: 72px;` (BattleHUD.uss) — used by LayoutPlayerStageCreaturesByLane/ApplyLaneLayout/ApplyEnemyLaneDepthScale to size the stage areas around the 7-row range without hardcoding the 72 magic number in three places.</summary>
     private const float StageCreatureSizePx = 72f;
 
@@ -1521,6 +1579,11 @@ public class BattleHUDController : MonoBehaviour
     {
         LayoutPlayerStageCreaturesByLane(playerSide);
         ApplyLaneLayout(playerSide);
+        if (playerSide.Count > 0)
+        {
+            _stageCreatureShadow?.Sync(playerSide[0]);
+            ApplyStageCreatureShadowDisplay();
+        }
     }
 
     private LaneGuideOverlay _laneGuideOverlay;
@@ -1602,6 +1665,11 @@ public class BattleHUDController : MonoBehaviour
         if (slotIndex < 0 || slotIndex >= _playerStageCreatureLaneIndex.Length) return;
         _playerStageCreatureLaneIndex[slotIndex] = laneIndex;
         RestoreStageCreatureDepthOrder();
+        if (slotIndex == 0 && _playerSide != null && _playerSide.Count > 0)
+        {
+            _stageCreatureShadow?.Sync(_playerSide[0]);
+            ApplyStageCreatureShadowDisplay();
+        }
     }
 
     /// <summary>
